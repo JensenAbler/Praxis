@@ -2,6 +2,17 @@
 
 Connect **Praxis Probe** first. Use the same account as the iPhone. Record the model/mode and app version if available from the interface; the model must not invent these. This fixture uses the VPS, not ChatGPT's temporary execution environment.
 
+## Complete the connection
+
+The **Praxis Probe** connection has been created in ChatGPT; owner OAuth sign-in is pending. Complete the open sign-in using the password in the private local file `C:\Users\Jensen\.codex\praxis-probe-private\login.txt`, then allow access. After ChatGPT confirms connection, open a new iPhone conversation and attach Praxis Probe. Connection and mobile tool availability remain unverified until those steps succeed.
+
+For reference, the observed web setup was:
+
+1. Enable **Settings → Security and login → Developer mode**, then open [ChatGPT Plugins](https://chatgpt.com/plugins) and select **Create app**. During this setup, the owner toggled an already-enabled switch off/on and the Codex in-app page was reloaded before Create app appeared; the cause of the earlier stale state is unknown.
+2. Enter **Praxis Probe**, server URL `https://mcp.jensenabler.com/praxis-probe/mcp`, and **OAuth**.
+3. Advanced settings discovered dynamic client registration and the expected endpoints/resource. Discovered scopes were `praxis:probe offline_access`; set the base scope to `offline_access`. Disable optional OIDC/email lookup because the fixture does not provide email or userinfo. Keep OAuth enabled.
+4. Accept the unreviewed-server notice and select **Create**, then complete the owner sign-in described above.
+
 ## Prompt 1 — tool behavior and disconnect
 
 ```text

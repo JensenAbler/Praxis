@@ -8,7 +8,7 @@ Nine authenticated tools provide capability discovery, synthetic responses, a co
 
 ## Connect and test
 
-Create a custom remote connection named **Praxis Probe**, use the endpoint above, and select OAuth. Dynamic client registration supplies the client configuration. Sign in using the separately delivered probe password, then allow the connection. No model API key is needed. Attach the connection to a new conversation and use [the phone test prompts](docs/phone-test.md).
+The **Praxis Probe** connection has been created in the owner's ChatGPT account; owner OAuth sign-in is pending. Complete the open sign-in using the private probe password, then allow the connection. No model API key is needed. After connection succeeds, attach it to a new conversation and use [the setup details and phone test prompts](docs/phone-test.md).
 
 ChatGPT account/workspace availability and mobile tool exposure must be verified in the actual account. Current setup guidance is [Connect and test a plugin](https://developers.openai.com/plugins/deploy/connect-chatgpt). If the app does not expose connection creation, create it in the web account settings first, then check its availability in a new iPhone conversation. Schema changes require refreshing connection metadata and starting a new conversation. Claude can be tested separately through its remote MCP connection flow; compatibility is not claimed until observed.
 

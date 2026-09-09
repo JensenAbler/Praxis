@@ -9,6 +9,7 @@
 - SQLite jobs, audit observations, and OAuth state under private `/var/lib/praxis-probe`. This single-host fixture shares a runtime UID; it is not the future isolation boundary for arbitrary development commands.
 - Root-only credential originals under `/etc/praxis-probe/credentials`; systemd loads only the web service's required credentials. Public-key material is intentionally published through OAuth JWKS.
 - Initial deployed source commit `4abf8f3604cb`, archive SHA-256 `b4c40571dc74ccbd507588d502abe0550803fdc1ed8eb3e185e56f3d52ad91fc`; configuration backup `/root/praxis-probe-backups/20260909T031822Z-h2lQy3`.
+- Current release `probe-d78e02c44615` corrects native OAuth form origin handling; archive SHA-256 `c7763aa0869adae1403f181e0e5700c9f83f23a213a0b4cf864fa9ed57cb5a85`, configuration backup `/root/praxis-probe-backups/20260909T035847Z-bevMeR`. All 17 tests passed on the host before activation.
 - Candidate dependency installation/tests run under distinct `praxis-probe-build` identity, without runtime-directory access. This bootstrap installer is owner-run code, not an application-controlled updater.
 
 The probe exposes only a fixed heartbeat loop. No repository access, host administration, production adapter, external model call, browser tool, or general shell is present.
@@ -33,7 +34,7 @@ No off-host backup or host-loss recovery is claimed. SQLite WAL with synchronous
 
 Generate credentials with `node scripts/create-credentials.js <private-directory>` outside Git. On Windows restrict the directory ACL before generation. Copy only password-hash, jwks.json and cookie-keys.json to the root-only server credential directory. Transfer an explicitly reviewed source archive to a unique release directory. Run `bash /srv/praxis-probe/releases/<release>/deploy/install.sh <release>` through existing owner SSH. The script validates release names, tests without root, backs up changed configuration, validates nginx, activates only the two probe services, and gracefully reloads nginx. Upgrades refuse active jobs.
 
-Use the latest repository installer for future bootstrap releases: it adds an exclusive deployment lock beyond the installer captured in the initial source archive. The application/worker source is unchanged.
+Use the latest repository installer for future bootstrap releases. The current release includes an exclusive deployment lock, complete configuration rollback, and refusal to upgrade while jobs are active.
 
 Inspect without changes:
 
