@@ -1,0 +1,197 @@
+{
+  "schemaVersion": 1,
+  "id": "praxis-replay-batch-v1",
+  "status": "prepared-not-run",
+  "purpose": "Collect varied coding and recovery friction before changing the current tool surface.",
+  "frozenRuntime": {
+    "release": "coding-a41abbbbb51e",
+    "sourceCommit": "a41abbbbb51ee8f68d8968f5ef3971495b1bf0b6",
+    "image": "sha256:a807793c27f53bf93480fc3dcfe73b2ab1b6bdf8b3aa1aca820118fd43767170",
+    "changeToolingDuringBatch": false
+  },
+  "catalog": "eval/catalog.json",
+  "readiness": {
+    "historicalCheckerCalibration": "passed",
+    "historicalCheckerCalibrationEvidence": "docs/evidence/replay-batch-v1-calibration.json",
+    "preparedBaselineValidation": "qualified-with-documented-native-recording-failures",
+    "registeredProjectVerification": "authenticated-fixture-passed-and-live-config-registered",
+    "newAgentRuns": "not-run",
+    "newNativePhoneRuns": "not-run"
+  },
+  "historicalControl": {
+    "caseId": "speech-first",
+    "status": "previous-native-run-accepted",
+    "workspaceId": "4851843f-e8af-43c3-a828-33dbd417bf0f",
+    "evidence": "docs/evidence/iphone-coding-report.md",
+    "includedInNewRunCount": false,
+    "instruction": "Retain the original workspace and jobs. Do not restart or recreate this completed control."
+  },
+  "newRunCount": 6,
+  "deliveryPolicy": {
+    "client": "native-iPhone",
+    "promptsPerAssistantResponse": 1,
+    "preamble": false,
+    "extraCommentary": false,
+    "advanceWhenUserSays": "next",
+    "instruction": "Deliver all six task prompts first, then all six read-only recovery prompts. Each prompt is pasted into a fresh phone conversation."
+  },
+  "deliveryOrder": [
+    {
+      "phase": "task",
+      "runId": "batch-v1-01-buffer"
+    },
+    {
+      "phase": "task",
+      "runId": "batch-v1-02-provider"
+    },
+    {
+      "phase": "task",
+      "runId": "batch-v1-03-vad"
+    },
+    {
+      "phase": "task",
+      "runId": "batch-v1-04-provider-repeat"
+    },
+    {
+      "phase": "task",
+      "runId": "batch-v1-05-buffer-repeat"
+    },
+    {
+      "phase": "task",
+      "runId": "batch-v1-06-vad-artifact"
+    },
+    {
+      "phase": "recovery",
+      "runId": "batch-v1-01-buffer"
+    },
+    {
+      "phase": "recovery",
+      "runId": "batch-v1-02-provider"
+    },
+    {
+      "phase": "recovery",
+      "runId": "batch-v1-03-vad"
+    },
+    {
+      "phase": "recovery",
+      "runId": "batch-v1-04-provider-repeat"
+    },
+    {
+      "phase": "recovery",
+      "runId": "batch-v1-05-buffer-repeat"
+    },
+    {
+      "phase": "recovery",
+      "runId": "batch-v1-06-vad-artifact"
+    }
+  ],
+  "runs": [
+    {
+      "id": "batch-v1-01-buffer",
+      "caseId": "buffer-settling",
+      "variant": "standard",
+      "packetScenario": "standard",
+      "workspaceLabel": "Praxis replay buffer-settling / batch-v1-01-buffer / standard",
+      "workspaceCreationKey": "praxis:buffer-settling:batch-v1-01-buffer:standard:workspace",
+      "status": "not-run",
+      "workspaceId": null,
+      "clientType": null
+    },
+    {
+      "id": "batch-v1-02-provider",
+      "caseId": "provider-stream-errors",
+      "variant": "standard",
+      "packetScenario": "standard",
+      "workspaceLabel": "Praxis replay provider-stream-errors / batch-v1-02-provider / standard",
+      "workspaceCreationKey": "praxis:provider-stream-errors:batch-v1-02-provider:standard:workspace",
+      "status": "not-run",
+      "workspaceId": null,
+      "clientType": null
+    },
+    {
+      "id": "batch-v1-03-vad",
+      "caseId": "vad-flap",
+      "variant": "standard",
+      "packetScenario": "standard",
+      "workspaceLabel": "Praxis replay vad-flap / batch-v1-03-vad / standard",
+      "workspaceCreationKey": "praxis:vad-flap:batch-v1-03-vad:standard:workspace",
+      "status": "not-run",
+      "workspaceId": null,
+      "clientType": null
+    },
+    {
+      "id": "batch-v1-04-provider-repeat",
+      "caseId": "provider-stream-errors",
+      "variant": "independent-repeat",
+      "packetScenario": "standard",
+      "workspaceLabel": "Praxis replay provider-stream-errors / batch-v1-04-provider-repeat / standard",
+      "workspaceCreationKey": "praxis:provider-stream-errors:batch-v1-04-provider-repeat:standard:workspace",
+      "status": "not-run",
+      "workspaceId": null,
+      "clientType": null,
+      "instruction": "Use a fresh conversation and clean base; keep model/client/settings matched to run 02 where available. Do not reveal run 02's solution or critique."
+    },
+    {
+      "id": "batch-v1-05-buffer-repeat",
+      "caseId": "buffer-settling",
+      "variant": "independent-repeat",
+      "packetScenario": "standard",
+      "workspaceLabel": "Praxis replay buffer-settling / batch-v1-05-buffer-repeat / standard",
+      "workspaceCreationKey": "praxis:buffer-settling:batch-v1-05-buffer-repeat:standard:workspace",
+      "status": "not-run",
+      "workspaceId": null,
+      "clientType": null,
+      "instruction": "Use a fresh conversation and clean base; keep model/client/settings matched to run 01 where available. Do not reveal run 01's solution or critique."
+    },
+    {
+      "id": "batch-v1-06-vad-artifact",
+      "caseId": "vad-flap",
+      "variant": "nonempty-artifact-recovery",
+      "packetScenario": "artifact",
+      "workspaceLabel": "Praxis replay vad-flap / batch-v1-06-vad-artifact / artifact",
+      "workspaceCreationKey": "praxis:vad-flap:batch-v1-06-vad-artifact:artifact:workspace",
+      "status": "not-run",
+      "workspaceId": null,
+      "clientType": null,
+      "instruction": "Preserve a nonempty bounded validation artifact through job artifactPaths. A fresh conversation reads its complete contents and verifies bytes/hash without recreating the artifact job."
+    }
+  ],
+  "executionRules": [
+    "Every new run creates or recovers its own isolated workspace at that case's exact catalog base.",
+    "Record actual workspace/job/operation IDs durably; stable labels and creation keys identify intended runs, not pre-existing server objects.",
+    "Run sequentially; the frozen service permits one active coding job.",
+    "Keep private prompts, reference implementations and checker mounts out of candidate source.",
+    "Judge with independent behavioral checks, the candidate validation summary and a complete diff review; do not require the historical diff.",
+    "Keep fixture calibration, automated-client runs and actual native-phone runs as separate evidence types.",
+    "Record client/model/settings when observable; use unknown rather than inference."
+  ],
+  "measurements": [
+    "independentBehavioralResults",
+    "candidateValidationSummary",
+    "diffReview",
+    "recoveryIntegrity",
+    "toolCallsByOperation",
+    "extraCallsAndWorkarounds",
+    "argumentFailures",
+    "transientFailures",
+    "displayTruncation",
+    "persistedTruncation",
+    "humanRescues",
+    "clientElapsedTime",
+    "serverHandlerTime",
+    "jobQueueAndExecutionTime"
+  ],
+  "earlyStopConditions": [
+    "Data loss, corruption, unexpected duplicate mutation, or mismatched recovered results",
+    "A security boundary violation",
+    "Evidence is insufficient or inconsistent enough that the measurement cannot be trusted"
+  ],
+  "ordinaryFrictionPolicy": "Record recoverable errors and workarounds, preserve evidence, and continue the bounded batch before selecting tooling fixes.",
+  "limitations": "Six runs map failure modes; they do not estimate reliable pass rates or prove Codex parity. Unmeasured elapsed time cannot be attributed entirely to the model or backend.",
+  "readinessEvidence": {
+    "calibration": "docs/evidence/replay-batch-v1-calibration.json",
+    "baselines": "docs/evidence/replay-batch-v1-baselines.json",
+    "authenticatedFixture": "docs/evidence/replay-batch-v1-mcp.json",
+    "registration": "docs/evidence/replay-batch-v1-registration.json"
+  }
+}

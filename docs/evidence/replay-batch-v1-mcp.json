@@ -1,0 +1,106 @@
+{
+  "evidenceKind": "authenticated-MCP-client-temporary-authority",
+  "fixtureId": "3648dbef-922b-421e-af24-b5c1aba515b8",
+  "startedAt": "2026-09-09T19:07:46.672Z",
+  "authentication": "Ephemeral fixture issuer and signing keys; no live OAuth authority, owner password, or ChatGPT sign-in.",
+  "executor": "Real PodmanRunner, using the protected fixed image and existing dedicated container storage.",
+  "gatewayRestartMode": "Gateway application instance and HTTP listener recreated in the same fixture process; coding backend remains alive.",
+  "assertions": [
+    {
+      "name": "permission_boundaries",
+      "gatewayInsufficientScopeDenied": true,
+      "backendMissingMalformedAndProbeTokenDenied": true,
+      "codeTokenCannotUseProbeTools": true,
+      "passedAt": "2026-09-09T19:07:47.232Z"
+    },
+    {
+      "name": "source_discovery_and_create",
+      "workspaceId": "1990f40a-6a86-4b45-9e9d-d20ea3d8db11",
+      "createOperationId": "83ce08a2-7429-454a-84b4-4bbdf7dd356e",
+      "createIdempotencyVerified": true,
+      "passedAt": "2026-09-09T19:07:47.572Z"
+    },
+    {
+      "name": "all_edit_actions_and_conflicts",
+      "actions": [
+        "patch",
+        "write",
+        "rename",
+        "delete"
+      ],
+      "editIdempotencyVerified": true,
+      "staleRevisionDenied": true,
+      "pathEscapeDenied": true,
+      "passedAt": "2026-09-09T19:07:47.729Z"
+    },
+    {
+      "name": "real_command_and_gateway_restart",
+      "jobId": "24d3e362-27cd-45c0-8dc0-52b02ad0b5fa",
+      "runningStartedAt": "2026-09-09T19:07:48.104Z",
+      "realContainerRunningAfterGatewayRestart": true,
+      "passedAt": "2026-09-09T19:07:48.267Z"
+    },
+    {
+      "name": "fresh_client_recovers_completed_job",
+      "sameWorkspace": true,
+      "sameJob": true,
+      "backendBootIdUnchanged": true,
+      "jobIdempotencyVerified": true,
+      "passedAt": "2026-09-09T19:07:53.554Z"
+    },
+    {
+      "name": "persisted_logs_artifact_diff_and_mutation_receipts",
+      "logPages": 3,
+      "logRecords": 6,
+      "artifactPages": 4,
+      "artifactHashIndependentlyVerified": true,
+      "diffPages": 4,
+      "mutationReceiptRecovered": true,
+      "passedAt": "2026-09-09T19:07:53.892Z"
+    }
+  ],
+  "status": "completed",
+  "release": "coding-a41abbbbb51e",
+  "image": "sha256:a807793c27f53bf93480fc3dcfe73b2ab1b6bdf8b3aa1aca820118fd43767170",
+  "source": {
+    "kind": "synthetic immutable fixture",
+    "baseRevision": "968f622e87d2ac04b295e4ab34c125913029274ca316dac1e94ef81021a972e2"
+  },
+  "backendBootId": "2e067b79-d46a-4d5a-8486-0de67f06655f",
+  "replayProjects": [
+    {
+      "projectId": "discord-replay-buffer-settling",
+      "revision": "35d1bb2d723f7bf3960bb9cbe2a484b7d6feb0ab",
+      "instructionsSha256": "ea447efc01482580c1a8a179067ccce706b9db0e0d0dfad2415066d07701c5a0",
+      "validationCommandsVerified": true
+    },
+    {
+      "projectId": "discord-replay-provider-stream-errors",
+      "revision": "8b098f28c96ecbde424d66fbd1ac03f0767d2fed",
+      "instructionsSha256": "8b50e90179d369f1a5268309a95397b51f6e60cbfc6dba5efa607af3316e2fde",
+      "validationCommandsVerified": true
+    },
+    {
+      "projectId": "discord-replay-vad-flap",
+      "revision": "8b507b5d9678606823758eb6ed7cde05896a2cef",
+      "instructionsSha256": "aab0ff3603790a76bac57bb454279f1526cf09921553f7c26e4b18660ed36d2c",
+      "validationCommandsVerified": true
+    }
+  ],
+  "workspaceId": "1990f40a-6a86-4b45-9e9d-d20ea3d8db11",
+  "createOperationId": "83ce08a2-7429-454a-84b4-4bbdf7dd356e",
+  "applyOperationId": "5102581f-2afe-428d-b157-56b82e1a6439",
+  "jobId": "24d3e362-27cd-45c0-8dc0-52b02ad0b5fa",
+  "gatewayRestartedAt": "2026-09-09T19:07:48.267Z",
+  "jobStartedAt": "2026-09-09T19:07:48.104Z",
+  "jobFinishedAt": "2026-09-09T12:07:53.156615868-07:00",
+  "jobExitCode": 0,
+  "artifact": {
+    "id": "6e5b4ddceeb81b65d3f8191efd979d9a0339967365c552e0d8e4df1243c536b8",
+    "bytes": 64,
+    "sha256": "44f1a2c4a5955545a5cd3e1aeadcf884e1bb5dbcea5074a6f72a38fd761c7a94"
+  },
+  "finishedAt": "2026-09-09T19:07:53.898Z",
+  "elapsedMilliseconds": 7226,
+  "fixtureStateRetained": true
+}

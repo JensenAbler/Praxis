@@ -1,0 +1,63 @@
+{
+  "runId": "c4f143a4-5ae1-4cf5-8357-7fe562b7de86",
+  "evidenceKind": "bootstrap-configuration-only-replay-registration",
+  "release": "coding-a41abbbbb51e",
+  "image": "sha256:a807793c27f53bf93480fc3dcfe73b2ab1b6bdf8b3aa1aca820118fd43767170",
+  "previousConfigSha256": "3cbc2dc3d211e60907c302e175c71b5b369194366481ba084990d7a0fb8f13d6",
+  "configSha256": "bd726fa28b9ee99ea142b8ee3a65497056c2eadf860af5a9f7e441cda929ee5e",
+  "addedProjects": [
+    "discord-replay-buffer-settling",
+    "discord-replay-provider-stream-errors",
+    "discord-replay-vad-flap"
+  ],
+  "runtimeSourceChanged": false,
+  "imageChanged": false,
+  "nativePhoneRun": false,
+  "status": "completed",
+  "before": {
+    "workspaces": {
+      "rows": 1,
+      "sha256": "f5172b4ad1d2f0bd9464084b244d2adc600bc71b7e51112972f28a26f314b089"
+    },
+    "operations": {
+      "rows": 1,
+      "sha256": "165ae09402f1be7607af4fdefb92c4b2e469a0ed8f02367f16a80e972be9c34d"
+    },
+    "code_jobs": {
+      "rows": 3,
+      "sha256": "55ae02bcdacb321184cc8acef981ae96a103366f94c813663b2a824a181f9e48"
+    },
+    "code_records": {
+      "rows": 1166,
+      "sha256": "c7fdcce02b6d5a795b993642f98808ca0a3ddd66459aef0c98ce7110f5f1157a"
+    },
+    "code_artifacts": {
+      "rows": 0,
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    }
+  },
+  "after": {
+    "workspaces": {
+      "rows": 1,
+      "sha256": "f5172b4ad1d2f0bd9464084b244d2adc600bc71b7e51112972f28a26f314b089"
+    },
+    "operations": {
+      "rows": 1,
+      "sha256": "165ae09402f1be7607af4fdefb92c4b2e469a0ed8f02367f16a80e972be9c34d"
+    },
+    "code_jobs": {
+      "rows": 3,
+      "sha256": "55ae02bcdacb321184cc8acef981ae96a103366f94c813663b2a824a181f9e48"
+    },
+    "code_records": {
+      "rows": 1166,
+      "sha256": "c7fdcce02b6d5a795b993642f98808ca0a3ddd66459aef0c98ce7110f5f1157a"
+    },
+    "code_artifacts": {
+      "rows": 0,
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    }
+  },
+  "storedWorkspaceJobsReceiptsAndRecordsUnchanged": true,
+  "backendBootId": "e5fa065b-149e-4862-816d-810111ae36f8"
+}

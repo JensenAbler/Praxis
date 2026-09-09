@@ -1,8 +1,10 @@
-# Seed replay evaluation
+# Historical replay evaluations
 
-`eval/catalog.json` identifies the first case, its clean starting commit, reference outcome, and private prompt hash. It includes no copied private source or original prompt. Authorized operators supply the prompt separately; preserve UTF-8 text with LF endings and a final newline before checking its hash. Keep reference source outside the candidate workspace.
+`eval/catalog.json` identifies four cases, their clean starting commits, reference outcomes, and private worker-prompt hashes. It includes no copied private source or original prompts. The [six-run batch](replay-batch-v1.md) adds buffer synchronization, provider stream errors, and audio contamination to the accepted speech-first control. Original requests that depend on missing incident context are explicitly adapted, with separate original and worker-prompt hashes. Keep reference source outside the candidate workspace.
 
-The seed is a clean parent-commit replay, not an exact reconstruction of historical dirty files or the original machine. Its reference commit is an outcome example. The grader checks behavior, not the reference diff or exact prompt wording.
+The private packet generator verifies canonical UTF-8 text with LF endings and a final newline, then creates worker and recovery prompts outside this public repository. Packet generation, historical checker calibration, clean baseline validation, automated client runs, and native phone runs are distinct steps; none substitutes for another.
+
+Each case is a clean parent-commit replay, not an exact reconstruction of historical dirty files or the original machine. Its reference commit is an outcome example. The grader checks behavior, not the reference diff or exact prompt wording.
 
 The historical package lock omits peers in an optional WASM dependency branch. Default `npm ci` rejects it under both the initial Linux image's npm and a Windows npm 11.6.2 dry run. The Windows dry run succeeds with `--legacy-peer-deps`, preserving the original lock hash. Dependency-image preparation uses that explicit compatibility flag for this replay project only; it does not repair or edit the candidate's lockfile. Linux installation subsequently succeeded, and the unchanged historical snapshot completed 75 tests with a final summary and exit 0 in the actual offline sandbox; [project validation evidence](evidence/project-validation.json) records the exact image, manifests, source, and runtime versions. This preparation reproduces a usable offline dependency bundle, not the exact historical machine or its unrecorded local lock changes.
 
@@ -21,6 +23,8 @@ The checker and catalog must be outside the editable candidate workspace. The ca
 The module VM has an empty environment, mocked HTTP responses, limited dependency loading, and bounded evaluation. **Node's VM is not a security sandbox.** These controls make tests repeatable; OS isolation must protect the host when evaluating candidate code. Do not invoke this checker on untrusted source from a privileged web/backend process.
 
 ## What it measures
+
+The checks below describe `speech-first`. The batch guide describes the three additional graders. Select their catalog IDs with the same `--case` argument. [Calibration evidence](evidence/replay-batch-v1-calibration.json) records the exact grader/module hashes, complete receipts, and exit codes for all three historical base/reference pairs in the frozen rootless container. Each old implementation fails and each reference passes. This qualifies the graders on those examples; it is not an agent result.
 
 - Speech-first property and required-field order.
 - Obvious contradictions in generated system, decision, and user prompt output-order instructions.

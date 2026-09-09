@@ -1,0 +1,396 @@
+{
+  "schemaVersion": 1,
+  "runId": "8a94c139-d369-4c25-a972-32cc41aaf6b7",
+  "evidenceKind": "historical-base-reference-calibration-in-rootless-containers",
+  "agentRun": false,
+  "nativePhoneRun": false,
+  "liveServicesExercised": false,
+  "release": "coding-a41abbbbb51e",
+  "image": "sha256:a807793c27f53bf93480fc3dcfe73b2ab1b6bdf8b3aa1aca820118fd43767170",
+  "checkerFilesSha256": {
+    "scripts/eval-check.js": "b6b15790d80078f26d8ebee34750a2341048b1aa780b2af8a6b623b5169b5fed",
+    "scripts/export-project.py": "71421c1561433dc1c696a05b4bf360f92eeefa5edd8f990a901c529d0d39e99c",
+    "eval/catalog.json": "4697fb0697c3f66e4bd701494b7100cb194d1352a79e814245f8dee4758cef71",
+    "eval/checkers/buffer-settling.js": "be51b3dbdba558e014489347ef582f94887986897a6171e0844d38863eb457eb",
+    "eval/checkers/provider-stream-errors.js": "8ae59d673add045dbee73e6a4292c288ec4fe369bb452f7a5eb3f882b70985c3",
+    "eval/checkers/support.js": "3b153c0e75496f4141eb86f267a234d32b63f5ccd531ad4d3690a515f5f1370d",
+    "eval/checkers/vad-flap.js": "bb4915d512aef6a61aaba9396e3a2e21d00108d7c3da15e17c20a8e042327a44"
+  },
+  "isolation": {
+    "network": "none",
+    "candidateMount": "read-only",
+    "checkerMount": "read-only",
+    "credentialsMounted": false,
+    "memoryMax": "1536M",
+    "swapMax": 0,
+    "cpuQuota": "100%",
+    "tasksMax": 256
+  },
+  "status": "completed",
+  "cases": [
+    {
+      "caseId": "buffer-settling",
+      "promptSha256": "f35ef2d183af92a4def42c801ea65c1f7816e1610a19b203444b26e73a4d16f5",
+      "revisions": [
+        {
+          "role": "base",
+          "commit": "35d1bb2d723f7bf3960bb9cbe2a484b7d6feb0ab",
+          "sourceDigest": "03ea31cb29a2d73c507aab2dc3ebc61ebcbc7ba25797e14f233581b03f164bbe",
+          "unit": "praxis-replay-8a94c139-d369-4c25-a972-32cc41aaf6b7-buffer-settling-base.service",
+          "status": "failed",
+          "exitCode": 1,
+          "result": {
+            "caseId": "buffer-settling",
+            "checker": "buffer-settling-v1",
+            "complete": true,
+            "passed": false,
+            "checks": [
+              {
+                "id": "duration_never_extends_fixed_delay",
+                "passed": false,
+                "reason": "Utterance duration or the retired dynamic flag extended the fixed delay"
+              },
+              {
+                "id": "all_asr_completions_gate_flush",
+                "passed": true
+              },
+              {
+                "id": "resumed_speech_cancels_deadline",
+                "passed": true
+              },
+              {
+                "id": "closely_arriving_results_share_deadline",
+                "passed": true
+              },
+              {
+                "id": "endpoint_and_multiple_holds_preserve_text",
+                "passed": true
+              },
+              {
+                "id": "cooldown_then_settling",
+                "passed": true
+              },
+              {
+                "id": "stale_requeue_preserves_asr_and_order",
+                "passed": true
+              },
+              {
+                "id": "empty_asr_and_timeout_recovery",
+                "passed": true
+              },
+              {
+                "id": "clear_cancels_all_pending_work",
+                "passed": true
+              }
+            ],
+            "candidateModuleSha256": {
+              "conversation-buffer.js": "29ec7720e5a6eccf29646f8960900e1fda451a8872f0b45aa08fb19281be426b"
+            },
+            "promptSha256": "f35ef2d183af92a4def42c801ea65c1f7816e1610a19b203444b26e73a4d16f5",
+            "evidenceType": "offline-virtual-clock-module-evaluation",
+            "liveServicesExercised": false,
+            "semanticReviewRequired": true,
+            "isolation": "Caller must enforce an unprivileged OS sandbox; VM restrictions are not a security boundary.",
+            "limitations": [
+              "Checks the exported buffer contract with deterministic receiver events; no Discord or ASR service is contacted.",
+              "Documentation, environment-variable deprecation, unchanged receiver policy, and candidate-authored deterministic tests require diff review."
+            ]
+          }
+        },
+        {
+          "role": "reference",
+          "commit": "b1e8e61fe9878b566ab0aa173fcb4119bf31219c",
+          "sourceDigest": "cba0e4154d60f4d373d5286ad33bf71eaa84b3c2e273b44dd4b01e8cfd97449d",
+          "unit": "praxis-replay-8a94c139-d369-4c25-a972-32cc41aaf6b7-buffer-settling-reference.service",
+          "status": "inactive",
+          "exitCode": 0,
+          "result": {
+            "caseId": "buffer-settling",
+            "checker": "buffer-settling-v1",
+            "complete": true,
+            "passed": true,
+            "checks": [
+              {
+                "id": "duration_never_extends_fixed_delay",
+                "passed": true
+              },
+              {
+                "id": "all_asr_completions_gate_flush",
+                "passed": true
+              },
+              {
+                "id": "resumed_speech_cancels_deadline",
+                "passed": true
+              },
+              {
+                "id": "closely_arriving_results_share_deadline",
+                "passed": true
+              },
+              {
+                "id": "endpoint_and_multiple_holds_preserve_text",
+                "passed": true
+              },
+              {
+                "id": "cooldown_then_settling",
+                "passed": true
+              },
+              {
+                "id": "stale_requeue_preserves_asr_and_order",
+                "passed": true
+              },
+              {
+                "id": "empty_asr_and_timeout_recovery",
+                "passed": true
+              },
+              {
+                "id": "clear_cancels_all_pending_work",
+                "passed": true
+              }
+            ],
+            "candidateModuleSha256": {
+              "conversation-buffer.js": "87e0a83679be83e83b9a072b540b4cf9016c0da1ce52fb35cbce9f78d478d090"
+            },
+            "promptSha256": "f35ef2d183af92a4def42c801ea65c1f7816e1610a19b203444b26e73a4d16f5",
+            "evidenceType": "offline-virtual-clock-module-evaluation",
+            "liveServicesExercised": false,
+            "semanticReviewRequired": true,
+            "isolation": "Caller must enforce an unprivileged OS sandbox; VM restrictions are not a security boundary.",
+            "limitations": [
+              "Checks the exported buffer contract with deterministic receiver events; no Discord or ASR service is contacted.",
+              "Documentation, environment-variable deprecation, unchanged receiver policy, and candidate-authored deterministic tests require diff review."
+            ]
+          }
+        }
+      ],
+      "discriminatesHistoricalChange": true
+    },
+    {
+      "caseId": "provider-stream-errors",
+      "promptSha256": "1ba7e7dabc78387317c868a9a6c95397c88487c1491a242c67b0d901429f8608",
+      "revisions": [
+        {
+          "role": "base",
+          "commit": "8b098f28c96ecbde424d66fbd1ac03f0767d2fed",
+          "sourceDigest": "d114530b6e1ceb7090cff08532d07082d3ecb80e5b2a697b03b9387fa321d9e1",
+          "unit": "praxis-replay-8a94c139-d369-4c25-a972-32cc41aaf6b7-provider-stream-errors-base.service",
+          "status": "failed",
+          "exitCode": 1,
+          "result": {
+            "caseId": "provider-stream-errors",
+            "checker": "provider-stream-errors-v1",
+            "complete": true,
+            "passed": false,
+            "checks": [
+              {
+                "id": "provider_error_before_speech",
+                "passed": false,
+                "reason": "HTTP 200 provider error must reject decision, completion, and speech with the provider cause"
+              },
+              {
+                "id": "fragmented_provider_error_without_final_newline",
+                "passed": false,
+                "reason": "HTTP 200 provider error must reject decision, completion, and speech with the provider cause"
+              },
+              {
+                "id": "provider_error_after_partial_speech",
+                "passed": false,
+                "reason": "An error after partial speech must reject completion and the remaining speech stream"
+              },
+              {
+                "id": "text_deltas_preserve_speech",
+                "passed": true
+              },
+              {
+                "id": "partial_json_deltas_preserve_speech",
+                "passed": false,
+                "reason": "Valid provider output did not complete as speech"
+              },
+              {
+                "id": "genuine_silence_remains_silence",
+                "passed": true
+              }
+            ],
+            "candidateModuleSha256": {
+              "podcast-generator.js": "337ce3650ee7d7c7d10c57b16dc97ed3c20c67d38eb39a6699e0e44145586842",
+              "anthropic-messages.js": "7cd7354c491b8beda0957ba8947057d5b7a540a855e266b7b6b78e41675ec2e5"
+            },
+            "promptSha256": "1ba7e7dabc78387317c868a9a6c95397c88487c1491a242c67b0d901429f8608",
+            "evidenceType": "offline-mocked-module-evaluation",
+            "liveServicesExercised": false,
+            "semanticReviewRequired": true,
+            "isolation": "Caller must enforce an unprivileged OS sandbox; VM restrictions are not a security boundary."
+          }
+        },
+        {
+          "role": "reference",
+          "commit": "cf6de19d8b894ce6b6f49334e31ee65b7d01a874",
+          "sourceDigest": "e9968325b8f58edfedfce37bdcd8e657f0499a6da2042b2170a5bf1a49bf3d65",
+          "unit": "praxis-replay-8a94c139-d369-4c25-a972-32cc41aaf6b7-provider-stream-errors-reference.service",
+          "status": "inactive",
+          "exitCode": 0,
+          "result": {
+            "caseId": "provider-stream-errors",
+            "checker": "provider-stream-errors-v1",
+            "complete": true,
+            "passed": true,
+            "checks": [
+              {
+                "id": "provider_error_before_speech",
+                "passed": true
+              },
+              {
+                "id": "fragmented_provider_error_without_final_newline",
+                "passed": true
+              },
+              {
+                "id": "provider_error_after_partial_speech",
+                "passed": true
+              },
+              {
+                "id": "text_deltas_preserve_speech",
+                "passed": true
+              },
+              {
+                "id": "partial_json_deltas_preserve_speech",
+                "passed": true
+              },
+              {
+                "id": "genuine_silence_remains_silence",
+                "passed": true
+              }
+            ],
+            "candidateModuleSha256": {
+              "podcast-generator.js": "9ff3bb877fbaf6468b87d81720a078f29cba71ba149ca0cf8b0e252a8675baa1",
+              "anthropic-messages.js": "7cd7354c491b8beda0957ba8947057d5b7a540a855e266b7b6b78e41675ec2e5"
+            },
+            "promptSha256": "1ba7e7dabc78387317c868a9a6c95397c88487c1491a242c67b0d901429f8608",
+            "evidenceType": "offline-mocked-module-evaluation",
+            "liveServicesExercised": false,
+            "semanticReviewRequired": true,
+            "isolation": "Caller must enforce an unprivileged OS sandbox; VM restrictions are not a security boundary."
+          }
+        }
+      ],
+      "discriminatesHistoricalChange": true
+    },
+    {
+      "caseId": "vad-flap",
+      "promptSha256": "07c365dc091f67aba6913579d244dd5488e2c078853d5ce951878a6b6117d76a",
+      "revisions": [
+        {
+          "role": "base",
+          "commit": "8b507b5d9678606823758eb6ed7cde05896a2cef",
+          "sourceDigest": "21d81aa8fdf9a65ca6d770abed8777963afb2f653b617e1bc9afc1db3cfe365f",
+          "unit": "praxis-replay-8a94c139-d369-4c25-a972-32cc41aaf6b7-vad-flap-base.service",
+          "status": "failed",
+          "exitCode": 1,
+          "result": {
+            "caseId": "vad-flap",
+            "checker": "vad-flap-v1",
+            "complete": true,
+            "passed": false,
+            "checks": [
+              {
+                "id": "silent_stops_drop_audio_keep_subscription",
+                "passed": false,
+                "reason": "A non-speech stop retained audio or its old start time"
+              },
+              {
+                "id": "next_speech_has_only_its_own_bytes_and_time",
+                "passed": false,
+                "reason": "Old flap bytes leaked into the next ASR request"
+              },
+              {
+                "id": "manual_flush_rejects_noise_but_keeps_short_speech",
+                "passed": false,
+                "reason": "Manual finalization emitted non-speech audio"
+              },
+              {
+                "id": "silence_rollover_drops_noise_resets_detector",
+                "passed": false,
+                "reason": "Silence rollover transcribed or recorded a noise-only buffer"
+              },
+              {
+                "id": "speaker_isolation_and_resume_preserve_audio",
+                "passed": true
+              },
+              {
+                "id": "queued_asr_snapshots_remain_distinct",
+                "passed": false,
+                "reason": "ASR snapshots were reordered, duplicated, or contaminated while the first request was pending"
+              }
+            ],
+            "candidateModuleSha256": {
+              "audio-receiver.js": "d443f9e6e583b9691c5e448c761097716be8cd70baed283bec310179f87f82e7",
+              "silence-detector.js": "426cecb3ef1ca4cdc64372c0c38b16423c102befa36ebad826d55412135d75e5",
+              "speaker-tracker.js": "e2f9dfc32e419bdcbf6df5abcd331cba749b7632a3ed3c311f6d759aa042cfd5"
+            },
+            "promptSha256": "07c365dc091f67aba6913579d244dd5488e2c078853d5ce951878a6b6117d76a",
+            "evidenceType": "offline-mocked-module-evaluation",
+            "liveServicesExercised": false,
+            "semanticReviewRequired": true,
+            "isolation": "Caller must enforce an unprivileged OS sandbox; VM restrictions are not a security boundary.",
+            "limitations": [
+              "Synthetic PCM and mocked Discord/ASR only; no codec, provider, live recording, or perceptual audio verification."
+            ]
+          }
+        },
+        {
+          "role": "reference",
+          "commit": "b961a9c600b3cec410339389f17a67f1b4a83499",
+          "sourceDigest": "cc0a9c32ea31bae5768b59b0ef3936e8085cc29708492966ca02f63b2a1e4c2a",
+          "unit": "praxis-replay-8a94c139-d369-4c25-a972-32cc41aaf6b7-vad-flap-reference.service",
+          "status": "inactive",
+          "exitCode": 0,
+          "result": {
+            "caseId": "vad-flap",
+            "checker": "vad-flap-v1",
+            "complete": true,
+            "passed": true,
+            "checks": [
+              {
+                "id": "silent_stops_drop_audio_keep_subscription",
+                "passed": true
+              },
+              {
+                "id": "next_speech_has_only_its_own_bytes_and_time",
+                "passed": true
+              },
+              {
+                "id": "manual_flush_rejects_noise_but_keeps_short_speech",
+                "passed": true
+              },
+              {
+                "id": "silence_rollover_drops_noise_resets_detector",
+                "passed": true
+              },
+              {
+                "id": "speaker_isolation_and_resume_preserve_audio",
+                "passed": true
+              },
+              {
+                "id": "queued_asr_snapshots_remain_distinct",
+                "passed": true
+              }
+            ],
+            "candidateModuleSha256": {
+              "audio-receiver.js": "7218251be939ace46cd64a268f16b35de2ec317ebcbd77f669c8e885416f8090",
+              "silence-detector.js": "426cecb3ef1ca4cdc64372c0c38b16423c102befa36ebad826d55412135d75e5",
+              "speaker-tracker.js": "e2f9dfc32e419bdcbf6df5abcd331cba749b7632a3ed3c311f6d759aa042cfd5"
+            },
+            "promptSha256": "07c365dc091f67aba6913579d244dd5488e2c078853d5ce951878a6b6117d76a",
+            "evidenceType": "offline-mocked-module-evaluation",
+            "liveServicesExercised": false,
+            "semanticReviewRequired": true,
+            "isolation": "Caller must enforce an unprivileged OS sandbox; VM restrictions are not a security boundary.",
+            "limitations": [
+              "Synthetic PCM and mocked Discord/ASR only; no codec, provider, live recording, or perceptual audio verification."
+            ]
+          }
+        }
+      ],
+      "discriminatesHistoricalChange": true
+    }
+  ],
+  "passed": true
+}

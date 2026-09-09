@@ -18,7 +18,7 @@ ChatGPT account/workspace availability and mobile tool exposure must be verified
 
 Node 22.22 or newer is required. Run `npm ci --ignore-scripts` and `npm test`. Tests use disposable directories and test credentials. They cover OAuth and HTTP MCP calls, source/edit/diff behavior, stale revisions, concurrent duplicate submissions, cancellation, worker crashes, and recovery. Simulated runners exercise protocol and lifecycle behavior. The separate [Linux host fixture](docs/evidence/coding-host-bootstrap.json) records actual Podman execution, effective cgroups, network and mount policy, storage capacity, cancellation, independent timeout, and recovery; it does not claim deliberate resource-exhaustion stress or a phone coding run.
 
-[Replay evaluations](docs/replay-evals.md) compare an exact source snapshot and original task against independent checks. The public catalog contains provenance and mechanical checks. Private project source and original prompts are kept outside this repository.
+[Replay evaluations](docs/replay-evals.md) compare clean historical snapshots and private tasks against independent checks. The [next batch](docs/replay-batch-v1.md) adds three varied cases and six coding/recovery runs while keeping the accepted tool release fixed. Context-dependent historical requests are labeled as adapted. Private project source and original prompts stay outside this repository.
 
 The deployed verification client reads credentials from private files. Set `PRAXIS_BASE_URL`, `PRAXIS_PASSWORD_FILE`, and `PRAXIS_CLIENT_STATE`, then run `node scripts/probe-client.js smoke`. The `start` and `recover` commands verify a 45-second job across an operator-triggered MCP app restart. Never put password/token values in shell arguments or Git.
 

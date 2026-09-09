@@ -11,6 +11,7 @@ import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/cli
 import { createApp } from '../src/server.js';
 import { createCodingService } from '../src/code/server.js';
 import { containerName } from '../src/code/runner.js';
+import { selectValidationProjectIds } from '../eval/project-selection.js';
 
 const startedAt = new Date().toISOString();
 const fixtureId = randomUUID();
@@ -59,6 +60,7 @@ try {
   assert.notEqual(process.getuid(), 0, 'Run the test as the dedicated coding identity, never root.');
   assert.equal(process.argv.length, 3, 'Supply one protected JSON configuration file with runnerConfig.');
   const supplied = JSON.parse(readFileSync(resolve(process.argv[2]), 'utf8'));
+  if (supplied.evaluationProjects !== undefined) selectValidationProjectIds(supplied);
   assert.ok(supplied.runnerConfig && typeof supplied.runnerConfig.image === 'string', 'Protected runnerConfig is required.');
   receipt.release = supplied.release || 'host-mcp-fixture';
   receipt.image = supplied.runnerConfig.image;
@@ -98,7 +100,8 @@ try {
     runnerConfig: { ...supplied.runnerConfig, workspaceRoot: workspaceDirectory,
       logDirectory: `/srv/praxis-code/storage/container-logs/mcp-${fixtureId}` },
     projects: [{ id: 'host-fixture', name: 'Host MCP fixture', repository: 'fixture:synthetic', revision: baseRevision, snapshotPath,
-      instructions: 'Synthetic source used only for authenticated transport and real container evidence.', validationCommands: [['node', '-e', "require('node:assert/strict').equal(require('./answer.cjs').answer, 42)"]] }],
+      instructions: 'Synthetic source used only for authenticated transport and real container evidence.', validationCommands: [['node', '-e', "require('node:assert/strict').equal(require('./answer.cjs').answer, 42)"]] },
+      ...(supplied.evaluationProjects || []).map(id => { const project = supplied.projects.find(item => item.id === id); assert.ok(project); return project; })],
   });
   gateway = await createApp(gatewayConfig);
   async function token(scope) {
@@ -129,7 +132,19 @@ try {
   const capabilities = await call(client, 'capabilities');
   receipt.backendBootId = capabilities.bootId;
   assert.equal(capabilities.execution.imageDigest, receipt.image);
-  assert.equal((await call(client, 'projects_list')).projects[0].projectId, 'host-fixture');
+  const listedProjects = (await call(client, 'projects_list')).projects;
+  assert.ok(listedProjects.some(project => project.projectId === 'host-fixture'));
+  receipt.replayProjects = [];
+  for (const id of supplied.evaluationProjects || []) {
+    const expected = supplied.projects.find(project => project.id === id);
+    assert.ok(listedProjects.some(project => project.projectId === id));
+    const inspected = await call(client, 'project_inspect', { projectId: id });
+    assert.equal(inspected.revision, expected.revision);
+    assert.equal(inspected.instructions, expected.instructions);
+    assert.deepEqual(inspected.validationCommands, expected.validationCommands);
+    receipt.replayProjects.push({ projectId: id, revision: inspected.revision,
+      instructionsSha256: sha256(inspected.instructions), validationCommandsVerified: true });
+  }
   assert.equal((await call(client, 'project_inspect', { projectId: 'host-fixture' })).revision, baseRevision);
   assert.equal((await call(client, 'files_list', { projectId: 'host-fixture' })).files.length, 3);
   const createRequest = { projectId: 'host-fixture', baseRevision, idempotencyKey: `create-${fixtureId}`, label: `Host MCP recovery ${fixtureId}` };

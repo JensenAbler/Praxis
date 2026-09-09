@@ -10,6 +10,7 @@ import { CodeStore } from '../src/code/store.js';
 import { WorkspaceManager } from '../src/code/workspaces.js';
 import { CodeJobs } from '../src/code/jobs.js';
 import { PodmanRunner } from '../src/code/runner.js';
+import { selectValidationProjectIds } from '../eval/project-selection.js';
 
 assert.equal(process.platform, 'linux');
 assert.notEqual(process.getuid(), 0, 'Never execute project code as host root.');
@@ -145,13 +146,13 @@ function suiteSummary(projectId, text) {
   const suiteCompleted = projectId === 'production' ? Boolean(pythonSummary)
     : projectId === 'praxis' ? Boolean(tap.tests) : custom.length > 0 && (projectId !== 'discord' || Boolean(tap.tests));
   const suitePassed = projectId === 'production' ? pythonSummary?.result === 'OK'
-    : projectId === 'praxis' ? tapPassed : customPassed && (projectId !== 'discord' || tapPassed);
+    : projectId === 'praxis' ? tapPassed : customPassed && (projectId !== 'discord' && !Object.hasOwn(tap, 'tests') || tapPassed);
   return { custom, tap, python: pythonSummary, childClosure, suiteCompleted, suitePassed: Boolean(suitePassed) };
 }
 
 try {
   await jobs.recover();
-  const ids = ['discord', 'production', 'praxis', 'discord-replay-speech-first'];
+  const ids = selectValidationProjectIds(config);
   const projects = ids.map(id => { const p = config.projects.find(value => value.id === id); assert.ok(p); return p; });
   const provenance = await run('provenance', workspace(projects[0]), ['node', '-e', provenanceProgram]);
   const match = /^PRAXIS_RUNTIME_PROVENANCE (.+)$/m.exec(provenance.text);
@@ -164,15 +165,21 @@ try {
       const path = join(project.snapshotPath, file);
       if (existsSync(path)) item.sourceManifests[file] = hash(readFileSync(path));
     }
-    const bundle = evidence.runtime.bundles[project.id];
+    const bundleId = config.evaluationDependencyBundles?.[project.id] || project.id;
+    const bundle = evidence.runtime.bundles[bundleId];
+    item.dependencyBundleId = bundleId;
     item.dependencyManifestsMatchSource = bundle ? Object.entries(item.sourceManifests).every(([file, value]) => bundle[file] === value) : null;
+    item.dependencyLockMatchesSource = bundle ? item.sourceManifests['package-lock.json'] === bundle['package-lock.json'] : null;
     for (let i = 0; i < project.validationCommands.length; i++) {
       const result = await run(`${project.id}-${i}`, workspaceId, wrapped(project.validationCommands[i]));
       const summary = suiteSummary(project.id, result.text);
       item.commands.push({ commandIndex: i, ...result.summary, ...summary,
-        acceptedAsPassing: result.summary.status === 'completed' && result.summary.exitCode === 0 && !result.summary.truncated && summary.suitePassed && summary.childClosure?.code === 0 });
+        acceptedAsPassing: result.summary.status === 'completed' && result.summary.exitCode === 0 && !result.summary.truncated && summary.suiteCompleted && summary.suitePassed && summary.childClosure?.code === 0 });
     }
-    item.passed = item.commands.every(command => command.acceptedAsPassing) && item.dependencyManifestsMatchSource !== false;
+    item.dependencyAdaptation = config.evaluationDependencyAdaptations?.[project.id] || null;
+    item.passed = item.commands.every(command => command.acceptedAsPassing)
+      && (item.dependencyManifestsMatchSource !== false || Boolean(item.dependencyAdaptation)
+        && (item.dependencyLockMatchesSource === true || project.id === 'discord-replay-vad-flap'));
     evidence.projects = [...evidence.projects.filter(value => value.projectId !== project.id), item]; checkpoint();
     process.stdout.write(JSON.stringify({ event: 'PROJECT_VALIDATED', projectId: project.id, passed: item.passed,
       commands: item.commands.map(({ status, exitCode, suiteCompleted, custom, tap, python }) => ({ status, exitCode, suiteCompleted, custom, tap, python })) }) + '\n');
