@@ -1,0 +1,19 @@
+{
+  "date": "2026-09-09",
+  "evidenceType": "Observed native ChatGPT web account interface through browser controls",
+  "connectorId": "asdk_app_6aa0d8a46ad08191b05827a9824cd295",
+  "name": "Praxis Probe",
+  "endpoint": "https://mcp.jensenabler.com/praxis-probe/mcp",
+  "connected": true,
+  "authorizationUsed": "OAuth",
+  "registrationMethod": "Dynamic Client Registration",
+  "baseScopes": ["offline_access"],
+  "optionalOidcEmailLookup": false,
+  "toolsRefreshedAfterConnection": true,
+  "discoveredTools": ["probe_capabilities", "probe_failure", "probe_job_cancel", "probe_job_logs", "probe_job_start", "probe_job_status", "probe_jobs_list", "probe_observations", "probe_response"],
+  "requiredToolScope": "praxis:probe",
+  "permissionsMode": "Allow low-risk (default)",
+  "nativeLoginFixRelease": "probe-d78e02c44615",
+  "actualIphoneToolCallsExercised": false,
+  "notes": "The owner entered the private password. After native form-origin header repair and reconnection of the existing plugin, ChatGPT displayed Connected and Authorization used OAuth. Refresh replaced the initial empty action list with nine tool schemas. No password, token, authorization code, or OAuth state value is recorded here."
+}

@@ -4,7 +4,7 @@ Connect **Praxis Probe** first. Use the same account as the iPhone. Record the m
 
 ## Complete the connection
 
-The **Praxis Probe** connection has been created in ChatGPT; owner OAuth sign-in is pending. Complete the open sign-in using the password in the private local file `C:\Users\Jensen\.codex\praxis-probe-private\login.txt`, then allow access. After ChatGPT confirms connection, open a new iPhone conversation and attach Praxis Probe. Connection and mobile tool availability remain unverified until those steps succeed.
+**Praxis Probe is connected through OAuth in ChatGPT**, and the refreshed settings list all nine tools. Open a new iPhone conversation and attach Praxis Probe. Mobile tool calls and fresh-conversation recovery are still unverified. If reauthorization is needed later, use the private probe password and allow access; the bootstrap password file is `C:\Users\Jensen\.codex\praxis-probe-private\login.txt`.
 
 For reference, the observed web setup was:
 
@@ -12,6 +12,7 @@ For reference, the observed web setup was:
 2. Enter **Praxis Probe**, server URL `https://mcp.jensenabler.com/praxis-probe/mcp`, and **OAuth**.
 3. Advanced settings discovered dynamic client registration and the expected endpoints/resource. Discovered scopes were `praxis:probe offline_access`; set the base scope to `offline_access`. Disable optional OIDC/email lookup because the fixture does not provide email or userinfo. Keep OAuth enabled.
 4. Accept the unreviewed-server notice and select **Create**, then complete the owner sign-in described above.
+5. In Praxis Probe's settings, select **Refresh** after connection if Actions is initially empty. This loaded all nine actions during the actual setup.
 
 ## Prompt 1 — tool behavior and disconnect
 
