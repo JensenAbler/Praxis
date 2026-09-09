@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "evidenceKind": "owner-bootstrap-deployment-observations",
+  "status": "activation_pending",
+  "endpoint": "https://mcp.jensenabler.com/praxis-probe/mcp",
+  "currentInstalledRelease": "coding-0121604a83cf",
+  "codingEnabled": false,
+  "installations": [
+    {
+      "release": "coding-53cf0cdab55c",
+      "commit": "53cf0cdab55c0262f3cf8fa9246db5f3681cbe1a",
+      "archiveSha256": "473d1d30771691e99c5a3cbb480cf3d15c4e215f88f6c43776c7c3a1caba55fd",
+      "linuxTests": { "total": 55, "passed": 55, "failed": 0, "skipped": 0 },
+      "backup": "/root/praxis-probe-backups/20260909T060545Z-U1Xckp"
+    },
+    {
+      "release": "coding-0121604a83cf",
+      "commit": "0121604a83cf3940ce4e790ba6373b89ae95c008",
+      "archiveSha256": "da4e979dd977bc172eac6910b1d2b86dbf2f685884a4056bd2105d381ec0ae06",
+      "linuxTests": { "total": 57, "passed": 57, "failed": 0, "skipped": 0 },
+      "backup": "/root/praxis-probe-backups/20260909T153847Z-fKRgyO"
+    }
+  ],
+  "activationAttempts": [
+    {
+      "release": "coding-0121604a83cf",
+      "observedAt": "2026-09-09T15:42:20Z",
+      "result": "rolled_back",
+      "backendProcessExitCode": 0,
+      "backendListenerStarted": false,
+      "cause": "The executable-entry check compared a canonical ES module URL with the unresolved /current symlink path, so it skipped starting the HTTP server.",
+      "gatewayConfigurationRestored": true,
+      "backup": "/root/praxis-probe-backups/coding-activation-gW0Uz3Rl"
+    }
+  ],
+  "workstationOutageRecovery": {
+    "observedAt": "2026-09-09T15:34:59Z",
+    "vpsUptime": "37 days, 14:22",
+    "probeWebAndWorker": "active",
+    "codingService": "inactive as before outage",
+    "publicGitHead": "b641c86",
+    "uncommittedChangeRecovered": "deploy/install.sh coding-activation safeguard",
+    "scope": "The workstation lost power. This does not establish VPS reboot or host-loss recovery. Existing jobs were inspected before new fixtures were started."
+  },
+  "preservedApplications": {
+    "observedAt": "2026-09-09T15:41:00Z",
+    "podcastDiscord": { "revision": "feef620f1958b24e2a0de50f28361a9d9e2db4ef", "workingTreeClean": true },
+    "podcastProduction": { "revision": "2b5c4273d3f7b249f8626a8575ba79fe0f66c339", "workingTreeClean": true },
+    "apocryphaPid": 2217438,
+    "observerPid": 2973852,
+    "openClawPid": 871,
+    "scope": "The same listener PIDs and clean source revisions were observed before and after the Praxis installation. No unrelated service restart was requested."
+  },
+  "phoneCodingAcceptance": "pending",
+  "claudeAcceptance": "pending"
+}

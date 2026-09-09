@@ -49,11 +49,18 @@
     "configDirectoryMode": "0750 root:praxis-code",
     "configContainsOAuthSecrets": false,
     "usageAfterColdUserMapping": "2.1 GiB of approximately 7.8 GiB usable ext4 capacity",
-    "observedFilesystemCapacityBytes": 8350298112
+    "observedFilesystemCapacityBytes": 8350298112,
+    "latestUsageObservation": {
+      "measuredAt": "2026-09-09T15:37:20.783652+00:00",
+      "usedBytes": 3789168640,
+      "availableBytes": 4544352256,
+      "capacityBytes": 8350298112
+    }
   },
   "image": {
-    "tag": "localhost/praxis-executor:bootstrap",
-    "imageId": "sha256:bd368951e79939564988d295441322017f69bc352e058c6ccb94b4efeba606ce",
+    "tag": "localhost/praxis-executor:dependencies-aba6f4d",
+    "imageId": "sha256:a807793c27f53bf93480fc3dcfe73b2ab1b6bdf8b3aa1aca820118fd43767170",
+    "baseImageId": "sha256:bd368951e79939564988d295441322017f69bc352e058c6ccb94b4efeba606ce",
     "includes": [
       "Node 22",
       "Python 3",
@@ -61,7 +68,8 @@
       "ripgrep",
       "make",
       "g++",
-      "ffmpeg"
+      "ffmpeg",
+      "Offline dependency trees for the current Discord snapshot, historical replay, and Praxis"
     ],
     "pushedToRegistry": false
   },
@@ -123,16 +131,16 @@
     "Filesystem capacity and effective cgroup files are observed; deliberate disk, memory, and PID exhaustion stress is not claimed.",
     "The corrected bootstrap script is syntax-checked and its changed commands exercised; a second complete package/image bootstrap is not claimed."
   ],
-  "measuredAt": "2026-09-09T05:53:02.456Z",
+  "measuredAt": "2026-09-09T06:10:48.436Z",
   "prepared": true,
   "isolationChecksPassed": true,
   "actualContainerPolicy": {
     "cgroups": {
-      "pid": 3218174,
-      "membership": "0::/system.slice/praxis-code-bootstrap-smoke.service",
+      "pid": 3227573,
+      "membership": "0::/system.slice/praxis-code-release-runner-smoke.service",
       "ancestors": [
         {
-          "path": "/sys/fs/cgroup/system.slice/praxis-code-bootstrap-smoke.service",
+          "path": "/sys/fs/cgroup/system.slice/praxis-code-release-runner-smoke.service",
           "memory.max": "1610612736",
           "memory.swap.max": "0",
           "pids.max": "256",
@@ -165,11 +173,18 @@
     ]
   },
   "fixtureProvenance": {
-    "runId": "d14ec621-9ce4-4ed2-9cb1-d52b6b6330fa",
-    "startedAt": "2026-09-09T05:52:42.956Z",
-    "completedAt": "2026-09-09T05:53:02.456Z",
-    "unit": "praxis-code-bootstrap-smoke.service",
-    "policySource": "Clone of deploy/praxis-code.service; only condition, working directory, command, fixture image environment, restart behavior, and fixture lifetime differ.",
+    "runId": "c0bd58c6-e651-47a9-8a84-863e0a8811d4",
+    "startedAt": "2026-09-09T06:08:50.669Z",
+    "completedAt": "2026-09-09T06:10:48.436Z",
+    "unit": "praxis-code-release-runner-smoke.service",
+    "policySource": "Clone of deploy/praxis-code.service, with an immutable release working directory, fixture command, fixed dependency image environment, no restart, and a 240-second service lifetime.",
+    "sourceRevision": "53cf0cdab55c0262f3cf8fa9246db5f3681cbe1a",
+    "sourceScope": "The unit executed code-runner-smoke.js and imported runner/jobs modules directly from the immutable coding-53cf0cdab55c release, including JSON output-budget and embedded-NUL SQLite hardening.",
+    "fileSha256": {
+      "scripts/code-runner-smoke.js": "ab0c15b06cbe690ec8d475705670efb7f0926312ecd4824cf2ea68aca68e914b",
+      "src/code/jobs.js": "8779896ff3194fd4740ae6f6b570dffbf035d62e5171d761157a0e3e0a0fd18f",
+      "src/code/runner.js": "bc9a573081f8634bdeac62d52f648ef53a39a611ee4fc51cdd766c03cc765160"
+    },
     "passedChecks": [
       "isolated_workspace_created",
       "real_failing_test",
@@ -185,9 +200,8 @@
     ],
     "fullLifecycleSuitePassed": true,
     "serviceExitStatus": 0,
-    "sourceScope": "This run loaded the staged runner/jobs modules before the later JSON-escaped output-budget and embedded-NUL SQLite hardening copy. Subsequent Linux tests/MCP acceptance must cover that later source change.",
     "timeoutReceipt": {
-      "jobId": "b1d9d9c4-b209-4b2c-b273-701ec1ee4cfa",
+      "jobId": "5a59877f-e08f-4f13-8d61-a909ca11fa05",
       "exitCode": null,
       "status": "interrupted",
       "terminationReason": "timeout_inferred",
@@ -197,7 +211,9 @@
       "runId": "15bd50de-9e16-4293-99c1-b58bb2a34677",
       "issue": "Podman monitor exit -1 was previously reported as a process failure.",
       "resolution": "Normalize the unavailable POSIX exit code to null. Preserve observed stopped state and report interrupted/timeout_inferred explicitly, without claiming a definitively observed cause or rerunning the command."
-    }
+    },
+    "evidenceRecoveredAt": "2026-09-09T15:37:20.783652+00:00",
+    "originalJobsRestartedDuringRecovery": false
   },
   "localChecksBeforeBootstrap": {
     "npmTestPassed": 44,
@@ -206,5 +222,27 @@
     "authenticatedMcpIntegrationIncluded": true,
     "shellSyntaxCheckPassed": true,
     "gitDiffWhitespaceCheckPassed": true
+  },
+  "bootstrapImage": {
+    "tag": "localhost/praxis-executor:bootstrap",
+    "imageId": "sha256:bd368951e79939564988d295441322017f69bc352e058c6ccb94b4efeba606ce",
+    "includes": [
+      "Node 22",
+      "Python 3",
+      "git",
+      "ripgrep",
+      "make",
+      "g++",
+      "ffmpeg"
+    ],
+    "pushedToRegistry": false
+  },
+  "previousFixture": {
+    "runId": "d14ec621-9ce4-4ed2-9cb1-d52b6b6330fa",
+    "startedAt": "2026-09-09T05:52:42.956Z",
+    "completedAt": "2026-09-09T05:53:02.456Z",
+    "imageId": "sha256:bd368951e79939564988d295441322017f69bc352e058c6ccb94b4efeba606ce",
+    "passed": true,
+    "sourceScope": "This run loaded the staged runner/jobs modules before the later JSON-escaped output-budget and embedded-NUL SQLite hardening copy. Subsequent Linux tests/MCP acceptance must cover that later source change."
   }
 }

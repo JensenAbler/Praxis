@@ -1,0 +1,408 @@
+{
+  "schemaVersion": 1,
+  "evidenceType": "authenticated-MCP-client-with-real-rootless-container",
+  "scope": "Successful automated synthetic fixture using temporary signing authority, with a real isolated command and fresh MCP client recovery. Live owner OAuth and actual iPhone coding acceptance remain separate checks.",
+  "status": "completed",
+  "fixtureReceipt": {
+    "evidenceKind": "authenticated-MCP-client-temporary-authority",
+    "fixtureId": "24922c89-e879-4274-882d-283192dd8a7b",
+    "startedAt": "2026-09-09T15:41:21.517Z",
+    "authentication": "Ephemeral fixture issuer and signing keys; no live OAuth authority, owner password, or ChatGPT sign-in.",
+    "executor": "Real PodmanRunner, using the protected fixed image and existing dedicated container storage.",
+    "gatewayRestartMode": "Gateway application instance and HTTP listener recreated in the same fixture process; coding backend remains alive.",
+    "assertions": [
+      {
+        "name": "permission_boundaries",
+        "gatewayInsufficientScopeDenied": true,
+        "backendMissingMalformedAndProbeTokenDenied": true,
+        "codeTokenCannotUseProbeTools": true,
+        "passedAt": "2026-09-09T15:41:22.057Z"
+      },
+      {
+        "name": "source_discovery_and_create",
+        "workspaceId": "15a27259-a5aa-4feb-92a5-ac20ed1a2431",
+        "createOperationId": "6f18a689-f4ca-44d8-88ca-1b287848718b",
+        "createIdempotencyVerified": true,
+        "passedAt": "2026-09-09T15:41:22.359Z"
+      },
+      {
+        "name": "all_edit_actions_and_conflicts",
+        "actions": [
+          "patch",
+          "write",
+          "rename",
+          "delete"
+        ],
+        "editIdempotencyVerified": true,
+        "staleRevisionDenied": true,
+        "pathEscapeDenied": true,
+        "passedAt": "2026-09-09T15:41:22.603Z"
+      },
+      {
+        "name": "real_command_and_gateway_restart",
+        "jobId": "85d7fd28-b7c0-403a-870c-fd1e25e5cd79",
+        "runningStartedAt": "2026-09-09T15:41:22.994Z",
+        "realContainerRunningAfterGatewayRestart": true,
+        "passedAt": "2026-09-09T15:41:23.208Z"
+      },
+      {
+        "name": "fresh_client_recovers_completed_job",
+        "sameWorkspace": true,
+        "sameJob": true,
+        "backendBootIdUnchanged": true,
+        "jobIdempotencyVerified": true,
+        "passedAt": "2026-09-09T15:41:28.386Z"
+      },
+      {
+        "name": "persisted_logs_artifact_diff_and_mutation_receipts",
+        "logPages": 3,
+        "logRecords": 6,
+        "artifactPages": 4,
+        "artifactHashIndependentlyVerified": true,
+        "diffPages": 4,
+        "mutationReceiptRecovered": true,
+        "passedAt": "2026-09-09T15:41:28.691Z"
+      }
+    ],
+    "status": "completed",
+    "release": "coding-0121604a83cf",
+    "image": "sha256:a807793c27f53bf93480fc3dcfe73b2ab1b6bdf8b3aa1aca820118fd43767170",
+    "source": {
+      "kind": "synthetic immutable fixture",
+      "baseRevision": "968f622e87d2ac04b295e4ab34c125913029274ca316dac1e94ef81021a972e2"
+    },
+    "backendBootId": "55a306ec-c230-49e0-988b-31ae22cdb0ef",
+    "workspaceId": "15a27259-a5aa-4feb-92a5-ac20ed1a2431",
+    "createOperationId": "6f18a689-f4ca-44d8-88ca-1b287848718b",
+    "applyOperationId": "0d29b3f5-6320-432e-a8da-3aa6ba439a41",
+    "jobId": "85d7fd28-b7c0-403a-870c-fd1e25e5cd79",
+    "gatewayRestartedAt": "2026-09-09T15:41:23.208Z",
+    "jobStartedAt": "2026-09-09T15:41:22.994Z",
+    "jobFinishedAt": "2026-09-09T08:41:28.048479001-07:00",
+    "jobExitCode": 0,
+    "artifact": {
+      "id": "08cf904d84ad4601f30b44371ca0d1798ee72a2ab6c6c13030cecc6ec5ddd5cf",
+      "bytes": 64,
+      "sha256": "44f1a2c4a5955545a5cd3e1aeadcf884e1bb5dbcea5074a6f72a38fd761c7a94"
+    },
+    "finishedAt": "2026-09-09T15:41:28.698Z",
+    "elapsedMilliseconds": 7181,
+    "fixtureStateRetained": true
+  },
+  "provenance": {
+    "sourceRevision": "0121604a83cf3940ce4e790ba6373b89ae95c008",
+    "release": "coding-0121604a83cf",
+    "archiveSha256": "da4e979dd977bc172eac6910b1d2b86dbf2f685884a4056bd2105d381ec0ae06",
+    "scriptPath": "/srv/praxis-probe/releases/coding-0121604a83cf/scripts/coding-host-mcp-smoke.js",
+    "scriptSha256": "943cd85f14a3419778bb09a744b9679d585bc7b3a77a5c3ddf0df7177c0caeb3",
+    "jobsSha256": "d1ffa25b11e3cacbad489a01fc73297625b0a4fd1f13ac983834a8022f63f374",
+    "sourceLoading": "Script and imports loaded directly from the new immutable release. No release files were edited.",
+    "unit": "praxis-code-mcp-smoke-0121604a.service",
+    "unitSha256": "e4af1b976c14c9c2ca7754c1872ea8ac689ed9264f24d34918e6df2c0eff4eea",
+    "unitPolicy": "Clone of permanent praxis-code.service with immutable working directory, fixture command, restart=no, and a 240-second lifetime.",
+    "serviceExitStatus": 0,
+    "identity": "praxis-code",
+    "memoryMaxBytes": 1610612736,
+    "swapMaxBytes": 0,
+    "cpuQuotaPercent": 100,
+    "tasksMax": 256,
+    "fixtureServiceStarts": 1
+  },
+  "postCompletionVerification": {
+    "verifiedAt": "2026-09-09T15:42:28.097903+00:00",
+    "jobCount": 1,
+    "jobs": [
+      {
+        "id": "85d7fd28-b7c0-403a-870c-fd1e25e5cd79",
+        "status": "completed",
+        "exit_code": 0,
+        "started_at": "2026-09-09T15:41:22.994Z",
+        "finished_at": "2026-09-09T08:41:28.048479001-07:00"
+      }
+    ],
+    "operations": [
+      {
+        "id": "6f18a689-f4ca-44d8-88ca-1b287848718b",
+        "kind": "create",
+        "status": "completed"
+      },
+      {
+        "id": "0d29b3f5-6320-432e-a8da-3aa6ba439a41",
+        "kind": "apply",
+        "status": "completed"
+      }
+    ],
+    "method": "Read-only SQLite inspection after service completion and rootless Podman running-container inventory.",
+    "runningContainers": 0,
+    "permanentCodingBackendStatus": "inactive"
+  },
+  "resolvedDefect": {
+    "previousFixtureId": "3513a5b6-0459-47cb-a2c8-be2305324d6c",
+    "issue": "Published job start timestamp changed between running and terminal responses.",
+    "resolution": "Preserve the first published start timestamp through later state inspection and finalization.",
+    "runningStartedAt": "2026-09-09T15:41:22.994Z",
+    "completedStartedAt": "2026-09-09T15:41:22.994Z",
+    "strictEqualityPassed": true,
+    "originalFailedJobRestarted": false
+  },
+  "limitations": [
+    "The fixture used an ephemeral issuer and signing keys, not the live owner OAuth authority or ChatGPT connection.",
+    "Gateway application and HTTP listener recreation occurred inside one fixture process while the coding backend remained alive; this run does not establish OS process restart recovery.",
+    "The source and command were synthetic, not an agent's solution to the historical podcast task.",
+    "The one-job idempotency and persisted output checks do not establish a universal exactly-once execution guarantee.",
+    "This run does not establish an actual iPhone coding session or arbitrary interruption timing."
+  ],
+  "previousAttempts": [
+    {
+      "schemaVersion": 1,
+      "evidenceType": "authenticated-MCP-client-with-real-rootless-container",
+      "scope": "Automated synthetic fixture using temporary signing authority. This failed attempt is preserved with later read-only recovery; no successful full MCP acceptance, live owner OAuth flow, or phone coding run is claimed.",
+      "status": "failed",
+      "fixtureReceipt": {
+        "evidenceKind": "authenticated-MCP-client-temporary-authority",
+        "fixtureId": "3513a5b6-0459-47cb-a2c8-be2305324d6c",
+        "startedAt": "2026-09-09T06:14:28.663Z",
+        "authentication": "Ephemeral fixture issuer and signing keys; no live OAuth authority, owner password, or ChatGPT sign-in.",
+        "executor": "Real PodmanRunner, using the protected fixed image and existing dedicated container storage.",
+        "gatewayRestartMode": "Gateway application instance and HTTP listener recreated in the same fixture process; coding backend remains alive.",
+        "assertions": [
+          {
+            "name": "permission_boundaries",
+            "gatewayInsufficientScopeDenied": true,
+            "backendMissingMalformedAndProbeTokenDenied": true,
+            "codeTokenCannotUseProbeTools": true,
+            "passedAt": "2026-09-09T06:14:29.183Z"
+          },
+          {
+            "name": "source_discovery_and_create",
+            "workspaceId": "a6a8f0cc-0cc2-4266-8193-b26b2bd51730",
+            "createOperationId": "7bfcaf12-3eb1-45d0-8c48-e09bf52e9c4b",
+            "createIdempotencyVerified": true,
+            "passedAt": "2026-09-09T06:14:29.402Z"
+          },
+          {
+            "name": "all_edit_actions_and_conflicts",
+            "actions": [
+              "patch",
+              "write",
+              "rename",
+              "delete"
+            ],
+            "editIdempotencyVerified": true,
+            "staleRevisionDenied": true,
+            "pathEscapeDenied": true,
+            "passedAt": "2026-09-09T06:14:29.579Z"
+          },
+          {
+            "name": "real_command_and_gateway_restart",
+            "jobId": "b62ccf81-5c45-4a88-afed-7118614072e8",
+            "runningStartedAt": "2026-09-09T06:14:29.961Z",
+            "realContainerRunningAfterGatewayRestart": true,
+            "passedAt": "2026-09-09T06:14:30.146Z"
+          }
+        ],
+        "status": "failed",
+        "release": "coding-53cf0cdab55c",
+        "image": "sha256:a807793c27f53bf93480fc3dcfe73b2ab1b6bdf8b3aa1aca820118fd43767170",
+        "source": {
+          "kind": "synthetic immutable fixture",
+          "baseRevision": "968f622e87d2ac04b295e4ab34c125913029274ca316dac1e94ef81021a972e2"
+        },
+        "backendBootId": "a9c3777b-f0da-4bde-af20-20fed9dc3679",
+        "workspaceId": "a6a8f0cc-0cc2-4266-8193-b26b2bd51730",
+        "createOperationId": "7bfcaf12-3eb1-45d0-8c48-e09bf52e9c4b",
+        "applyOperationId": "8dd6fc96-9cd9-43de-ad85-e34928a2d8f7",
+        "jobId": "b62ccf81-5c45-4a88-afed-7118614072e8",
+        "gatewayRestartedAt": "2026-09-09T06:14:30.146Z",
+        "failure": {
+          "phase": "fresh_client_recovers_completed_job",
+          "code": "ERR_ASSERTION",
+          "errorType": "AssertionError"
+        },
+        "finishedAt": "2026-09-09T06:14:35.385Z",
+        "elapsedMilliseconds": 6722,
+        "fixtureStateRetained": true
+      },
+      "harness": {
+        "path": "/srv/praxis-code/mcp-fixture-harness-53cf0cd/scripts/coding-host-mcp-smoke.js",
+        "sha256": "943cd85f14a3419778bb09a744b9679d585bc7b3a77a5c3ddf0df7177c0caeb3",
+        "owner": "root:root",
+        "mode": "0644",
+        "sourceRelease": "coding-53cf0cdab55c",
+        "sourceLoading": "Root-owned src and node_modules symlinks resolve directly to the immutable coding-53cf0cdab55c release; runner/jobs SHA-256 values match the release.",
+        "changesFromRelease": [
+          "Fixture workspace and runner logs located inside the dedicated 8 GiB filesystem.",
+          "Wait for initial running state bounded at 180 seconds to allow cold user mapping."
+        ],
+        "unit": "praxis-code-mcp-smoke.service",
+        "unitRuntimeMaxSeconds": 240,
+        "serviceExitStatus": 1
+      },
+      "failureAnalysis": {
+        "assertion": "finished.startedAt === running.startedAt",
+        "observedRunningStartedAt": "2026-09-09T06:14:29.961Z",
+        "persistedFinishedStartedAt": "2026-09-08T23:14:29.947738575-07:00",
+        "meaning": "The job's published start timestamp changed between running and completed responses. Both formatting and the represented instant differ; this is a stable job metadata defect, not evidence of a second execution.",
+        "fixAndNewFixtureRequired": true
+      },
+      "readOnlyRecovery": {
+        "recoveredAt": "2026-09-09T15:37:20.783652+00:00",
+        "method": "SQLite opened in mode=ro plus retained artifact and synthetic workspace file reads. No original job or gateway was restarted; no MCP tool call was made during this recovery.",
+        "jobCount": 1,
+        "job": {
+          "id": "b62ccf81-5c45-4a88-afed-7118614072e8",
+          "status": "completed",
+          "created_at": "2026-09-09T06:14:29.590Z",
+          "updated_at": "2026-09-09T06:14:35.185Z",
+          "started_at": "2026-09-08T23:14:29.947738575-07:00",
+          "finished_at": "2026-09-08T23:14:35.007553098-07:00",
+          "container_id": "912802dff60693034c5d3008bc9e1138643eea122e5fcb77aae54f38740d9d90",
+          "exit_code": 0,
+          "termination_reason": "exit",
+          "execution_error": null,
+          "revision_after": "edd7b78335eec4d5cd4a6bc4cc72c0e9a78ea63a70d3bc282cc7b8f9c729d79e",
+          "output_bytes": 36,
+          "truncated": 0,
+          "artifact_errors": "[]"
+        },
+        "records": [
+          {
+            "sequence": 1,
+            "timestamp": "2026-09-09T06:14:29.590Z",
+            "stream": "system",
+            "text": "QUEUED",
+            "partial": 0
+          },
+          {
+            "sequence": 2,
+            "timestamp": "2026-09-09T06:14:29.687Z",
+            "stream": "system",
+            "text": "STARTING",
+            "partial": 0
+          },
+          {
+            "sequence": 3,
+            "timestamp": "2026-09-09T06:14:29.962Z",
+            "stream": "system",
+            "text": "RUNNING",
+            "partial": 0
+          },
+          {
+            "sequence": 4,
+            "timestamp": "2026-09-08T23:14:29.990344239-07:00",
+            "stream": "stdout",
+            "text": "HOST_MCP_STARTED\n",
+            "partial": 0
+          },
+          {
+            "sequence": 5,
+            "timestamp": "2026-09-08T23:14:34.996169150-07:00",
+            "stream": "stdout",
+            "text": "HOST_MCP_COMPLETED\n",
+            "partial": 0
+          },
+          {
+            "sequence": 6,
+            "timestamp": "2026-09-09T06:14:35.185Z",
+            "stream": "system",
+            "text": "COMPLETED exit=0 reason=exit monitorExit=0",
+            "partial": 0
+          }
+        ],
+        "artifacts": [
+          {
+            "id": "3ca003ecefaca38ef45e62f75e5317a8d6cbe3af76f0585246fe97f2185a1f25",
+            "name": "report.txt",
+            "bytes": 64,
+            "sha256": "44f1a2c4a5955545a5cd3e1aeadcf884e1bb5dbcea5074a6f72a38fd761c7a94",
+            "created_at": "2026-09-09T06:14:35.179Z",
+            "actualBytes": 64,
+            "actualSha256": "44f1a2c4a5955545a5cd3e1aeadcf884e1bb5dbcea5074a6f72a38fd761c7a94",
+            "content": {
+              "fixture": "authenticated-host-mcp",
+              "answer": 42,
+              "executions": 1
+            }
+          }
+        ],
+        "workspace": {
+          "id": "a6a8f0cc-0cc2-4266-8193-b26b2bd51730",
+          "project_id": "host-fixture",
+          "label": "Host MCP recovery 3513a5b6-0459-47cb-a2c8-be2305324d6c",
+          "base_revision": "968f622e87d2ac04b295e4ab34c125913029274ca316dac1e94ef81021a972e2",
+          "revision": "edd7b78335eec4d5cd4a6bc4cc72c0e9a78ea63a70d3bc282cc7b8f9c729d79e",
+          "status": "ready"
+        },
+        "sourceChanges": [
+          {
+            "path": "answer.cjs",
+            "kind": "modified",
+            "sha256": "904e0ef370b7426731e5391a69e7e79fb20adf6c8b7d94b2a298e116d0a95b03"
+          },
+          {
+            "path": "created.txt",
+            "kind": "added",
+            "sha256": "874e03458315bbcb438181c4232fabef37c25ab8f78f350d7d3238b38979f647"
+          },
+          {
+            "path": "delete-me.txt",
+            "kind": "deleted",
+            "sha256": null
+          },
+          {
+            "path": "rename-me.txt",
+            "kind": "deleted",
+            "sha256": null
+          },
+          {
+            "path": "renamed.txt",
+            "kind": "added",
+            "sha256": "f7c222af4d74a2224f006a541ee04f5dc0ad78338d2cc89ef347e26f6e7690d9"
+          },
+          {
+            "path": "report.txt",
+            "kind": "added",
+            "sha256": "44f1a2c4a5955545a5cd3e1aeadcf884e1bb5dbcea5074a6f72a38fd761c7a94"
+          }
+        ],
+        "operations": [
+          {
+            "id": "7bfcaf12-3eb1-45d0-8c48-e09bf52e9c4b",
+            "kind": "create",
+            "status": "completed",
+            "lastError": null
+          },
+          {
+            "id": "8dd6fc96-9cd9-43de-ad85-e34928a2d8f7",
+            "kind": "apply",
+            "status": "completed",
+            "lastError": null
+          }
+        ],
+        "checks": {
+          "singlePersistedJob": true,
+          "completedWithExitZero": true,
+          "contiguousSequences1Through6": true,
+          "oneStartAndOneCompletionMarker": true,
+          "artifactBytesAndHashIndependentlyVerified": true,
+          "artifactReportsOneExecution": true,
+          "workspaceRevisionMatchesJobRevisionAfter": true,
+          "createAndEditReceiptsCompleted": true
+        },
+        "runtimeInspection": {
+          "activeJobsAcrossCodingDatabases": 0,
+          "runningContainers": 0,
+          "retainedExitedTimeoutContainers": 2,
+          "retainedPreparedNeverStartedContainers": 2
+        }
+      },
+      "limitations": [
+        "The fixture reached fresh-client workspace/job recovery and completed the actual command, then failed before its terminal job-idempotency assertion and MCP log/artifact/diff/receipt pagination checks.",
+        "Read-only retained-state inspection verifies persistence but does not replace the uncompleted authenticated MCP assertions.",
+        "Gateway application and HTTP listener recreation occurred in the same fixture process; an OS process restart was not exercised.",
+        "Fixture signing keys were ephemeral test authority; no live owner password, OAuth grant, ChatGPT connection, or iPhone session was used.",
+        "Retained output indicates one execution; it is not a universal exactly-once execution guarantee."
+      ]
+    }
+  ]
+}
