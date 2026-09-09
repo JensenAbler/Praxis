@@ -1,0 +1,79 @@
+{
+  "kind": "real-linux-rootless-executor-fixture",
+  "authenticatedMcp": false,
+  "image": "sha256:a807793c27f53bf93480fc3dcfe73b2ab1b6bdf8b3aa1aca820118fd43767170",
+  "cases": [
+    {
+      "label": "npm-public-registry-install",
+      "jobId": "dbe5c69e-d452-4bce-a107-7a7d1745ea8f",
+      "network": "registries",
+      "exitCode": 0,
+      "output": "\nadded 1 package in 2s\n"
+    },
+    {
+      "label": "npm-persistence-offline",
+      "jobId": "79b04e90-b5b9-4a88-aa0d-96000e8fff71",
+      "network": "none",
+      "exitCode": 0,
+      "output": "OFFLINE_NPM_OK\n"
+    },
+    {
+      "label": "pypi-venv-install",
+      "jobId": "876d8ed8-8ebe-4399-b141-5318d43e4776",
+      "network": "registries",
+      "exitCode": 0,
+      "output": "Collecting idna==3.10\n  Downloading idna-3.10-py3-none-any.whl (70 kB)\n     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 70.4/70.4 kB 1.5 MB/s eta 0:00:00\nInstalling collected packages: idna\nSuccessfully installed idna-3.10\n"
+    },
+    {
+      "label": "python-persistence-offline",
+      "jobId": "bc81d3e1-6303-4040-b810-697aa501548c",
+      "network": "none",
+      "exitCode": 0,
+      "output": "OFFLINE_PYTHON_OK\n"
+    },
+    {
+      "label": "registry-authority-and-direct-network-denial",
+      "jobId": "b4992753-baf0-4e7f-bfeb-fd66159335cf",
+      "network": "registries",
+      "exitCode": 0,
+      "output": "DENIED_CONNECT 127.0.0.1:443\nDENIED_CONNECT 169.254.169.254:443\nDENIED_CONNECT github.com:443\nDENIED_CONNECT registry.npmjs.org.evil.example:443\nDENIED_DIRECT 1.1.1.1:443\nDENIED_DIRECT 169.254.169.254:80\nDENIED_DIRECT 127.0.0.1:8793\nISOLATION_OK uid=993\n"
+    },
+    {
+      "label": "package-script-remains-unprivileged",
+      "jobId": "7b4b9661-85e4-4bc0-a4fc-23ffc3de2284",
+      "network": "registries",
+      "exitCode": 0,
+      "output": "\n> praxis-registry-qualification@1.0.0 postinstall\n> node -e \"const fs=require('node:fs'),assert=require('node:assert/strict'); assert.notEqual(process.getuid(),0); for(const path of ['/etc/praxis-git/config.json','/opt/podcast-discord/.env']) assert.equal(fs.existsSync(path),false); fs.writeFileSync('script-proof.json',JSON.stringify({uid:process.getuid(),productionFilesVisible:false})); console.log('PACKAGE_SCRIPT_UNPRIVILEGED')\"\n\nPACKAGE_SCRIPT_UNPRIVILEGED\n\nup to date in 1s\n"
+    },
+    {
+      "label": "offline-dependency-preparation",
+      "jobId": "7e8a9c3b-568a-4813-970f-5ca7dd4bf913",
+      "network": "none",
+      "exitCode": 0,
+      "output": "{\"event\": \"DEPENDENCIES_PREPARED\", \"files\": 7, \"expandedBytes\": 10088, \"packageJsonSha256\": \"90d202548b0ecdd4ee9a21962c735d6e76b88104e4b964033383edeeabafb68b\", \"packageLockSha256\": \"513ee4e8ecf6e91a175181be596e58caa05fef6ded21bab1679d0a450f591741\", \"shrinkwrapSha256\": null, \"platform\": \"linux\", \"arch\": \"x64\", \"nodeVersion\": \"v22.23.2\", \"nodeMajor\": 22}\n"
+    }
+  ],
+  "scriptProof": {
+    "uid": 993,
+    "productionFilesVisible": false
+  },
+  "bundle": {
+    "version": 1,
+    "archiveSha256": "ea878de94f008171995909bdc0c402cc3be43161b6e5b0d5ed81c6f17e2f6f6a",
+    "archiveBytes": 20480,
+    "packageJsonSha256": "90d202548b0ecdd4ee9a21962c735d6e76b88104e4b964033383edeeabafb68b",
+    "packageLockSha256": "513ee4e8ecf6e91a175181be596e58caa05fef6ded21bab1679d0a450f591741",
+    "shrinkwrapSha256": null,
+    "workspaceId": "isolated-registry-qualification",
+    "revision": "fixture-only",
+    "jobId": "7e8a9c3b-568a-4813-970f-5ca7dd4bf913",
+    "image": "sha256:a807793c27f53bf93480fc3dcfe73b2ab1b6bdf8b3aa1aca820118fd43767170",
+    "platform": "linux",
+    "arch": "x64",
+    "nodeMajor": 22,
+    "nodeVersion": "v22.23.2",
+    "createdAt": "2026-09-09T23:23:14.784Z",
+    "validation": "Prepared bytes only; run application tests separately."
+  },
+  "ok": true
+}

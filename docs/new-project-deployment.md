@@ -109,4 +109,3 @@ source hashes, controlled privileges, exact-head updates, retained releases,
 operation recovery, configuration restoration, port limits and fixed templates.
 Real systemd unit syntax is separately checked using `systemd-analyze verify`;
 these checks do not claim a live app deployment or phone run.
-

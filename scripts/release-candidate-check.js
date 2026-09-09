@@ -25,8 +25,12 @@ const jwk = { ...await exportJWK(privateKey), kid: 'release-stage', use: 'sig', 
 const publicJwks = { keys: [{ ...await exportJWK(publicKey), kid: jwk.kid, use: 'sig', alg: 'RS256' }] };
 const source = join(directory, 'source'); mkdirSync(source, { recursive: true });
 writeFileSync(join(source, 'check.txt'), 'Praxis candidate readiness\n');
+const outboxDirectory = join(directory, 'outbox'), exportDirectory = join(directory, 'exports');
+mkdirSync(outboxDirectory, { recursive: true }); mkdirSync(exportDirectory, { recursive: true });
 const backendConfig = { port, issuer, resourceUrl, publicJwks, dataDirectory: directory, workspaceDirectory: join(directory, 'workspaces'),
-  staging: true, release: 'candidate-readiness', projects: [{ id: 'release-check', name: 'Release checker fixture', revision: 'a'.repeat(40), snapshotPath: source }] };
+  staging: true, release: 'candidate-readiness',
+  git: { url: 'http://127.0.0.1:1/call', outboxDirectory, exportDirectory },
+  projects: [{ id: 'release-check', name: 'Release checker fixture', revision: 'a'.repeat(40), snapshotPath: source }] };
 const configPath = join(directory, 'candidate.json'); writeFileSync(configPath, JSON.stringify(backendConfig));
 const salt = randomBytes(16), password = randomBytes(32);
 let gateway, client, child;

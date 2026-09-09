@@ -137,7 +137,21 @@ export class GitBroker {
     try { return await releaseCall(this, action, input); }
     catch (error) { if (error instanceof BrokerError) throw error; throw new BrokerError(error.code || 'UPDATER_UNAVAILABLE', error.message || 'Independent release control could not confirm this request.'); }
   }
-  submit(kind, { owner, ...input }) {
+  submit(kind, request) {
+    // The updater takes this same write lease while checking for idle work.
+    // Keep the fence check and admission together so an old check cannot admit
+    // a publication after activation has reserved the service generation.
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      const result = this.admit(kind, request);
+      this.db.exec('COMMIT');
+      return result;
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+  }
+  admit(kind, { owner, ...input }) {
     if (this.generationFencePath) {
       const fence = JSON.parse(readFileSync(this.generationFencePath, 'utf8'));
       check(fence.state === 'active', 'UPDATE_IN_PROGRESS', 'Application activation is draining mutations; recover existing work through status tools.');
