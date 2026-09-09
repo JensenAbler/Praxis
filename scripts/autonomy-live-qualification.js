@@ -36,8 +36,11 @@ async function step(label, name, args) {
 }
 async function completedOperation(label, name, args) {
   const initial = await step(label, name, args);
+  return observeOperation(label, initial.operationId);
+}
+async function observeOperation(label, operationId) {
   for (let i = 0; i < 180; i++) {
-    const result = await call('git_operation_status', { operationId: initial.operationId });
+    const result = await call('git_operation_status', { operationId });
     state.steps[label].observed = result; save();
     if (['completed', 'failed', 'uncertain'].includes(result.status)) {
       assert.equal(result.status, 'completed', JSON.stringify(result));
@@ -46,7 +49,7 @@ async function completedOperation(label, name, args) {
     }
     await delay(2000);
   }
-  throw new Error(`Observe existing operation ${initial.operationId}; qualification polling deadline reached.`);
+  throw new Error(`Observe existing operation ${operationId}; qualification polling deadline reached.`);
 }
 async function completedJob(label, name, args) {
   const initial = await step(label, name, args), jobId = initial.id;
@@ -123,7 +126,11 @@ try {
     state.deployment = deployed; save();
   }
   if (phase === 'recover' || phase === 'deploy') {
-    assert.ok(state.deployment);
+    if (!state.deployment) {
+      const operationId = state.steps.deploy?.result?.operationId;
+      assert.ok(operationId, 'No deployment ID was saved; resume deploy with the existing state and original idempotency key.');
+      state.deployment = await observeOperation('deploy', operationId); save();
+    }
     state.observations.workspace = await call('workspace_inspect', { workspaceId: state.workspaceId });
     state.observations.project = await call('project_inspect', { projectId: state.projectId });
     state.observations.deployment = await call('deployment_status', { projectId: state.projectId });

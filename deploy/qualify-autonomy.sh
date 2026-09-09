@@ -221,6 +221,13 @@ class Qualification:
         log.touch(mode=0o600)
         properties = self.properties('nobody', BUILDER, log) + ['MemoryMax=128M', 'CPUQuota=25%', 'TasksMax=24',
                       'RuntimeMaxSec=900', 'ReadWritePaths=' + str(directory), 'RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6']
+        resolver = pathlib.Path('/etc/resolv.conf').resolve(strict=True)
+        require(resolver.is_file(), 'The registry proxy requires the host DNS resolver configuration.')
+        if resolver.is_relative_to(pathlib.Path('/run')):
+            # Ubuntu's /etc/resolv.conf points into /run. Restore only the
+            # resolver files, keeping the host bus and service sockets hidden.
+            require(resolver.parent == pathlib.Path('/run/systemd/resolve'), 'Unsupported runtime DNS resolver path.')
+            properties.append('BindReadOnlyPaths=/run/systemd/resolve:/run/systemd/resolve')
         argv = ['/usr/bin/systemd-run', '--quiet', '--collect', '--unit=' + unit]
         argv += ['--property=' + prop for prop in properties]
         argv += ['/usr/bin/python3', '-B', str(launcher), str(self.checker / 'deploy/registry-proxy.py'), str(directory / 'proxy.sock')]
