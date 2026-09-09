@@ -2,6 +2,7 @@ import { mkdirSync, writeFileSync, openSync, closeSync, fsyncSync, renameSync, l
 import { join, resolve, dirname, relative, isAbsolute, sep } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { requireValue, readSafe, safePath, sha256, manifest, LIMITS, WorkspaceError } from './paths.js';
+import { CodeProjects } from './projects.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const COMMIT = /^[0-9a-f]{40}$/;
@@ -77,6 +78,7 @@ export class CodeGit {
         workspace_id TEXT PRIMARY KEY, operation_id TEXT NOT NULL, commit_hash TEXT NOT NULL,
         revision TEXT NOT NULL, entries_json TEXT NOT NULL, updated_at TEXT NOT NULL);`);
     for (const row of this.db.prepare("SELECT * FROM code_git_requests WHERE kind='commit'").all()) this._cleanup(row);
+    this.projects = new CodeProjects({ git: this });
   }
 
   _row(owner, operationId) {
@@ -159,7 +161,7 @@ export class CodeGit {
     const input = { kind: 'sync', projectId };
     const row = this.store.transaction(() => {
       const existing = this._existing(owner, idempotencyKey, input); if (existing) return existing;
-      this.workspaces._project(projectId);
+      this.workspaces._project(projectId, owner);
       return this._prepare({ owner, idempotencyKey, input, projectId, request: { projectId } });
     });
     return this._submit(row);
@@ -183,22 +185,59 @@ export class CodeGit {
     });
     return this._submit(row);
   }
-  async deploy({ owner, pushOperationId, expectedHead, idempotencyKey }) {
+  async deploy({ owner, pushOperationId, expectedHead, idempotencyKey, preparedDependenciesId }) {
     requireValue(typeof expectedHead === 'string' && COMMIT.test(expectedHead), 'expectedHead must be a full Git commit.');
-    const input = { kind: 'deploy', pushOperationId, expectedHead };
+    requireValue(preparedDependenciesId === undefined || DIGEST.test(preparedDependenciesId), 'preparedDependenciesId must be a SHA-256.');
+    const input = { kind: 'deploy', pushOperationId, expectedHead, ...(preparedDependenciesId ? { preparedDependenciesId } : {}) };
     const row = this.store.transaction(() => {
       const existing = this._existing(owner, idempotencyKey, input); if (existing) return existing;
       const push = this._row(owner, pushOperationId), receipt = JSON.parse(push.receipt_json);
       requireValue(push.kind === 'push' && receipt.status === 'completed', 'A completed push operation is required.', 'PUSH_NOT_READY');
       return this._prepare({ owner, idempotencyKey, input, projectId: push.project_id, workspaceId: push.workspace_id,
-        request: { pushOperationId, expectedHead } });
+        request: { pushOperationId, expectedHead, ...(preparedDependenciesId ? { preparedDependenciesId } : {}) } });
     });
     return this._submit(row);
   }
   async deploymentStatus({ owner, projectId }) {
-    ownerValue(owner); this.workspaces._project(projectId);
+    ownerValue(owner); this.workspaces._project(projectId, owner);
     return this.broker.deploymentStatus({ owner, projectId });
   }
+  async projectDeploy({ owner, publicationOperationId, expectedHead, preparedDependenciesId, recoverOperationId, idempotencyKey }) {
+    requireValue(expectedHead === null || COMMIT.test(expectedHead), 'expectedHead must be a full Git commit or null for first deployment.');
+    requireValue(preparedDependenciesId === undefined || DIGEST.test(preparedDependenciesId), 'Invalid dependency bundle identifier.');
+    if (recoverOperationId) idValue(recoverOperationId);
+    const input = { kind: 'projectDeploy', publicationOperationId, expectedHead, ...(preparedDependenciesId ? { preparedDependenciesId } : {}), ...(recoverOperationId ? { recoverOperationId } : {}) };
+    const row = this.store.transaction(() => {
+      const existing = this._existing(owner, idempotencyKey, input); if (existing) return existing;
+      const published = this._row(owner, publicationOperationId), receipt = JSON.parse(published.receipt_json);
+      requireValue(['push', 'projectPublish'].includes(published.kind) && receipt.status === 'completed', 'A completed project publication is required.', 'PUSH_NOT_READY');
+      const { kind: _kind, ...request } = input;
+      return this._prepare({ owner, idempotencyKey, input, projectId: published.project_id, workspaceId: published.workspace_id, request });
+    });
+    return this._submit(row);
+  }
+  async diagnosis({ owner, projectId, limit }) {
+    ownerValue(owner); this.workspaces._project(projectId, owner);
+    return this.broker.diagnosis({ owner, projectId, limit });
+  }
+  async deploymentHistory({ owner, projectId, limit, cursor }) {
+    ownerValue(owner); this.workspaces._project(projectId, owner);
+    return this.broker.deploymentHistory({ owner, projectId, limit, ...(cursor ? { cursor } : {}) });
+  }
+  async restart(args) { return this._recovery('restart', args); }
+  async rollback(args) { return this._recovery('rollback', args); }
+  async _recovery(kind, { owner, projectId, expectedHead, idempotencyKey, deploymentOperationId, recoverOperationId }) {
+    ownerValue(owner); keyValue(idempotencyKey); this.workspaces._project(projectId, owner);
+    requireValue(COMMIT.test(expectedHead), 'expectedHead must be a full Git commit.');
+    if (deploymentOperationId) idValue(deploymentOperationId);
+    if (recoverOperationId) idValue(recoverOperationId);
+    const request = { projectId, expectedHead, ...(deploymentOperationId ? { deploymentOperationId } : {}), ...(recoverOperationId ? { recoverOperationId } : {}) };
+    const input = { kind, ...request };
+    const row = this.store.transaction(() => this._existing(owner, idempotencyKey, input) || this._prepare({ owner, idempotencyKey, input, projectId, request }));
+    return this._submit(row);
+  }
+  projectCreate(args) { return this.projects.create(args); }
+  projectPublish(args) { return this.projects.publish(args); }
 
   _observe(row, receipt) {
     requireValue(receipt && receipt.operationId === row.id && receipt.kind === row.kind && receipt.projectId === row.project_id
@@ -208,6 +247,7 @@ export class CodeGit {
       const latest = this._row(row.owner, row.id), previous = JSON.parse(latest.receipt_json);
       if (TERMINAL.has(previous.status)) return previous;
       if (receipt.status === 'completed' && !latest.integrated) {
+        if (['projectCreate', 'projectPublish'].includes(row.kind)) this.projects.integrate(row, receipt);
         if (row.kind === 'sync') this._import(row, receipt);
         if (row.kind === 'commit') {
           const result = receipt.result, request = JSON.parse(row.request_json), snapshot = JSON.parse(row.snapshot_json);

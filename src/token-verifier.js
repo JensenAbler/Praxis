@@ -22,3 +22,15 @@ export function createTokenVerifier({ issuer, resourceUrl, jwks, allowedScopes =
     }
   };
 }
+
+/** Independent health keys cannot mint normal owner/production grants. */
+export function createHealthVerifier({ issuer, resourceUrl, jwks }) {
+  const verify = createTokenVerifier({ issuer, resourceUrl, jwks, allowedScopes: ['praxis:health'], requiredScope: 'praxis:health' });
+  return async token => {
+    const result = await verify(token);
+    if (result.scopes.length !== 1 || result.scopes[0] !== 'praxis:health' || result.clientId !== 'praxis-health') {
+      throw new OAuthError(OAuthErrorCode.InvalidToken, 'Invalid health grant');
+    }
+    return result;
+  };
+}

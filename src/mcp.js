@@ -3,6 +3,7 @@ import { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import { codeTools, parseArguments } from './code/schema.js';
 import { diagnosticRecord, errorRecovery, requestContext } from './diagnostics.js';
+import { releaseTools } from './release-schema.js';
 
 export const VERSION = '0.1.0';
 const SCOPE = 'praxis:probe';
@@ -10,12 +11,12 @@ const jobId = z.string().uuid();
 const cursor = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).default(0).describe('Omit/0 begins. Copy the returned nextCursor exactly; do not calculate it from page length.');
 const pageLimit = z.number().int().min(1).max(100).default(20).describe('Maximum records per page: 1–100; default 20. Omit for the default.');
 
-export function createProbeServer({ jobs, audit, resourceUrl, bootId, release, authInfo, era, coding }) {
+export function createProbeServer({ jobs, audit, resourceUrl, bootId, release, authInfo, era, coding, applicationTools = codeTools, releaseClient }) {
   const owner = authInfo?.extra?.subject;
   if (owner !== 'jensen') throw new Error('Authenticated owner required');
-  const server = new McpServer({ name: 'Praxis', version: coding ? '0.4.0' : VERSION }, {
+  const server = new McpServer({ name: 'Praxis', version: coding ? '0.5.0' : VERSION }, {
     instructions: coding
-      ? 'Praxis supplies coding tools; you supply reasoning. Start with capabilities and projects_list. Inspect a project, create one workspace at its exact base revision, read/search, edit with content hashes, run validation using job_start, and review workspace_diff. Use exact-text patches for large files; same-file patches run sequentially against one original hash. Omit optional page sizes initially and copy returned cursors exactly. Start job recovery with compact job_status; use job_logs tail/query/stream for selected evidence. General commands are sandboxed with network disabled. Use existing workspace/job/operation IDs to recover work in a fresh conversation. NEVER recreate an ambiguously completed operation; repeat its original idempotency key and inputs or inspect receipts. Probe tools are separate bounded diagnostics. Read capabilities for the installed publication policy. Where configured, project_sync fetches main, git_commit captures reviewed source, git_push publishes to main, and deployment_fast_forward updates the fixed podcast-discord service. Recover Git operations by durable IDs. General production administration and independent self-update remain unavailable.'
+      ? 'Praxis supplies tools; you supply reasoning. Start with capabilities and projects_list. Create new Node/Python/static projects with project_create or synchronize existing main with project_sync, then create one isolated workspace. Read/search, hash-check edits, run checks, review the diff, commit and publish main. New projects use project_publish once, then git_push; project_deploy hosts stateless apps on the separate apps origin. Commands default offline; explicitly choose network=registries for supported package downloads. Use dependency_prepare after npm changes before deployment. Use production_diagnosis, deployment_history and recorded recovery operations for registered production services. Independent praxis_release_* tools prepare, activate and recover the coding application while protected authentication and adapters remain installed separately. Copy returned cursors, prefer compact job_status and targeted log reads, and retain existing IDs/idempotency keys across conversations. Never recreate ambiguously completed work. Tool schema changes require refreshing the client connection metadata and starting a new conversation. Probe tools remain bounded diagnostics.'
       : 'This is an isolated diagnostic fixture. Call probe_capabilities first. Start only a bounded heartbeat job using a unique idempotencyKey, save its job ID, and inspect it through probe_job_status/logs. In a fresh conversation, probe_jobs_list recovers existing jobs. These tools provide no source access, arbitrary commands, production access, or model execution. Never recreate a job merely because a response was lost; repeat the same idempotency key or list existing jobs. Results describe only this fixture.'
   });
   const register = (name, title, description, inputSchema, handler, readOnly = true, destructive = false, scope = SCOPE) => {
@@ -34,7 +35,9 @@ export function createProbeServer({ jobs, audit, resourceUrl, bootId, release, a
       const started = performance.now();
       let result, text;
       try {
-        if (!authInfo.scopes?.includes(scope)) throw Object.assign(new Error(`Reconnect and grant ${scope} to use this tool.`), { code: 'AUTHORIZATION_REQUIRED' });
+        const healthRead = readOnly && scope === 'praxis:code' && authInfo.scopes?.length === 1 && authInfo.scopes[0] === 'praxis:health'
+          && ['capabilities', 'projects_list', 'project_inspect', 'file_read', 'jobs_list', 'job_status'].includes(name);
+        if (!authInfo.scopes?.includes(scope) && !healthRead) throw Object.assign(new Error(`Reconnect and grant ${scope} to use this tool.`), { code: 'AUTHORIZATION_REQUIRED' });
         const validated = parseArguments(inputSchema, args);
         const data = await requestContext.run(context, () => handler(validated));
         result = { ok: true, requestId, observedAt: new Date().toISOString(), ...data };
@@ -91,8 +94,13 @@ export function createProbeServer({ jobs, audit, resourceUrl, bootId, release, a
     throw Object.assign(new Error('Intentional fixture error. Continue by calling probe_capabilities; do not retry this tool to make it succeed.'), { code: 'FIXTURE_ERROR' });
   });
   register('probe_observations', 'Read server observation receipts', 'Read sanitized server-side tool/HTTP observations in sequence. Includes measured result sizes and durations, never tokens or request bodies.', z.object({ cursor, limit: pageLimit }), ({ cursor, limit }) => audit.list(owner, cursor, limit));
-  if (coding) for (const [name, tool] of Object.entries(codeTools)) {
+  if (coding) for (const [name, tool] of Object.entries(applicationTools)) {
     register(name, tool.title, tool.description, tool.schema, args => coding.call(name, args, authInfo.token), !tool.write, !!tool.destructive, 'praxis:code');
+  }
+  if (releaseClient) for (const [name, tool] of Object.entries(releaseTools)) {
+    register(name, tool.title, tool.description, tool.schema,
+      args => requestContext.run({ ...requestContext.getStore(), token: authInfo.token }, () => releaseClient[tool.action](args)),
+      !tool.write, !!tool.destructive, 'praxis:code');
   }
   return server;
 }

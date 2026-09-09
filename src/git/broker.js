@@ -1,20 +1,29 @@
 import { DatabaseSync } from 'node:sqlite';
-import { mkdirSync, writeFileSync, renameSync, existsSync, openSync, closeSync, fsyncSync, chmodSync, fchmodSync, readdirSync, lstatSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync, renameSync, existsSync, openSync, closeSync, fsyncSync, chmodSync, fchmodSync, readdirSync, lstatSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { execFile } from 'node:child_process';
 import { z } from 'zod';
 import { readSafe, safePath, normalizePath, IGNORED, sha256, LIMITS, WorkspaceError } from '../code/paths.js';
 import { GitTransportError } from './git.js';
+import { ProjectProvisioner, projectBrokerSchemas } from './projects.js';
+import { releaseBrokerSchemas, releaseCall } from './releases.js';
 
 const id = z.string().uuid(), oid = z.string().regex(/^[a-f0-9]{40}$/), digest = z.string().regex(/^[a-f0-9]{64}$/);
 const project = z.string().regex(/^[a-z0-9][a-z0-9_-]{0,63}$/);
 const base = { operationId: id, idempotencyKey: z.string().regex(/^[A-Za-z0-9._:-]{8,128}$/) };
 export const brokerSchemas = {
+  ...projectBrokerSchemas,
+  ...releaseBrokerSchemas,
   sync: z.object({ ...base, projectId: project }).strict(),
   commit: z.object({ ...base, workspaceId: id, projectId: project, baseCommit: oid, parentCommit: oid,
     revision: digest, stageId: id, message: z.string().min(1).max(2000).refine(x => x.trim() && !x.includes('\0')) }).strict(),
   push: z.object({ ...base, commitOperationId: id }).strict(),
-  deploy: z.object({ ...base, pushOperationId: id, expectedHead: oid }).strict(),
+  deploy: z.object({ ...base, pushOperationId: id, expectedHead: oid, preparedDependenciesId: digest.optional() }).strict(),
+  projectDeploy: z.object({ ...base, publicationOperationId: id, expectedHead: oid.nullable(), preparedDependenciesId: digest.optional(), recoverOperationId: id.optional() }).strict(),
+  restart: z.object({ ...base, projectId: project, expectedHead: oid, recoverOperationId: id.optional() }).strict(),
+  rollback: z.object({ ...base, projectId: project, expectedHead: oid, deploymentOperationId: id, recoverOperationId: id.optional() }).strict(),
+  diagnosis: z.object({ projectId: project, limit: z.number().int().min(1).max(100).default(40) }).strict(),
+  deploymentHistory: z.object({ projectId: project, limit: z.number().int().min(1).max(100).default(20), cursor: id.optional() }).strict(),
   get: z.object({ operationId: id }).strict(),
   list: z.object({ workspaceId: id.optional(), cursor: z.number().int().nonnegative().default(0), limit: z.number().int().min(1).max(100).default(20) }).strict(),
   deploymentStatus: z.object({ projectId: project }).strict()
@@ -40,7 +49,7 @@ const now = () => new Date().toISOString();
 
 /** Trusted source publisher. It never checks out or executes candidate source. */
 export class GitBroker {
-  constructor({ dataDirectory, outboxDirectory, exportDirectory, git, repositories, deployment }) {
+  constructor({ dataDirectory, outboxDirectory, exportDirectory, git, repositories, deployment, projectProvisioning, releaseControl, generationFencePath, projectDeployment }) {
     mkdirSync(dataDirectory, { recursive: true, mode: 0o700 });
     mkdirSync(exportDirectory, { recursive: true, mode: 0o2750 });
     this.db = new DatabaseSync(join(dataDirectory, 'git.sqlite'));
@@ -57,10 +66,13 @@ export class GitBroker {
     this.git = git; this.outbox = outboxDirectory; this.exports = exportDirectory;
     this.repositories = new Map(repositories.map(repo => [repo.projectId, repo]));
     this.deployment = deployment; this.pending = null;
+    this.releaseControl = releaseControl; this.generationFencePath = generationFencePath; this.projectDeployment = projectDeployment;
+    this.projectProvisioner = projectProvisioning ? new ProjectProvisioner({ broker: this, ...projectProvisioning }) : null;
   }
-  policy(projectId) {
+  policy(projectId, owner) {
     const repo = this.repositories.get(projectId);
     check(repo, 'PUBLICATION_DISABLED', 'Publication is not enabled for this registered project.');
+    check(!repo.owner || repo.owner === owner, 'NOT_FOUND', 'Project not found.');
     check((repo.defaultBranch || 'main') === 'main', 'INVALID_CONFIGURATION', 'This release publishes only to main.');
     return repo;
   }
@@ -82,11 +94,18 @@ export class GitBroker {
         if (row.kind === 'push') {
           const result = await this.run_push(row, JSON.parse(row.request_json));
           this.update(row, 'completed', 'completed', result);
-        } else if (row.kind === 'deploy') {
+        } else if (['deploy', 'restart', 'rollback'].includes(row.kind)) {
           const result = await this.deployment({ action: 'status', operationId: row.id });
           const record = result.operation || result;
-          if (record.phase === 'completed') this.update(row, 'completed', 'completed', { ...record, commit: JSON.parse(row.result_json).commit, branch: 'main' });
+          if (record.phase === 'completed') this.update(row, 'completed', 'completed', { ...record, commit: record.targetCommit || JSON.parse(row.result_json).commit, branch: 'main' });
           else if (record.phase === 'failed') this.update(row, 'failed', 'failed', record, { code: 'DEPLOYMENT_FAILED', message: 'Deployment activation failed; the saved checkout was retained.' });
+        } else if (row.kind === 'projectPublish' && row.phase === 'project_push_intent') {
+          const result = await this.run_projectPublish(row, JSON.parse(row.request_json));
+          this.update(row, 'completed', 'completed', result);
+        } else if (row.kind === 'projectDeploy') {
+          const result = await this.projectDeployment({ action: 'status', projectId: row.project_id, operationId: row.id });
+          const record = result.operation || result;
+          if (['completed', 'failed'].includes(record.phase)) this.update(row, record.phase, record.phase, record);
         }
       } catch { /* Observation failure leaves the durable uncertain receipt unchanged. */ }
     }
@@ -98,23 +117,60 @@ export class GitBroker {
     const hasMore = rows.length > limit, page = rows.slice(0, limit);
     return { operations: page.map(row => this.receipt(row)), hasMore, nextCursor: hasMore ? page.at(-1).row_id : null };
   }
-  async deploymentStatus({ projectId }) {
-    const repo = this.policy(projectId);
+  async deploymentStatus({ projectId, owner }) {
+    const repo = this.policy(projectId, owner);
+    if (repo.owner && this.projectProvisioner && this.projectDeployment) return this.projectDeployment({ action: 'status', projectId });
     check(repo.deployment && this.deployment, 'DEPLOYMENT_DISABLED', 'Deployment is not enabled for this project.');
     return this.deployment({ action: 'status' });
   }
+  async diagnosis({ owner, projectId, limit = 40 }) {
+    const repo = this.policy(projectId, owner);
+    check(repo.deployment && this.deployment, 'DEPLOYMENT_DISABLED', 'Production diagnosis is not enabled for this project.');
+    return this.deployment({ action: 'diagnosis', limit });
+  }
+  async deploymentHistory({ owner, projectId, limit = 20, cursor }) {
+    const repo = this.policy(projectId, owner);
+    check(repo.deployment && this.deployment, 'DEPLOYMENT_DISABLED', 'Deployment history is not enabled for this project.');
+    return this.deployment({ action: 'history', limit, ...(cursor ? { cursor } : {}) });
+  }
+  async release(action, input) {
+    try { return await releaseCall(this, action, input); }
+    catch (error) { if (error instanceof BrokerError) throw error; throw new BrokerError(error.code || 'UPDATER_UNAVAILABLE', error.message || 'Independent release control could not confirm this request.'); }
+  }
   submit(kind, { owner, ...input }) {
+    if (this.generationFencePath) {
+      const fence = JSON.parse(readFileSync(this.generationFencePath, 'utf8'));
+      check(fence.state === 'active', 'UPDATE_IN_PROGRESS', 'Application activation is draining mutations; recover existing work through status tools.');
+    }
     const parsed = brokerSchemas[kind]?.safeParse(input);
-    check(parsed?.success && ['sync', 'commit', 'push', 'deploy'].includes(kind), 'INVALID_ARGUMENT', 'Invalid publishing request.');
+    check(parsed?.success && ['sync', 'commit', 'push', 'deploy', 'projectDeploy', 'restart', 'rollback', 'projectCreate', 'projectPublish'].includes(kind), 'INVALID_ARGUMENT', 'Invalid publishing request.');
     const args = parsed.data;
     const encoded = JSON.stringify(args);
     const existing = this.db.prepare('SELECT * FROM git_operations WHERE owner=? AND idempotency_key=?').get(owner, args.idempotencyKey);
     if (existing) {
       check(existing.kind === kind && existing.request_json === encoded, 'IDEMPOTENCY_CONFLICT', 'The key belongs to different publishing inputs.');
+      if (['projectPublish', 'projectDeploy'].includes(kind) && existing.status === 'uncertain') {
+        // This is an explicit mutation retry with identical inputs. The provisioner
+        // observes each saved intent before continuing; it never repeats an
+        // ambiguous effect. Read-only status cannot initiate the remaining steps.
+        this.update(existing, 'queued', existing.phase, existing.result_json ? JSON.parse(existing.result_json) : null);
+        return this.get({ owner, operationId: existing.id });
+      }
       return this.receipt(existing);
     }
     check(!this.db.prepare('SELECT id FROM git_operations WHERE id=?').get(args.operationId), 'IDEMPOTENCY_CONFLICT', 'The operation identifier is already used.');
     let projectId = args.projectId, workspaceId = args.workspaceId;
+    if (kind === 'projectDeploy') {
+      const published = this.row(owner, args.publicationOperationId);
+      check(['push', 'projectPublish'].includes(published.kind) && published.status === 'completed', 'OPERATION_NOT_READY', 'A completed project publication is required.');
+      projectId = published.project_id; workspaceId = published.workspace_id;
+      check(this.projectProvisioner && this.projectDeployment && this.projectProvisioner.get(owner, projectId).published, 'DEPLOYMENT_DISABLED', 'New-project deployment requires a published owner-created project.');
+    }
+    if (['projectCreate', 'projectPublish'].includes(kind)) {
+      check(this.projectProvisioner, 'PROJECT_CREATION_DISABLED', 'New-project provisioning is not configured on this broker.');
+      ({ projectId } = this.projectProvisioner.admit(kind, owner, args));
+      if (args.commitOperationId) workspaceId = this.row(owner, args.commitOperationId).workspace_id;
+    }
     if (kind === 'push' || kind === 'deploy') {
       const parent = this.row(owner, args.commitOperationId || args.pushOperationId);
       check(parent.kind === (kind === 'push' ? 'commit' : 'push') && parent.status === 'completed', 'OPERATION_NOT_READY', 'A completed predecessor operation is required.');
@@ -123,8 +179,9 @@ export class GitBroker {
         .find(row => { const prior = JSON.parse(row.request_json); return (prior.commitOperationId || prior.pushOperationId) === (args.commitOperationId || args.pushOperationId); });
       check(!pending, 'GIT_OPERATION_PENDING', `An earlier ${kind} operation remains unresolved${pending ? `: ${pending.id}` : ''}. Recover it before submitting another attempt.`);
     }
-    const repo = this.policy(projectId);
-    if (kind === 'deploy') check(repo.deployment && this.deployment, 'DEPLOYMENT_DISABLED', 'Deployment is not enabled for this project.');
+    const repo = kind === 'projectCreate' ? null : this.policy(projectId, owner);
+    if (kind === 'push') check(!repo.localOnly, 'REPOSITORY_NOT_PUBLISHED', 'Use project_publish for a new local project before ordinary Git pushes.');
+    if (['deploy', 'restart', 'rollback'].includes(kind)) check(repo.deployment && this.deployment, 'DEPLOYMENT_DISABLED', 'Deployment is not enabled for this project.');
     check(this.db.prepare('SELECT COUNT(*) AS n FROM git_operations').get().n < 10000, 'LIMIT_EXCEEDED', 'Publishing receipt quota reached.');
     const stamp = now();
     this.db.prepare(`INSERT INTO git_operations(id,owner,kind,project_id,workspace_id,idempotency_key,request_json,status,created_at,updated_at)
@@ -151,7 +208,8 @@ export class GitBroker {
       const known = error instanceof BrokerError || error instanceof GitTransportError || error instanceof WorkspaceError;
       const latest = this.row(row.owner, row.id);
       const definitePushFailure = row.kind === 'push' && row.phase !== 'push_intent' && error instanceof GitTransportError && (error.pushAttempted !== true || error.code === 'GIT_PUSH_FAILED');
-      const uncertain = !error.definiteFailure && !definitePushFailure && (latest.phase === 'push_intent' || latest.phase === 'deploy_intent');
+      const uncertain = !error.definiteFailure && !definitePushFailure && (error.uncertain ||
+        ['push_intent', 'deploy_intent', 'project_remote_intent', 'project_key_intent', 'project_push_intent'].includes(latest.phase));
       this.update(row, uncertain ? 'uncertain' : 'failed', latest.phase,
         latest.result_json ? JSON.parse(latest.result_json) : null,
         { code: known ? error.code : 'INTERNAL_ERROR', message: known ? error.message : 'Publishing could not finish. Recover this operation before attempting more work.' });
@@ -174,7 +232,9 @@ export class GitBroker {
   async run_sync(row) {
     let commit = row.result_json ? JSON.parse(row.result_json).commit : null;
     if (!commit) {
-      ({ commit } = await this.git.fetch(row.project_id));
+      const repo = this.policy(row.project_id, row.owner);
+      if (repo.localOnly) commit = repo.initialCommit;
+      else ({ commit } = await this.git.fetch(row.project_id));
       this.update(row, 'running', 'fetched', { commit });
     }
     const { entries, tree } = await this.sourceEntries(row.project_id, commit);
@@ -200,8 +260,9 @@ export class GitBroker {
     return { exportId: row.id, commit, revision, branch: 'main' };
   }
   async run_commit(row, args) {
-    await this.git.fetch(row.project_id);
-    const remote = await this.git.remoteHead(row.project_id, 'main');
+    const repo = this.policy(row.project_id, row.owner);
+    if (!repo.localOnly) await this.git.fetch(row.project_id);
+    const remote = repo.localOnly ? { commit: repo.initialCommit } : await this.git.remoteHead(row.project_id, 'main');
     check(remote.commit, 'REMOTE_CONFLICT', 'Remote main is missing.');
     const prior = this.db.prepare("SELECT * FROM git_operations WHERE owner=? AND workspace_id=? AND kind='commit' AND status='completed' AND row_id<? ORDER BY row_id DESC LIMIT 1")
       .get(row.owner, row.workspace_id, row.row_id);
@@ -258,7 +319,8 @@ export class GitBroker {
     const push = JSON.parse(this.row(row.owner, args.pushOperationId).result_json);
     this.update(row, 'running', 'deploy_intent', { commit: push.commit, expectedHead: args.expectedHead });
     let result;
-    try { result = await this.deployment({ action: 'apply', operationId: row.id, expectedHead: args.expectedHead, targetCommit: push.commit }); }
+    try { result = await this.deployment({ action: 'apply', operationId: row.id, expectedHead: args.expectedHead, targetCommit: push.commit,
+      ...(args.preparedDependenciesId ? { preparedDependenciesId: args.preparedDependenciesId } : {}) }); }
     catch (error) {
       if (error.admissionRejected && row.phase !== 'deploy_intent') error.definiteFailure = true;
       throw error;
@@ -270,6 +332,84 @@ export class GitBroker {
     }
     return { ...result, commit: push.commit, branch: 'main' };
   }
+  async run_restart(row, args) { return this.run_recovery(row, args, 'restart'); }
+  async run_rollback(row, args) { return this.run_recovery(row, args, 'rollback'); }
+  async run_recovery(row, args, action) {
+    const previous = row.result_json ? JSON.parse(row.result_json) : { expectedHead: args.expectedHead };
+    this.update(row, 'running', 'deploy_intent', previous);
+    const result = await this.deployment({ action, operationId: row.id, expectedHead: args.expectedHead,
+      ...(args.deploymentOperationId ? { deploymentOperationId: args.deploymentOperationId } : {}),
+      ...(args.recoverOperationId ? { recoverOperationId: args.recoverOperationId } : {}) });
+    if (result.phase !== 'completed') {
+      this.update(row, 'running', 'deploy_intent', result);
+      const error = new BrokerError(result.phase === 'uncertain' ? 'DEPLOYMENT_UNCERTAIN' : 'DEPLOYMENT_FAILED', 'Recovery did not establish healthy activation. Inspect the recorded outcome.');
+      error.definiteFailure = result.phase === 'failed'; throw error;
+    }
+    return { ...result, branch: 'main' };
+  }
+  async run_projectDeploy(row, args) {
+    const publication = JSON.parse(this.row(row.owner, args.publicationOperationId).result_json);
+    const project = this.projectProvisioner.get(row.owner, row.project_id);
+    let deploymentRequest;
+    if (row.phase === 'deploy_intent') {
+      const saved = row.result_json ? JSON.parse(row.result_json) : {};
+      // Keep the exact helper request durable across a lost response. Earlier
+      // receipts stored either the export or the helper's own request envelope.
+      deploymentRequest = saved.deploymentRequest || saved.request || {
+        action: 'apply', operationId: row.id, projectId: row.project_id,
+        exportId: saved.exportId || row.id, targetCommit: publication.commit,
+        expectedHead: args.expectedHead, runtime: project.template,
+        ...(args.preparedDependenciesId ? { preparedDependenciesId: args.preparedDependenciesId } : {}),
+        ...(args.recoverOperationId ? { recoverOperationId: args.recoverOperationId } : {})
+      };
+      let record;
+      try {
+        const result = await this.projectDeployment({ action: 'status', projectId: row.project_id, operationId: row.id });
+        record = result.operation || result;
+      } catch (error) {
+        // The fixed helper persists a journal before any activation and holds
+        // its lock through effects. A definitive missing journal proves this
+        // exact helper operation did not start; other read failures prove nothing.
+        if (error.code !== 'OPERATION_NOT_FOUND') throw error;
+        record = { phase: 'prepared' };
+      }
+      if (record.phase === 'completed') return record;
+      if (record.phase === 'failed') {
+        this.update(row, 'running', 'deploy_intent', { ...record, deploymentRequest });
+        const error = new BrokerError('DEPLOYMENT_FAILED', 'The saved project deployment failed. Inspect its existing result.');
+        error.definiteFailure = true; throw error;
+      }
+      check(['prepared', 'activated', 'service_ready'].includes(record.phase), 'DEPLOYMENT_UNCERTAIN',
+        'The helper has not proved which deployment effects completed; no activation is repeated.');
+      if (record.phase === 'prepared') {
+        await this.git.fetch(row.project_id);
+        const remote = await this.git.remoteHead(row.project_id, 'main');
+        check(remote.commit === publication.commit, 'REMOTE_CONFLICT', 'Unstarted deployment source must still match published main.');
+      }
+      // This path runs only for an explicit same-key mutation retry. Read-only
+      // observation never calls apply. The helper resumes its saved safe phase
+      // and will not repeat an already-observed service restart.
+    } else {
+      await this.git.fetch(row.project_id);
+      const remote = await this.git.remoteHead(row.project_id, 'main');
+      check(remote.commit === publication.commit, 'REMOTE_CONFLICT', 'Deploy the exact current published main commit.');
+      const exported = await this.run_sync({ ...row, result_json: JSON.stringify({ commit: publication.commit }) });
+      deploymentRequest = { action: 'apply', operationId: row.id, projectId: row.project_id,
+        exportId: exported.exportId, targetCommit: publication.commit, expectedHead: args.expectedHead, runtime: project.template,
+        ...(args.preparedDependenciesId ? { preparedDependenciesId: args.preparedDependenciesId } : {}),
+        ...(args.recoverOperationId ? { recoverOperationId: args.recoverOperationId } : {}) };
+      this.update(row, 'running', 'deploy_intent', { ...exported, expectedHead: args.expectedHead, deploymentRequest });
+    }
+    const result = await this.projectDeployment(deploymentRequest);
+    if (result.phase !== 'completed') {
+      this.update(row, 'running', 'deploy_intent', { ...result, deploymentRequest });
+      const error = new BrokerError('DEPLOYMENT_UNCERTAIN', 'New-project activation did not establish successful health; inspect its saved result.');
+      error.definiteFailure = result.phase === 'failed'; throw error;
+    }
+    return result;
+  }
+  run_projectCreate(row, args) { return this.projectProvisioner.runCreate(row, args); }
+  run_projectPublish(row, args) { return this.projectProvisioner.runPublish(row, args); }
   async close() { await this.pending; this.db.close(); }
 }
 

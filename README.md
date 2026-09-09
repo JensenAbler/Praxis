@@ -2,11 +2,13 @@
 
 Praxis gives a conversational model source access, isolated editing, command execution, durable recovery, and controlled Git publication and deployment. ChatGPT or Claude supplies the reasoning; Praxis supplies the tools. The owner develops it openly in this public repository.
 
-Praxis **0.4.0**, runtime `coding-abc97268f6d9`, is deployed. For podcast-discord it can synchronize GitHub source, create commits, push to `main`, and fast-forward and restart the fixed VPS deployment. It passed [130 Linux tests](docs/evidence/publication-v04-linux.json) and [authenticated MCP checks with real containers](docs/evidence/publication-v04-mcp.json). [Deployment evidence](docs/evidence/publication-v04-deployment.json) records preserved workspaces/jobs/credentials, the configured repository-scoped write key, and adoption of the unchanged bot into its managed service. The first real phone-driven feature publication and deployment remains to be exercised.
+Praxis **0.4.0**, runtime `coding-abc97268f6d9`, is deployed. For podcast-discord it can synchronize GitHub source, create commits, push to `main`, and fast-forward and restart the fixed VPS deployment. It passed [130 Linux tests](docs/evidence/publication-v04-linux.json) and [authenticated MCP checks with real containers](docs/evidence/publication-v04-mcp.json). [Deployment evidence](docs/evidence/publication-v04-deployment.json) records preserved workspaces/jobs/credentials, the configured repository-scoped write key, and adoption of the unchanged bot into its managed service.
 
 The first real phone-driven task has now published and deployed podcast-discord commit `5f6a212646f6fbe95b99135a2f918f9edc54eb90`. The [next milestone](docs/autonomy-milestone.md) covers new projects, production diagnosis/recovery, dependencies, and self-improvement. The preceding runtime completed the [first iPhone coding workflow](docs/evidence/iphone-coding-report.md) and [six varied replay implementations and recoveries](docs/evidence/replay-batch-v1-results.md). All six saved candidates passed independent behavioral checks. See [acceptance evidence](docs/acceptance.md) and [workspace contracts](docs/workspace-contract.md).
 
 See the [independent publication and deployment workflow](docs/publication-milestone.md). Deployment currently requires unchanged dependency manifests. Browser operation, unrelated production administration, and independent Praxis self-update remain later milestones.
+
+The 0.5 implementation is being qualified: [new projects](docs/new-projects.md), [isolated app hosting](docs/new-project-deployment.md), [production recovery](docs/production-recovery.md), [dependency changes](docs/dependencies.md), and [independent application updates](docs/self-improvement.md). The [milestone record](docs/autonomy-milestone.md) distinguishes implemented behavior from deployed and phone-tested results.
 
 Endpoint: **https://mcp.jensenabler.com/praxis/mcp**
 

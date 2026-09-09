@@ -75,9 +75,10 @@ export class WorkspaceManager {
     this.recover();
   }
 
-  _project(projectId) {
+  _project(projectId, owner) {
     const project = this.projects.get(projectId);
     requireValue(project, 'Project not found.', 'NOT_FOUND');
+    requireValue(!project.owner || owner === undefined || project.owner === owner, 'Project not found.', 'NOT_FOUND');
     const override = this.db.prepare('SELECT * FROM project_snapshot_overrides WHERE project_id = ?').get(projectId);
     return override ? { ...project, revision: override.revision, snapshotPath: override.snapshot_path } : project;
   }
@@ -107,6 +108,7 @@ export class WorkspaceManager {
   }
   _publicProject(project) {
     return { projectId: project.id, name: project.name, repository: project.repository, revision: project.revision,
+      ...(project.template ? { template: project.template, runtime: project.runtime, publication: project.publication } : {}),
       validationCommands: project.validationCommands || [], instructions: project.instructions || '',
       exclusions: [...IGNORED, '.git', '.env*', 'credential/key files'], limits: LIMITS };
   }
@@ -134,7 +136,7 @@ export class WorkspaceManager {
     ownerCheck(owner);
     requireValue(Boolean(projectId) !== Boolean(workspaceId), 'Specify exactly one of projectId or workspaceId.');
     if (projectId) {
-      const project = this._project(projectId);
+      const project = this._project(projectId, owner);
       return { root: project.snapshotPath, revision: project.revision, state: manifest(project.snapshotPath) };
     }
     const row = this._row(owner, workspaceId);
@@ -231,12 +233,12 @@ export class WorkspaceManager {
 
   projectsList({ owner }) {
     ownerCheck(owner);
-    return { projects: [...this.projects.keys()].map(id => this._project(id)).map(project => ({ projectId: project.id, name: project.name,
+    return { projects: [...this.projects.values()].filter(project => !project.owner || project.owner === owner).map(project => this._project(project.id, owner)).map(project => ({ projectId: project.id, name: project.name,
       repository: project.repository, revision: project.revision, instructionsAvailable: Boolean(project.instructions) })),
       nextStep: 'Use project_inspect with a projectId to read its instructions, validation commands, and source limits.' };
   }
   projectInspect({ owner, projectId }) {
-    ownerCheck(owner); const project = this._project(projectId), state = manifest(project.snapshotPath);
+    ownerCheck(owner); const project = this._project(projectId, owner), state = manifest(project.snapshotPath);
     return { ...this._publicProject(project), sourceDigest: state.revision, fileCount: Object.keys(state.entries).length, bytes: state.bytes };
   }
   create({ owner, projectId, baseRevision, idempotencyKey, label = '' }) {
@@ -244,7 +246,7 @@ export class WorkspaceManager {
     const request = { kind: 'create', projectId, baseRevision, label };
     const prepared = this.store.transaction(() => {
       const existing = this._existing(owner, idempotencyKey, request); if (existing) return existing;
-      const project = this._project(projectId);
+      const project = this._project(projectId, owner);
       requireValue(baseRevision === project.revision, 'baseRevision must match the registered project revision.', 'REVISION_CONFLICT');
       requireValue(this.db.prepare("SELECT COUNT(*) AS count FROM workspaces WHERE status != 'removed'").get().count < LIMITS.workspaces, 'Workspace quota reached.', 'LIMIT_EXCEEDED');
       const state = manifest(project.snapshotPath);

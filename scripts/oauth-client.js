@@ -3,7 +3,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 
 // Verification client only. Tokens stay in a private, ignored local file.
-export async function authorize({ baseUrl = 'https://mcp.jensenabler.com/praxis', passwordFile, stateFile }) {
+export async function authorize({ baseUrl = 'https://mcp.jensenabler.com/praxis', passwordFile, stateFile, scope = 'praxis:probe offline_access' }) {
   const base = new URL(baseUrl);
   const resource = `${base.href.replace(/\/$/, '')}/mcp`;
   const issuer = `${base.href.replace(/\/$/, '')}/oauth`;
@@ -15,6 +15,8 @@ export async function authorize({ baseUrl = 'https://mcp.jensenabler.com/praxis'
   }
   let state = existsSync(stateFile) ? JSON.parse(readFileSync(stateFile, 'utf8')) : {};
   if (state.resource && state.resource !== resource) throw new Error('Client state belongs to another resource');
+  if (state.client && (state.requestedScope || 'praxis:probe offline_access') !== scope) throw new Error('Use a separate private client state for a different permission grant');
+  state.requestedScope = scope;
   const save = () => { mkdirSync(dirname(stateFile), { recursive: true, mode: 0o700 }); writeFileSync(stateFile, JSON.stringify(state), { mode: 0o600 }); };
   if (state.accessToken && state.expiresAt > Date.now() + 30000) return { token: state.accessToken, resource, state, save };
   async function tokenRequest(params) {
@@ -34,7 +36,7 @@ export async function authorize({ baseUrl = 'https://mcp.jensenabler.com/praxis'
   state.client = await registration.json();
   const verifier = randomBytes(32).toString('base64url');
   const nonce = randomBytes(24).toString('base64url');
-  const params = new URLSearchParams({ client_id: state.client.client_id, redirect_uri: callback, response_type: 'code', scope: 'praxis:probe offline_access', resource, code_challenge: createHash('sha256').update(verifier).digest('base64url'), code_challenge_method: 'S256', state: nonce, prompt: 'consent' });
+  const params = new URLSearchParams({ client_id: state.client.client_id, redirect_uri: callback, response_type: 'code', scope, resource, code_challenge: createHash('sha256').update(verifier).digest('base64url'), code_challenge_method: 'S256', state: nonce, prompt: 'consent' });
   const cookies = new Map();
   async function browser(url, options = {}) {
     if (new URL(url).origin !== expectedOrigin) throw new Error('Refusing to send credentials outside the configured issuer');

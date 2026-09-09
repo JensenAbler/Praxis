@@ -4,7 +4,7 @@ import { createServer } from 'node:http';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { randomBytes, scryptSync } from 'node:crypto';
+import { randomBytes, scryptSync, createHash } from 'node:crypto';
 import { generateKeyPair, exportJWK, SignJWT } from 'jose';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -14,6 +14,7 @@ import { createCodingService } from '../src/code/server.js';
 // This runner tests transport/lifecycle integration. Real container isolation is a separate host test.
 class FixtureRunner {
   containers = new Map();
+  image = `sha256:${'a'.repeat(64)}`;
   async create({ job, workspacePath }) {
     const name = `praxis-code-${job.id}`;
     this.containers.set(name, { job, workspacePath, exists: true, id: job.id, status: 'created', running: false, records: [] });
@@ -36,7 +37,7 @@ class FixtureRunner {
   async remove({ name }) { this.containers.delete(name); }
 }
 
-async function fixture(t) {
+async function fixture(t, { dependencies = false } = {}) {
   const directory = mkdtempSync(join(tmpdir(), 'praxis-code-mcp-'));
   const snapshot = join(directory, 'snapshot'); mkdirSync(snapshot);
   writeFileSync(join(snapshot, 'answer.js'), 'export const answer = 41;\n');
@@ -46,6 +47,7 @@ async function fixture(t) {
   const salt = randomBytes(16);
   const passwordHash = `scrypt$${salt.toString('base64url')}$${scryptSync('fixture-password', salt, 64).toString('base64url')}`;
   const runner = new FixtureRunner();
+  runner.registryAccessEnabled = dependencies;
   let gateway, backend;
   const http = createServer((req, res) => gateway.app(req, res));
   const backendHttp = createServer((req, res) => backend.app(req, res));
@@ -56,6 +58,7 @@ async function fixture(t) {
   const gatewayConfig = { baseUrl, allowLoopback: true, dataDirectory: join(directory, 'gateway'), release: 'coding-fixture', coding: { url: backendUrl },
     auth: { passwordHash, jwks: { keys: [privateJwk] }, cookieKeys: ['coding-fixture-cookie-signing-key-at-least-32-characters'] } };
   backend = await createCodingService({ issuer, resourceUrl, publicJwks: { keys: [publicJwk] }, dataDirectory: join(directory, 'private'),
+    ...(dependencies ? { dependencyDirectory: join(directory, 'dependency-export') } : {}),
     workspaceDirectory: join(directory, 'workspaces'), release: 'coding-fixture', runner, pollIntervalMs: 20,
     projects: [{ id: 'fixture', name: 'Fixture', repository: 'https://example.test/fixture', revision: 'fixture-base', snapshotPath: snapshot, instructions: 'Keep the module small.', validationCommands: [['fixture-check']] }] });
   gateway = await createApp(gatewayConfig);
@@ -181,6 +184,71 @@ test('authenticated coding tools edit, run, survive gateway restart, and recover
   assert.equal(Buffer.from(report.content, report.encoding).toString(), 'fixture check passed\n');
   const receipt = await call(fresh, 'operation_read', { operationId: edit.operationId });
   assert.equal(receipt.status, 'completed');
+});
+
+test('authenticated dependency workflow advertises registry policy and recovers prepared bundle from a fresh client', async t => {
+  const f = await fixture(t, { dependencies: true }), client = await f.connect();
+  const capabilities = await call(client, 'capabilities');
+  assert.equal(capabilities.dependencies.registryAccessEnabled, true);
+  assert.equal(capabilities.dependencies.preparationEnabled, true);
+  assert.deepEqual(capabilities.dependencies.registries, ['registry.npmjs.org', 'pypi.org', 'files.pythonhosted.org']);
+  const catalog = (await client.listTools()).tools;
+  assert.deepEqual(catalog.find(tool => tool.name === 'job_start').inputSchema.properties.network.enum, ['none', 'registries']);
+  assert.equal(catalog.find(tool => tool.name === 'job_start').inputSchema.properties.network.default, 'none');
+  assert.ok(catalog.find(tool => tool.name === 'dependency_prepare'));
+  const oldScope = await f.connect('praxis:probe');
+  const denied = await oldScope.callTool({ name: 'dependency_prepare', arguments: { workspaceId: '550e8400-e29b-41d4-a716-446655440000', expectedRevision: 'nope', idempotencyKey: 'denied-dependency-fixture' } });
+  assert.equal(denied.structuredContent.error.code, 'AUTHORIZATION_REQUIRED');
+  const workspace = await call(client, 'workspace_create', { projectId: 'fixture', baseRevision: 'fixture-base', idempotencyKey: 'deps-create-fixture' });
+  const workspaceId = workspace.workspaceId;
+  const inspected = await call(client, 'workspace_inspect', { workspaceId });
+  const applied = await call(client, 'workspace_apply', { workspaceId, expectedRevision: inspected.revision, idempotencyKey: 'deps-manifest-fixture', changes: [
+    { action: 'write', path: 'package.json', expectedSha256: null, content: '{"name":"fixture","version":"1.0.0"}' },
+    { action: 'write', path: 'package-lock.json', expectedSha256: null, content: '{"lockfileVersion":3,"packages":{}}' },
+  ] });
+  const jobRequest = { workspaceId, expectedRevision: applied.result.revision, idempotencyKey: 'deps-install-fixture', argv: ['npm', 'ci', '--ignore-scripts'], network: 'registries' };
+  const install = await call(client, 'job_start', jobRequest);
+  assert.equal(install.network, 'registries');
+  await status(client, install.id, 'running');
+  const installContainer = [...f.runner.containers.values()].find(item => item.running);
+  assert.equal(installContainer.job.network, 'registries');
+  // Transport fixture only: real downloads and isolation require Linux qualification.
+  Object.assign(installContainer, { running: false, status: 'exited', exitCode: 0, finishedAt: new Date().toISOString() });
+  const installed = await status(client, install.id, 'completed');
+  const request = { workspaceId, expectedRevision: installed.revisionAfter, idempotencyKey: 'deps-prepare-fixture' };
+  const preparation = await call(client, 'dependency_prepare', request);
+  assert.equal(preparation.network, 'none');
+  await status(client, preparation.id, 'running');
+  const container = [...f.runner.containers.values()].find(item => item.running);
+  assert.equal(container.job.dependencyPreparation, true);
+  const cache = join(container.workspacePath, '.cache'); mkdirSync(cache);
+  writeFileSync(join(cache, 'praxis-dependencies.tar'), Buffer.alloc(10240));
+  const digest = name => createHash('sha256').update(readFileSync(join(container.workspacePath, name))).digest('hex');
+  writeFileSync(join(cache, 'praxis-dependencies.json'), JSON.stringify({ packageJsonSha256: digest('package.json'), packageLockSha256: digest('package-lock.json'), shrinkwrapSha256: null,
+    platform: 'linux', arch: 'x64', nodeVersion: 'v22.22.0', nodeMajor: 22 }));
+  Object.assign(container, { running: false, status: 'exited', exitCode: 0, finishedAt: new Date().toISOString() });
+  const prepared = await status(client, preparation.id, 'completed');
+  assert.match(prepared.preparedDependenciesId, /^[a-f0-9]{64}$/);
+  assert.equal(prepared.dependencyBundle.jobId, preparation.id);
+  assert.equal(prepared.dependencyBundle.packageJsonSha256, digest('package.json'));
+  await f.restartGateway();
+  const fresh = await f.connect();
+  assert.equal((await call(fresh, 'dependency_prepare', request)).id, preparation.id);
+  const recovered = await call(fresh, 'job_status', { jobId: preparation.id });
+  assert.equal(recovered.preparedDependenciesId, prepared.preparedDependenciesId);
+  assert.equal((await call(fresh, 'job_start', jobRequest)).id, install.id);
+});
+
+test('disabled registry access is a bounded authenticated error with no scheduled job', async t => {
+  const f = await fixture(t), client = await f.connect();
+  const workspace = await call(client, 'workspace_create', { projectId: 'fixture', baseRevision: 'fixture-base', idempotencyKey: 'disabled-deps-create' });
+  const inspected = await call(client, 'workspace_inspect', { workspaceId: workspace.workspaceId });
+  const result = await client.callTool({ name: 'job_start', arguments: { workspaceId: workspace.workspaceId, expectedRevision: inspected.revision,
+    idempotencyKey: 'disabled-deps-install', argv: ['npm', 'ci'], network: 'registries' } });
+  assert.equal(result.isError, true);
+  assert.equal(result.structuredContent.error.code, 'DEPENDENCY_NETWORK_DISABLED');
+  assert.equal((await call(client, 'jobs_list')).jobs.length, 0);
+  assert.equal((await call(client, 'capabilities')).dependencies.registryAccessEnabled, false);
 });
 
 test('discovered coding contracts explain page units, large-file patches, compact status, and focused logs', async t => {

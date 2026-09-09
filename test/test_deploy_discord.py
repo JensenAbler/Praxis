@@ -4,11 +4,16 @@ Run on Linux: python3 -m unittest discover -s test -p test_deploy_discord.py
 No production repository, network credential, or actual service is used.
 """
 import importlib.util
+import datetime
+import hashlib
+import io
 import json
 import os
 from pathlib import Path
 import subprocess
 import tempfile
+import tarfile
+import time
 import unittest
 import uuid
 
@@ -34,6 +39,7 @@ class FakeServiceDeployment(deployment.Deployment):
         self.crash_after_restart = False
         self.fail_restart = False
         self.ready = True
+        self.active = True
 
     def _git(self, *args, input_bytes=None):
         # The actual CLI always forbids file transport. Only this test instance
@@ -45,7 +51,7 @@ class FakeServiceDeployment(deployment.Deployment):
     def _service(self):
         if not self.ready:
             raise deployment.DeploymentError('SERVICE_NOT_MANAGED', 'Fixture service not adopted.')
-        return {'ActiveState': 'active', 'SubState': 'running', 'MainPID': str(100 + self.restart_count),
+        return {'ActiveState': 'active' if self.active else 'failed', 'SubState': 'running' if self.active else 'failed', 'MainPID': str(100 + self.restart_count) if self.active else '0',
                 'InvocationID': self.invocation, 'ExecMainStatus': '0',
                 'ExecMainStartTimestampMonotonic': str(1000 + self.restart_count)}
 
@@ -55,6 +61,7 @@ class FakeServiceDeployment(deployment.Deployment):
             if self.fail_restart:
                 raise deployment.DeploymentError('COMMAND_FAILED', 'Fixture restart failed.', 1)
             self.invocation = 'replacement-' + str(self.restart_count)
+            self.active = True
             if self.crash_after_restart:
                 self.crash_after_restart = False
                 raise Crash()
@@ -90,7 +97,10 @@ class DeploymentTests(unittest.TestCase):
         self.repo = self.root / 'production'
         git(self.root, 'clone', str(self.remote), str(self.repo))
         (self.repo / '.env').write_text('FIXTURE_SECRET=never-echo-this\n')
-        self.worker = FakeServiceDeployment(self.repo, self.root / 'state', str(self.remote), expected_uid=os.getuid())
+        self.worker = FakeServiceDeployment(self.repo, self.root / 'state', str(self.remote), expected_uid=os.getuid(),
+                                            log_path=self.root / 'bot-stdout.log', dependencies=self.root / 'dependencies',
+                                            dependency_uid=os.getuid())
+        self.bundle_sequence = 0
 
     def tearDown(self):
         self.temp.cleanup()
@@ -326,6 +336,256 @@ class DeploymentTests(unittest.TestCase):
             self.worker.handle({'action': 'status', 'operationId': request['operationId']})
         self.assertEqual(caught.exception.code, 'UNTRUSTED_PATH')
 
+    def test_explicit_restart_recovers_failed_service_without_checkout_or_duplicate_restart(self):
+        self.worker.active = False
+        request = {'action': 'restart', 'operationId': str(uuid.uuid4()), 'expectedHead': self.base}
+        result = self.worker.handle(request)
+        self.assertEqual(result['phase'], 'completed')
+        self.assertEqual(result['action'], 'restart')
+        self.assertEqual(git(self.repo, 'rev-parse', 'HEAD'), self.base)
+        self.assertEqual(self.worker.handle(request)['phase'], 'completed')
+        self.assertEqual(self.worker.restart_count, 1)
+
+    def test_explicit_restart_requires_exact_head(self):
+        result = self.worker.handle({'action': 'restart', 'operationId': str(uuid.uuid4()), 'expectedHead': '0' * 40})
+        self.assertEqual(result['error']['code'], 'DEPLOYMENT_CONFLICT')
+        self.assertEqual(self.worker.restart_count, 0)
+
+    def test_uncertain_restart_requires_named_recovery_and_preserves_original_uncertainty(self):
+        request = self.request()
+        self.worker.crash_phase = 'restart_intent'
+        with self.assertRaises(Crash):
+            self.worker.handle(request)
+        self.assertEqual(self.worker.handle({'action': 'status', 'operationId': request['operationId']})['phase'], 'uncertain')
+        recovery = {'action': 'restart', 'operationId': str(uuid.uuid4()), 'expectedHead': request['targetCommit'],
+                    'recoverOperationId': request['operationId']}
+        self.assertEqual(self.worker.handle(recovery)['phase'], 'completed')
+        original = self.worker.handle({'action': 'status', 'operationId': request['operationId']})
+        self.assertEqual(original['phase'], 'uncertain')
+        self.assertEqual(original['resolvedBy'], recovery['operationId'])
+        self.assertEqual(self.worker.restart_count, 1)
+
+    def test_rollback_restores_only_recorded_previous_revision_and_preserves_runtime(self):
+        deploy = self.request()
+        self.worker.handle(deploy)
+        runtime = self.repo / 'runtime'
+        runtime.mkdir()
+        (runtime / 'record.json').write_text('retained recording')
+        request = {'action': 'rollback', 'operationId': str(uuid.uuid4()), 'expectedHead': deploy['targetCommit'],
+                   'deploymentOperationId': deploy['operationId']}
+        result = self.worker.handle(request)
+        self.assertEqual(result['phase'], 'completed')
+        self.assertEqual(result['targetCommit'], self.base)
+        self.assertEqual(git(self.repo, 'rev-parse', 'HEAD'), self.base)
+        self.assertEqual(git(self.remote, 'rev-parse', 'main'), deploy['targetCommit'])
+        self.assertEqual((runtime / 'record.json').read_text(), 'retained recording')
+        self.assertEqual((self.repo / '.env').read_text(), 'FIXTURE_SECRET=never-echo-this\n')
+        self.worker.handle(request)
+        self.assertEqual(self.worker.restart_count, 2)
+
+    def test_rollback_of_failed_activation_can_restore_a_working_revision(self):
+        deploy = self.request()
+        self.worker.fail_restart = True
+        self.assertEqual(self.worker.handle(deploy)['phase'], 'failed')
+        self.worker.fail_restart = False
+        self.worker.active = False
+        request = {'action': 'rollback', 'operationId': str(uuid.uuid4()), 'expectedHead': deploy['targetCommit'],
+                   'deploymentOperationId': deploy['operationId']}
+        self.assertEqual(self.worker.handle(request)['phase'], 'completed')
+        self.assertEqual(git(self.repo, 'rev-parse', 'HEAD'), self.base)
+
+    def test_rollback_lost_restart_response_recovers_without_repeating(self):
+        deploy = self.request()
+        self.worker.handle(deploy)
+        request = {'action': 'rollback', 'operationId': str(uuid.uuid4()), 'expectedHead': deploy['targetCommit'],
+                   'deploymentOperationId': deploy['operationId']}
+        self.worker.crash_after_restart = True
+        with self.assertRaises(Crash):
+            self.worker.handle(request)
+        result = self.worker.handle({'action': 'status', 'operationId': request['operationId']})
+        self.assertEqual(result['phase'], 'completed')
+        self.assertEqual(self.worker.restart_count, 2)
+
+    def test_rollback_cannot_reference_an_arbitrary_commit_or_unrelated_operation(self):
+        request = {'action': 'rollback', 'operationId': str(uuid.uuid4()), 'expectedHead': self.base,
+                   'deploymentOperationId': str(uuid.uuid4())}
+        with self.assertRaises(deployment.DeploymentError) as caught:
+            self.worker.handle(request)
+        self.assertEqual(caught.exception.code, 'ROLLBACK_REFERENCE_INVALID')
+        with self.assertRaises(deployment.DeploymentError):
+            self.worker.handle({**request, 'targetCommit': self.base})
+        self.assertEqual(self.worker.restart_count, 0)
+
+    def test_history_has_stable_bounded_cursor_and_no_private_journal_fields(self):
+        first = self.request()
+        self.worker.handle(first)
+        second = {'action': 'restart', 'operationId': str(uuid.uuid4()), 'expectedHead': first['targetCommit']}
+        self.worker.handle(second)
+        page = self.worker.handle({'action': 'history', 'limit': 1})
+        self.assertEqual(page['operations'][0]['operationId'], second['operationId'])
+        self.assertEqual(page['nextCursor'], second['operationId'])
+        last = self.worker.handle({'action': 'history', 'limit': 1, 'cursor': page['nextCursor']})
+        self.assertEqual(last['operations'][0]['operationId'], first['operationId'])
+        self.assertIsNone(last['nextCursor'])
+        self.assertNotIn('request', page['operations'][0])
+
+    def test_diagnosis_exports_only_operational_events_and_safe_error_codes(self):
+        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        self.worker.log_path.write_text('\n'.join([
+            f'[{now}] [INFO] [Bot] Logged in as private-user#1234',
+            f'[{now}] [INFO] [GeminiLive] Input transcript: private conversation',
+            f'[{now}] [ERROR] Request failed with ECONNREFUSED token=never-echo-this private conversation',
+            f'[{now}] [INFO] [Shutdown] SIGTERM received; awaiting bot cleanup',
+            f'[{now}] [INFO] [Shutdown] SIGTERM: cleanup complete; exiting with code 0',
+        ]))
+        result = self.worker.handle({'action': 'diagnosis', 'limit': 10})
+        serialized = json.dumps(result)
+        for secret in ('private-user', 'private conversation', 'never-echo-this', 'token='):
+            self.assertNotIn(secret, serialized)
+        self.assertIn('ECONNREFUSED', serialized)
+        self.assertEqual(result['logs']['omittedLines'], 1)
+        self.assertTrue(result['health']['processRunning'])
+        self.assertTrue(result['health']['discordLoginObservedForCurrentInvocation'])
+        self.assertFalse(result['health']['discordConnectionVerified'])
+
+    def test_diagnosis_does_not_call_old_login_current_and_rejects_symlink_logs(self):
+        self.worker.log_path.write_text('[2000-01-01T00:00:00.000Z] [INFO] [Bot] Logged in as old-user\n')
+        result = self.worker.handle({'action': 'diagnosis'})
+        self.assertFalse(result['health']['discordLoginObservedForCurrentInvocation'])
+        self.worker.log_path.unlink()
+        self.worker.log_path.symlink_to(self.repo / '.env')
+        with self.assertRaises(deployment.DeploymentError) as caught:
+            self.worker.handle({'action': 'diagnosis'})
+        self.assertEqual(caught.exception.code, 'UNTRUSTED_LOG')
+
+    def bundle(self, target, members=None, changes=None):
+        directory = self.worker.dependencies
+        directory.mkdir(mode=0o750, exist_ok=True)
+        memory = io.BytesIO()
+        with tarfile.open(fileobj=memory, mode='w') as archive:
+            if members is None:
+                members = [('node_modules/package/index.js', b'new dependency', None),
+                           ('node_modules/.bin/package', b'', '../package/index.js')]
+            for name, content, link in members:
+                info = tarfile.TarInfo(name)
+                if link is not None:
+                    info.type = tarfile.SYMTYPE
+                    info.linkname = link
+                else:
+                    info.size = len(content)
+                archive.addfile(info, io.BytesIO(content) if link is None else None)
+        data = memory.getvalue()
+        artifact = hashlib.sha256(data).hexdigest()
+        (directory / (artifact + '.tar')).write_bytes(data)
+        node = subprocess.check_output(['/usr/bin/node', '--version']).decode().strip()
+        manifest = {'version': 1, 'archiveSha256': artifact, 'platform': 'linux', 'arch': 'x64',
+                    'nodeMajor': int(node.lstrip('v').split('.')[0]), 'nodeVersion': node,
+                    **self.worker._dependency_manifest_hashes(target), **(changes or {})}
+        (directory / (artifact + '.json')).write_text(json.dumps(manifest))
+        return artifact
+
+    def dependency_request(self, members=None, changes=None):
+        self.bundle_sequence += 1
+        self.commit('package-lock.json', json.dumps({'lockfileVersion': 3, 'fixtureRevision': self.bundle_sequence}) + '\n')
+        target = self.commit('package.json', json.dumps({'name': 'changed', 'dependencies': {'package': '1.0.0'},
+                                                       'fixtureRevision': self.bundle_sequence}) + '\n')
+        # Fetch only repository objects so the fixture manifest can independently
+        # hash the exact target. Production helper does its own fixed fetch.
+        git(self.repo, 'fetch', str(self.remote), 'main')
+        return {**self.request(target=target), 'preparedDependenciesId': self.bundle(target, members, changes)}
+
+    def test_prepared_dependencies_are_swapped_and_rollback_restores_original_modules(self):
+        modules = self.repo / 'node_modules'
+        modules.mkdir()
+        (modules / 'old.js').write_text('old dependency')
+        request = self.dependency_request()
+        result = self.worker.handle(request)
+        self.assertEqual(result['phase'], 'completed', result)
+        self.assertEqual((modules / 'package/index.js').read_text(), 'new dependency')
+        self.assertEqual((modules / '.bin/package').resolve(), modules / 'package/index.js')
+        self.assertFalse((modules / 'old.js').exists())
+        rollback = {'action': 'rollback', 'operationId': str(uuid.uuid4()), 'expectedHead': request['targetCommit'],
+                    'deploymentOperationId': request['operationId']}
+        restored = self.worker.handle(rollback)
+        self.assertEqual(restored['phase'], 'completed', restored)
+        self.assertEqual((modules / 'old.js').read_text(), 'old dependency')
+        self.assertFalse((modules / 'package').exists())
+
+    def test_prepared_dependencies_do_not_execute_install_scripts(self):
+        marker = self.root / 'candidate-script-ran'
+        request = self.dependency_request(members=[('node_modules/package/package.json',
+            json.dumps({'scripts': {'install': 'touch ' + str(marker)}}).encode(), None)])
+        self.assertEqual(self.worker.handle(request)['phase'], 'completed')
+        self.assertFalse(marker.exists())
+
+    def test_dependency_manifest_and_runtime_mismatches_block_checkout(self):
+        for changes in ({'packageJsonSha256': '0' * 64}, {'nodeMajor': 999}, {'arch': 'arm64'}):
+            request = self.dependency_request(changes=changes)
+            result = self.worker.handle(request)
+            self.assertIn(result['error']['code'], ('DEPENDENCIES_MISMATCH', 'DEPENDENCIES_RUNTIME_MISMATCH'))
+            self.assertEqual(git(self.repo, 'rev-parse', 'HEAD'), self.base)
+            # Vary the next fixture commit content without rewriting main.
+            git(self.author, 'commit', '--allow-empty', '-m', 'separate candidate')
+
+    def test_unsafe_dependency_archive_is_rejected_before_checkout(self):
+        for name, link in [('node_modules/../../outside', None), ('node_modules/.bin/bad', '/etc/passwd'),
+                           ('node_modules/.bin/bad', '../../../outside')]:
+            request = self.dependency_request(members=[(name, b'unsafe', link)])
+            result = self.worker.handle(request)
+            self.assertEqual(result['error']['code'], 'DEPENDENCIES_ARCHIVE_INVALID')
+            self.assertEqual(git(self.repo, 'rev-parse', 'HEAD'), self.base)
+            git(self.author, 'commit', '--allow-empty', '-m', 'separate candidate')
+
+    def test_dependency_swap_crashes_recover_without_duplicate_swaps(self):
+        for phase in ('dependencies_intent', 'dependencies_previous_saved', 'dependencies_updated'):
+            with self.subTest(phase=phase):
+                request = self.dependency_request()
+                self.worker.crash_phase = phase
+                with self.assertRaises(Crash):
+                    self.worker.handle(request)
+                result = self.worker.handle(request)
+                self.assertEqual(result['phase'], 'completed', result)
+                self.assertEqual((self.repo / 'node_modules/package/index.js').read_text(), 'new dependency')
+                self.worker.handle(request)
+                rollback = {'action': 'rollback', 'operationId': str(uuid.uuid4()), 'expectedHead': request['targetCommit'],
+                            'deploymentOperationId': request['operationId']}
+                self.assertEqual(self.worker.handle(rollback)['phase'], 'completed')
+                git(self.author, 'commit', '--allow-empty', '-m', 'separate candidate')
+
+    def test_dependency_rename_effect_before_journal_update_recovers(self):
+        modules = self.repo / 'node_modules'
+        modules.mkdir()
+        (modules / 'old.js').write_text('old')
+        request = self.dependency_request()
+        save = self.worker._save
+        interrupted = False
+
+        def crash_before_completed_swap_journal(record, phase=None, **values):
+            nonlocal interrupted
+            if phase == 'dependencies_updated' and not interrupted:
+                interrupted = True
+                raise Crash()
+            return save(record, phase, **values)
+
+        self.worker._save = crash_before_completed_swap_journal
+        with self.assertRaises(Crash):
+            self.worker.handle(request)
+        self.assertTrue((modules / 'package/index.js').exists())
+        result = self.worker.handle(request)
+        self.assertEqual(result['phase'], 'completed')
+        self.assertEqual(self.worker.restart_count, 1)
+
+    def test_dependency_archive_symlink_ancestors_and_digest_mismatch_are_rejected(self):
+        request = self.dependency_request(members=[('node_modules/path', b'', 'package'),
+                                                   ('node_modules/path/index.js', b'unsafe', None)])
+        result = self.worker.handle(request)
+        self.assertEqual(result['error']['code'], 'DEPENDENCIES_ARCHIVE_INVALID')
+        request = self.dependency_request()
+        (self.worker.dependencies / (request['preparedDependenciesId'] + '.tar')).write_bytes(b'corrupted archive')
+        result = self.worker.handle(request)
+        self.assertEqual(result['error']['code'], 'DEPENDENCIES_HASH_MISMATCH')
+        self.assertEqual(git(self.repo, 'rev-parse', 'HEAD'), self.base)
+
 
 class RequestValidationTests(unittest.TestCase):
     def test_no_arbitrary_paths_commands_repositories_or_units(self):
@@ -340,6 +600,13 @@ class RequestValidationTests(unittest.TestCase):
                                              'expectedHead': 'a' * 40, 'targetCommit': value})
         with self.assertRaises(deployment.DeploymentError):
             deployment.validate_request({'action': 'status', 'operationId': '../escape'})
+
+    def test_read_limits_and_recovery_inputs_are_bounded(self):
+        for limit in (0, 101, True, '10', None):
+            with self.assertRaises(deployment.DeploymentError):
+                deployment.validate_request({'action': 'diagnosis', 'limit': limit})
+        with self.assertRaises(deployment.DeploymentError):
+            deployment.validate_request({'action': 'restart', 'operationId': str(uuid.uuid4())})
 
 
 if __name__ == '__main__':

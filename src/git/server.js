@@ -6,11 +6,16 @@ import { createTokenVerifier } from '../token-verifier.js';
 import { diagnosticRecord } from '../diagnostics.js';
 import { TrustedGit } from './git.js';
 import { GitBroker, BrokerError, brokerSchemas, fixedDeploymentClient } from './broker.js';
+import { GitHubProvisioningClient, ProjectError } from './projects.js';
 
 export function createGitService(config) {
   const git = config.git || new TrustedGit(config);
   const broker = new GitBroker({ ...config, git,
-    deployment: config.deployment || (config.enableDeployment ? fixedDeploymentClient() : undefined) });
+    projectProvisioning: config.projectProvisioning ? { ...config.projectProvisioning,
+      github: config.projectProvisioning.github || new GitHubProvisioningClient({ account: config.projectProvisioning.account, tokenFile: config.projectProvisioning.tokenFile }) } : undefined,
+    deployment: config.deployment || (config.enableDeployment ? fixedDeploymentClient() : undefined),
+    releaseControl: config.releaseControl || (config.enableSelfUpdate ? fixedDeploymentClient({ executable: '/usr/local/libexec/praxis-updater' }) : undefined),
+    projectDeployment: config.projectDeployment || (config.enableProjectDeployment ? fixedDeploymentClient({ executable: '/usr/local/libexec/praxis-deploy-project' }) : undefined) });
   const verify = createTokenVerifier({ issuer: config.issuer, resourceUrl: config.resourceUrl, jwks: config.publicJwks,
     allowedScopes: ['praxis:code'], requiredScope: 'praxis:code' });
   const app = express(), bootId = randomUUID();
@@ -26,10 +31,11 @@ export function createGitService(config) {
       const parsed = schema?.safeParse(args);
       if (!parsed?.success || Object.keys(req.body).some(key => !['action', 'args'].includes(key))) throw new BrokerError('INVALID_ARGUMENT', 'Invalid publishing action or arguments.');
       const input = { ...parsed.data, owner: req.principal.extra.subject };
-      const data = action === 'get' ? await broker.observe(input) : ['list', 'deploymentStatus'].includes(action) ? await broker[action](input) : broker.submit(action, input);
+      const data = action.startsWith('release') ? await broker.release(action, input) : action === 'get' ? await broker.observe(input)
+        : ['list', 'deploymentStatus', 'diagnosis', 'deploymentHistory'].includes(action) ? await broker[action](input) : broker.submit(action, input);
       res.json({ ok: true, data });
     } catch (error) {
-      const safe = error instanceof BrokerError;
+      const safe = error instanceof BrokerError || error instanceof ProjectError;
       if (!safe) console.error(JSON.stringify(diagnosticRecord('publishing_request_failed', error)));
       res.status(safe ? 400 : 500).json({ ok: false, error: { code: safe ? error.code : 'INTERNAL_ERROR', message: safe ? error.message : 'Publishing could not finish this request. Recover the saved operation.' } });
     }

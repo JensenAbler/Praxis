@@ -64,26 +64,14 @@ function remote(value, allowLocalRemotes) {
 /** Only trusted bare repositories and fixed transport configuration enter this class. No checkout occurs. */
 export class TrustedGit {
   constructor({ repositories, homeDirectory, gitPath = 'git', transportEnv = {}, allowLocalRemotes = false }) {
-    requireValue(Array.isArray(repositories) && repositories.length > 0, 'Repository configuration is required.', 'INVALID_CONFIGURATION');
+    requireValue(Array.isArray(repositories), 'Repository configuration is required.', 'INVALID_CONFIGURATION');
     requireValue(isAbsolute(homeDirectory), 'Git home must be an absolute protected directory.', 'INVALID_CONFIGURATION');
     const home = lstatSync(homeDirectory);
     requireValue(home.isDirectory() && !home.isSymbolicLink(), 'Git home must be an ordinary protected directory.', 'INVALID_CONFIGURATION');
     this.gitPath = gitPath;
     this.allowLocalRemotes = allowLocalRemotes;
     this.repositories = new Map();
-    for (const item of repositories) {
-      requireValue(typeof item.projectId === 'string' && item.projectId && !this.repositories.has(item.projectId),
-        'Unique configured project IDs are required.', 'INVALID_CONFIGURATION');
-      requireValue(isAbsolute(item.directory), 'Git repository must have an absolute protected path.', 'INVALID_CONFIGURATION');
-      const stat = lstatSync(item.directory);
-      requireValue(stat.isDirectory() && !stat.isSymbolicLink(), 'Git repository must be an ordinary protected directory.', 'INVALID_CONFIGURATION');
-      const defaultBranch = validateBranch(item.defaultBranch || 'main');
-      const allowedBranches = (item.allowedBranches || [defaultBranch]).map(validateBranch);
-      requireValue(allowedBranches.includes(defaultBranch), 'Default branch must be allowed.', 'INVALID_CONFIGURATION');
-      this.repositories.set(item.projectId, Object.freeze({ ...item, directory: resolve(item.directory),
-        remoteUrl: remote(item.remoteUrl, allowLocalRemotes), defaultBranch, allowedBranches: Object.freeze(allowedBranches),
-        author: identity(item.author || { name: 'Praxis', email: 'praxis@users.noreply.github.com' }) }));
-    }
+    for (const item of repositories) this.registerRepository(item);
     this.env = {};
     for (const key of ['PATH', 'Path', 'SystemRoot', 'SYSTEMROOT', 'WINDIR', 'TMPDIR', 'TMP', 'TEMP']) {
       if (process.env[key] !== undefined) this.env[key] = process.env[key];
@@ -92,12 +80,35 @@ export class TrustedGit {
       GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_SYSTEM: GIT_DEV_NULL, GIT_CONFIG_GLOBAL: GIT_DEV_NULL,
       GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'Never', GIT_ATTR_NOSYSTEM: '1', GIT_NO_REPLACE_OBJECTS: '1',
       GIT_OPTIONAL_LOCKS: '0', GIT_PROTOCOL_FROM_USER: '0', LC_ALL: 'C', LANG: 'C' });
-    const allowedEnv = new Set(['GIT_SSH_COMMAND', 'GIT_SSH_VARIANT', 'GIT_ASKPASS', 'SSH_ASKPASS']);
-    for (const [key, value] of Object.entries(transportEnv)) {
-      requireValue(allowedEnv.has(key) && typeof value === 'string' && !value.includes('\0'),
+    Object.assign(this.env, this.validateTransportEnv(transportEnv));
+  }
+
+  validateTransportEnv(transportEnv = {}) {
+    const allowed = new Set(['GIT_SSH_COMMAND', 'GIT_SSH_VARIANT', 'GIT_ASKPASS', 'SSH_ASKPASS']);
+    const value = {};
+    for (const [key, item] of Object.entries(transportEnv)) {
+      requireValue(allowed.has(key) && typeof item === 'string' && !item.includes('\0'),
         'Unsupported Git transport environment setting.', 'INVALID_CONFIGURATION');
-      this.env[key] = value;
+      value[key] = item;
     }
+    return value;
+  }
+
+  /** Only trusted provisioning code may register a fixed bare repository and transport. */
+  registerRepository(item, { replace = false } = {}) {
+    requireValue(typeof item.projectId === 'string' && item.projectId && (replace || !this.repositories.has(item.projectId)),
+      'Unique configured project IDs are required.', 'INVALID_CONFIGURATION');
+    requireValue(isAbsolute(item.directory), 'Git repository must have an absolute protected path.', 'INVALID_CONFIGURATION');
+    const stat = lstatSync(item.directory);
+    requireValue(stat.isDirectory() && !stat.isSymbolicLink(), 'Git repository must be an ordinary protected directory.', 'INVALID_CONFIGURATION');
+    const defaultBranch = validateBranch(item.defaultBranch || 'main');
+    const allowedBranches = (item.allowedBranches || [defaultBranch]).map(validateBranch);
+    requireValue(allowedBranches.includes(defaultBranch), 'Default branch must be allowed.', 'INVALID_CONFIGURATION');
+    this.repositories.set(item.projectId, Object.freeze({ ...item, directory: resolve(item.directory),
+      remoteUrl: remote(item.remoteUrl, this.allowLocalRemotes), defaultBranch, allowedBranches: Object.freeze(allowedBranches),
+      transportEnv: Object.freeze(this.validateTransportEnv(item.transportEnv)),
+      author: identity(item.author || { name: 'Praxis', email: 'praxis@users.noreply.github.com' }) }));
+    return this.repository(item.projectId);
   }
 
   repository(projectId) {
@@ -120,7 +131,7 @@ export class TrustedGit {
       '-c', 'protocol.allow=never', '-c', 'protocol.https.allow=always', '-c', 'protocol.ssh.allow=always',
       '-c', `protocol.file.allow=${this.allowLocalRemotes ? 'always' : 'never'}`];
     return new Promise((resolvePromise, reject) => {
-      const child = execFile(this.gitPath, [...fixed, ...args], { env: { ...this.env, ...env },
+      const child = execFile(this.gitPath, [...fixed, ...args], { env: { ...this.env, ...repository.transportEnv, ...env },
         cwd: repository.directory, windowsHide: true, encoding: 'buffer', maxBuffer, timeout }, (error, stdout, stderr) => {
         const exitCode = error ? error.code : 0;
         if (!acceptedCodes.includes(exitCode)) {
@@ -178,7 +189,7 @@ export class TrustedGit {
 
   async createCommit(projectId, { parent, changes, message, timestamp }) {
     const repository = this.repository(projectId);
-    oid(parent);
+    if (parent !== null) oid(parent);
     requireValue(Array.isArray(changes) && changes.length > 0 && changes.length <= 20000, 'A bounded changed-file set is required.');
     requireValue(typeof message === 'string' && message.trim().length > 0 && Buffer.byteLength(message) <= 16384
       && !message.includes('\0'), 'Commit message must contain 1 to 16384 bytes.');
@@ -198,7 +209,7 @@ export class TrustedGit {
         requireValue(change.content.byteLength <= MAX_BLOB_BYTES && changedBytes <= MAX_CHANGE_BYTES, 'Changed file bytes exceed publication limits.', 'LIMIT_EXCEEDED');
       }
     }
-    const entries = new Map((await this.readTree(projectId, parent)).map(entry => [entry.path, entry]));
+    const entries = new Map((parent === null ? [] : await this.readTree(projectId, parent)).map(entry => [entry.path, entry]));
     for (const change of changes) {
       if (change.delete === true) {
         requireValue(entries.has(change.path), 'Deleted file does not exist in the parent tree.', 'PUBLISH_CONFLICT');
@@ -236,7 +247,7 @@ export class TrustedGit {
     const tree = await writeTree(root);
     const env = { GIT_AUTHOR_NAME: author.name, GIT_AUTHOR_EMAIL: author.email, GIT_AUTHOR_DATE: timestamp,
       GIT_COMMITTER_NAME: committer.name, GIT_COMMITTER_EMAIL: committer.email, GIT_COMMITTER_DATE: timestamp };
-    const result = await this.command(repository, ['commit-tree', tree, '-p', parent, '-F', '-'],
+    const result = await this.command(repository, ['commit-tree', tree, ...(parent === null ? [] : ['-p', parent]), '-F', '-'],
       { input: Buffer.from(message.endsWith('\n') ? message : `${message}\n`), env });
     return { commit: oid(result.stdout.toString().trim()), tree, parent };
   }

@@ -11,6 +11,8 @@ import { JobStore } from './jobs.js';
 import { AuditStore } from './audit.js';
 import { createProbeServer, VERSION } from './mcp.js';
 import { createCodingClient } from './code/client.js';
+import { createGitClient } from './code/git-client.js';
+import { loadToolManifest } from './tool-manifest.js';
 import { diagnosticRecord, requestContext } from './diagnostics.js';
 
 export async function createApp(config) {
@@ -25,6 +27,7 @@ export async function createApp(config) {
   const jobs = new JobStore(config.dataDirectory);
   const audit = new AuditStore(config.dataDirectory);
   const coding = config.coding ? createCodingClient(config.coding) : undefined;
+  const releaseClient = config.releaseControl ? createGitClient(config.releaseControl) : undefined;
   const auth = await createAuth({ issuer, resourceUrl, ...config.auth, dataDirectory: join(config.dataDirectory, 'oauth'), allowLoopback: config.allowLoopback ?? false, codingEnabled: !!coding });
   const app = express();
   app.disable('x-powered-by');
@@ -32,7 +35,7 @@ export async function createApp(config) {
   app.set('trust proxy', 'loopback');
   app.use(hostHeaderValidation([base.hostname, ...(config.allowLoopback ? ['localhost', '127.0.0.1'] : [])]));
   app.use((_req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
-  app.get(`${prefix}/healthz`, (_req, res) => res.json({ ok: true, name: 'Praxis', version: coding ? '0.4.0' : VERSION, release, bootId }));
+  app.get(`${prefix}/healthz`, (_req, res) => res.json({ ok: true, name: 'Praxis', version: coding ? '0.5.0' : VERSION, release, bootId }));
   app.get(`${prefix}/`, (_req, res) => res.type('text').send(coding ? 'Praxis: authenticated source, isolated coding, and durable jobs. Connect using the /mcp endpoint.' : 'Praxis: authenticated diagnostic tools. Connect using the /mcp endpoint.'));
   app.get(`/.well-known/oauth-protected-resource${prefix}/mcp`, (_req, res) => res.json({
     resource: resourceUrl, authorization_servers: [issuer], scopes_supported: ['praxis:probe', ...(coding ? ['praxis:code'] : []), 'offline_access'], resource_name: 'Praxis',
@@ -46,7 +49,15 @@ export async function createApp(config) {
     return auth.provider.callback()(req, res);
   });
   app.use(`${prefix}/oauth`, auth.router);
-  const handler = createMcpHandler(ctx => createProbeServer({ jobs, audit, resourceUrl, bootId, release, authInfo: ctx.authInfo, era: ctx.era, coding }), {
+  const handler = createMcpHandler(ctx => {
+    let applicationTools;
+    if (config.toolManifestPath) {
+      try { applicationTools = loadToolManifest(config.toolManifestPath).tools; }
+      catch (error) { console.error(JSON.stringify(diagnosticRecord('application_manifest_unavailable', error))); }
+    }
+    // A broken application manifest must not remove the independent recovery tools.
+    return createProbeServer({ jobs, audit, resourceUrl, bootId, release, authInfo: ctx.authInfo, era: ctx.era, coding, applicationTools, releaseClient });
+  }, {
     legacy: 'stateless', onerror: error => console.error(JSON.stringify(diagnosticRecord('mcp_protocol_error', error)))
   });
   app.use(`${prefix}/mcp`, (_req, res, next) => {
@@ -95,7 +106,10 @@ export function configFromEnvironment() {
     dataDirectory: process.env.PRAXIS_DATA_DIR || '/var/lib/praxis-probe',
     release: process.env.PRAXIS_RELEASE || VERSION,
     ...(process.env.PRAXIS_CODING_URL ? { coding: { url: process.env.PRAXIS_CODING_URL } } : {}),
-    auth: { passwordHash: read('password-hash'), jwks: JSON.parse(read('jwks.json')), cookieKeys: JSON.parse(read('cookie-keys.json')) }
+    ...(process.env.PRAXIS_TOOL_MANIFEST ? { toolManifestPath: process.env.PRAXIS_TOOL_MANIFEST } : {}),
+    ...(process.env.PRAXIS_RELEASE_CONTROL_URL ? { releaseControl: { url: process.env.PRAXIS_RELEASE_CONTROL_URL } } : {}),
+    auth: { passwordHash: read('password-hash'), jwks: JSON.parse(read('jwks.json')), cookieKeys: JSON.parse(read('cookie-keys.json')),
+      ...(process.env.PRAXIS_HEALTH_JWKS ? { healthPublicJwks: JSON.parse(readFileSync(process.env.PRAXIS_HEALTH_JWKS, 'utf8')) } : {}) }
   };
 }
 

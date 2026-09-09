@@ -5,7 +5,7 @@ import { promisify } from 'node:util';
 import { DatabaseSync } from 'node:sqlite';
 import express from 'express';
 import { Provider, errors } from 'oidc-provider';
-import { createTokenVerifier } from './token-verifier.js';
+import { createTokenVerifier, createHealthVerifier } from './token-verifier.js';
 
 const scrypt = promisify(scryptCallback);
 const OWNER = 'jensen';
@@ -61,7 +61,7 @@ function adapterClass(db) {
 }
 
 /** Independent single-owner OAuth issuer. Mount router at the issuer pathname. */
-export async function createAuth({ issuer, resourceUrl, passwordHash, jwks, cookieKeys, dataDirectory, allowLoopback = false, codingEnabled = false }) {
+export async function createAuth({ issuer, resourceUrl, passwordHash, jwks, cookieKeys, dataDirectory, allowLoopback = false, codingEnabled = false, healthPublicJwks }) {
   const issuerUrl = new URL(issuer);
   const resource = new URL(resourceUrl).href;
   const isLoopback = (url) => ['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname);
@@ -78,7 +78,12 @@ export async function createAuth({ issuer, resourceUrl, passwordHash, jwks, cook
   const db = createDatabase(dataDirectory);
   const publicJwks = { keys: jwks.keys.map(({ d, p, q, dp, dq, qi, oth, ...key }) => key) };
   const allowedScopes = [SCOPE, ...(codingEnabled ? ['praxis:code'] : [])];
-  const verifyAccessToken = createTokenVerifier({ issuer, resourceUrl: resource, jwks: publicJwks, allowedScopes });
+  const verifyOwner = createTokenVerifier({ issuer, resourceUrl: resource, jwks: publicJwks, allowedScopes });
+  const verifyHealth = healthPublicJwks ? createHealthVerifier({ issuer, resourceUrl: resource, jwks: healthPublicJwks }) : null;
+  const verifyAccessToken = async token => {
+    try { return await verifyOwner(token); }
+    catch (error) { if (!verifyHealth) throw error; return verifyHealth(token); }
+  };
   const provider = new Provider(issuer, {
     adapter: adapterClass(db), jwks,
     clients: [],
