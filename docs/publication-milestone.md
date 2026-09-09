@@ -1,6 +1,6 @@
 # Independent publication and deployment
 
-The owner authorizes Praxis to handle the full podcast-discord workflow without a Codex handoff. The default branch is `main`. Other production applications and independent Praxis self-update remain excluded. This document describes the implementation under qualification; deployment evidence must identify the actually active release.
+The owner authorizes Praxis to handle the full podcast-discord workflow without a Codex handoff. The default branch is `main`. Other production applications and independent Praxis self-update remain excluded. Version 0.4.0 is active as `coding-abc97268f6d9`; [deployment evidence](evidence/publication-v04-deployment.json) distinguishes configured production capabilities from fixture execution. Actual feature publication and deployment from a phone remain to be exercised.
 
 ## Phone workflow
 

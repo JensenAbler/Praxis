@@ -1,0 +1,150 @@
+{
+  "verifiedAt": "2026-09-09T21:58:55.679909+00:00",
+  "evidenceKind": "production-configuration-and-read-only-verification",
+  "release": "coding-abc97268f6d9",
+  "sourceCommit": "abc97268f6d98bb80d72e388d3fb2a30b3d33205",
+  "gateway": {
+    "ok": true,
+    "name": "Praxis",
+    "version": "0.4.0",
+    "release": "coding-abc97268f6d9",
+    "bootId": "87ed776f-371c-44af-bbe7-e7cb0b90f158"
+  },
+  "coding": {
+    "ok": true,
+    "release": "coding-abc97268f6d9",
+    "bootId": "597292fb-2b26-4c4e-9bc8-367693f0aeee"
+  },
+  "git": {
+    "ok": true,
+    "release": "coding-abc97268f6d9",
+    "bootId": "9ca4564b-70c2-452a-b2cc-0e6c9957ec6b"
+  },
+  "deploymentStatus": {
+    "ok": true,
+    "data": {
+      "repository": "JensenAbler/podcast-discord",
+      "branch": "main",
+      "currentHead": "feef620f1958b24e2a0de50f28361a9d9e2db4ef",
+      "clean": true,
+      "service": {
+        "ActiveState": "active",
+        "SubState": "running",
+        "MainPID": "3616875",
+        "InvocationID": "b5623ac8bb7640d7a624c4781dfc262c",
+        "Result": "success",
+        "ExecMainCode": "0",
+        "ExecMainStatus": "0",
+        "ExecMainStartTimestampMonotonic": "3270989149224"
+      },
+      "serviceError": null,
+      "healthKind": "systemd-process-stability"
+    }
+  },
+  "helperStatusFromBrokerMountNamespace": true,
+  "generalSudoDenied": true,
+  "serviceAdoption": {
+    "startedAt": "2026-09-09T21:49:02.581554+00:00",
+    "phase": "completed",
+    "oldPid": 1511328,
+    "oldStartTicks": "294193471",
+    "sourceCommit": "feef620f1958b24e2a0de50f28361a9d9e2db4ef",
+    "observedChildProcesses": 0,
+    "observedRecordingDescriptors": 0,
+    "applicationDrainVerified": false,
+    "service": {
+      "MainPID": "3616875",
+      "ActiveState": "active",
+      "SubState": "running",
+      "InvocationID": "b5623ac8bb7640d7a624c4781dfc262c"
+    },
+    "sourceUnchanged": true,
+    "configurationUnchanged": true,
+    "loginMessageObserved": true,
+    "completedAt": "2026-09-09T21:49:11.377748+00:00",
+    "loginObservedAt": "2026-09-09T21:49:12.624000+00:00"
+  },
+  "activations": [
+    {
+      "schemaVersion": 1,
+      "kind": "manual-coding-release-update",
+      "stage": "committed",
+      "release": "coding-d5a6b8d6613b",
+      "previousRelease": "coding-98c4f1d79036",
+      "sourceCommit": "d5a6b8d6613bbb805cdee46937a86150f49e5b0b",
+      "treeSha256": "f24048022680d8a060c7dcfe4f6d2df9631bca597eb5a421af47fea8c97dd094",
+      "fixtureReceiptSha256": "197d2c6cf9411ac5fc00bf7e727991f49146c27a762a848b1173bf29d3dab85c",
+      "npmTestPassed": true,
+      "authenticatedMcpPassed": true,
+      "verifiedAt": "2026-09-09T21:51:05.638164+00:00",
+      "canonicalEndpoint": "https://mcp.jensenabler.com/praxis/mcp",
+      "canonicalIssuer": "https://mcp.jensenabler.com/praxis/oauth",
+      "coreStatePreserved": true,
+      "credentialsPreserved": true,
+      "databaseIdentitiesPreserved": true,
+      "additiveTablesAllowed": true,
+      "noDatabaseRestore": true,
+      "noJobsStartedOrRerun": true,
+      "noProjectOrImageChanges": true,
+      "gitBrokerEnabled": true,
+      "gitBrokerPreviouslyActive": false,
+      "stateBeforeSha256": "e809697d0ba0c5697cee32452fb4cac77de00af615fe594c44ce87ecf5cce4bf",
+      "stateAfterSha256": "e809697d0ba0c5697cee32452fb4cac77de00af615fe594c44ce87ecf5cce4bf",
+      "ingressReopened": true
+    },
+    {
+      "schemaVersion": 1,
+      "kind": "manual-coding-release-update",
+      "stage": "committed",
+      "release": "coding-abc97268f6d9",
+      "previousRelease": "coding-d5a6b8d6613b",
+      "sourceCommit": "abc97268f6d98bb80d72e388d3fb2a30b3d33205",
+      "treeSha256": "565cc22238a5a1c5f08355108199023bcfb43a4ee28da98b98534230261d43d3",
+      "fixtureReceiptSha256": "229a5a50c38cd85cf94bc42f53b803663f51f3cd5fbe75096e5f6ce9fd625201",
+      "npmTestPassed": true,
+      "authenticatedMcpPassed": true,
+      "verifiedAt": "2026-09-09T21:57:54.233137+00:00",
+      "canonicalEndpoint": "https://mcp.jensenabler.com/praxis/mcp",
+      "canonicalIssuer": "https://mcp.jensenabler.com/praxis/oauth",
+      "coreStatePreserved": true,
+      "credentialsPreserved": true,
+      "databaseIdentitiesPreserved": true,
+      "additiveTablesAllowed": true,
+      "noDatabaseRestore": true,
+      "noJobsStartedOrRerun": true,
+      "noProjectOrImageChanges": true,
+      "gitBrokerEnabled": true,
+      "gitBrokerPreviouslyActive": true,
+      "stateBeforeSha256": "560127f1610a767e35e90aaa0add9d977f92af997ad65b93f46755c532c8e126",
+      "stateAfterSha256": "560127f1610a767e35e90aaa0add9d977f92af997ad65b93f46755c532c8e126",
+      "ingressReopened": true
+    }
+  ],
+  "deploymentHelperSha256": "dae0cd742fc9ec59b9e181987dd3a16a90f1b6411aeababaac200988d2abe5df",
+  "updaterSha256": "5ff121e2a6f8a0f8f40309c67e9b46e861a0f011cc4e26797f3697878959f893",
+  "publicationCredential": {
+    "repository": "JensenAbler/podcast-discord",
+    "deployKeyId": 162813696,
+    "readOnly": false,
+    "fingerprint": "SHA256:sgq5CFOpEsggYydZ5yDwg0gFQ/uiZRWKI+odm9t464Y",
+    "privateKeyLocation": "protected broker home outside coding access",
+    "githubReadVerified": true,
+    "githubWriteNotExercised": true
+  },
+  "codingCounts": {
+    "workspaces": 7,
+    "jobs": 23,
+    "gitRequests": 0
+  },
+  "brokerCounts": {
+    "operations": 0
+  },
+  "preservedProductionRepositoryCommit": "2b5c4273d3f7b249f8626a8575ba79fe0f66c339",
+  "scopeLimits": [
+    "No feature commit was pushed to podcast-discord during qualification.",
+    "The helper performed only read-only production status; service adoption restarted the unchanged existing application once.",
+    "Actual changed-commit fast-forward and restart were tested in disposable Git/fake-systemd fixtures.",
+    "No new phone coding, publication, or deployment run is claimed.",
+    "Dependency changes remain unsupported for deployment."
+  ]
+}

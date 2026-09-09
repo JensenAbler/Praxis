@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "evidenceKind": "native ChatGPT web connection metadata refresh",
+  "recordedAt": "2026-09-09T22:00:57Z",
+  "release": "coding-abc97268f6d9",
+  "version": "0.4.0",
+  "connectionName": "Praxis",
+  "endpoint": "https://mcp.jensenabler.com/praxis/mcp",
+  "appId": "asdk_app_6aa18e1760dc81919cb05f7e2c199665",
+  "versionIdShown": "asdk_app_v_6aa18e1760ec8191b7bb5236dfaa8b99",
+  "method": "Clicked Refresh in the existing connection's settings and inspected the resulting accessibility text and rendered schema-copy button count.",
+  "refreshCompleted": true,
+  "actionCount": 37,
+  "codingAndPublicationActions": 28,
+  "probeActions": 9,
+  "newActionsObserved": [
+    "project_sync",
+    "git_commit",
+    "git_push",
+    "deployment_status",
+    "deployment_fast_forward",
+    "git_operation_status",
+    "git_operations_list"
+  ],
+  "newAuthorizationPromptObserved": false,
+  "permissionPreferenceChanged": false,
+  "limitations": [
+    "This verifies refreshed native web connection metadata, not execution of the new tools in a phone conversation.",
+    "The connection's displayed version ID remained unchanged across refreshes; source release and tool definitions are separate evidence."
+  ]
+}
