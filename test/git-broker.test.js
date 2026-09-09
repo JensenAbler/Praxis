@@ -6,7 +6,7 @@ import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { TrustedGit, GitTransportError } from '../src/git/git.js';
-import { GitBroker } from '../src/git/broker.js';
+import { GitBroker, BrokerError } from '../src/git/broker.js';
 import { sha256 } from '../src/code/paths.js';
 
 const owner = 'fixture-owner';
@@ -237,4 +237,47 @@ test('new prototype-named files are ordinary exact source entries', async t => {
   const entry = (await f.transport.readTree('demo', result.receipt.result.commit)).find(value => value.path === '__proto__');
   assert.ok(entry); assert.equal((await f.transport.readBlob('demo', entry.oid)).toString(), 'New ordinary file');
   assert.equal(result.receipt.result.revision, item.args.revision);
+});
+
+test('deployment admission rejection is definite only before a persisted intent; helper terminal phases remain authoritative', async t => {
+  let outcome = 'admission-rejected';
+  const deployment = async input => {
+    assert.equal(input.action, 'apply');
+    if (outcome === 'admission-rejected') {
+      const error = new BrokerError('DEPLOYMENT_BUSY', 'Another fixture deployment is incomplete.');
+      error.admissionRejected = true; throw error;
+    }
+    return { operationId: input.operationId, phase: outcome, targetCommit: input.targetCommit };
+  };
+  const f = await fixture(t, { deployment }), item = await stage(f), prepared = await execute(f, 'commit', item.args);
+  const pushed = await execute(f, 'push', { commitOperationId: prepared.args.operationId });
+  const input = { pushOperationId: pushed.args.operationId, expectedHead: f.base };
+
+  const rejected = await execute(f, 'deploy', input);
+  assert.equal(rejected.receipt.status, 'failed');
+  assert.equal(rejected.receipt.error.code, 'DEPLOYMENT_BUSY');
+
+  outcome = 'failed';
+  const failed = await execute(f, 'deploy', input);
+  assert.equal(failed.receipt.status, 'failed');
+  assert.equal(failed.receipt.error.code, 'DEPLOYMENT_FAILED');
+  assert.equal(failed.receipt.result.phase, 'failed');
+
+  outcome = 'uncertain';
+  const uncertain = await execute(f, 'deploy', input);
+  assert.equal(uncertain.receipt.status, 'uncertain');
+  assert.equal(uncertain.receipt.error.code, 'DEPLOYMENT_UNCERTAIN');
+  assert.equal(uncertain.receipt.result.phase, 'uncertain');
+
+  f.broker.db.prepare("UPDATE git_operations SET status='running',phase='deploy_intent' WHERE id=?").run(uncertain.args.operationId);
+  await f.reopen(); outcome = 'admission-rejected'; await f.broker.tick();
+  const recovered = f.broker.get({ owner, operationId: uncertain.args.operationId });
+  assert.equal(recovered.status, 'uncertain', 'recovery admission failure cannot disprove the original deployment');
+  assert.equal(recovered.error.code, 'DEPLOYMENT_BUSY');
+
+  f.broker.db.prepare("UPDATE git_operations SET status='running',phase='deploy_intent' WHERE id=?").run(uncertain.args.operationId);
+  await f.reopen(); outcome = 'failed'; await f.broker.tick();
+  const terminal = f.broker.get({ owner, operationId: uncertain.args.operationId });
+  assert.equal(terminal.status, 'failed', 'a helper failure receipt resolves an existing intent');
+  assert.equal(terminal.result.phase, 'failed');
 });

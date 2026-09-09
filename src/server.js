@@ -32,7 +32,7 @@ export async function createApp(config) {
   app.set('trust proxy', 'loopback');
   app.use(hostHeaderValidation([base.hostname, ...(config.allowLoopback ? ['localhost', '127.0.0.1'] : [])]));
   app.use((_req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
-  app.get(`${prefix}/healthz`, (_req, res) => res.json({ ok: true, name: 'Praxis', version: coding ? '0.3.0' : VERSION, release, bootId }));
+  app.get(`${prefix}/healthz`, (_req, res) => res.json({ ok: true, name: 'Praxis', version: coding ? '0.4.0' : VERSION, release, bootId }));
   app.get(`${prefix}/`, (_req, res) => res.type('text').send(coding ? 'Praxis: authenticated source, isolated coding, and durable jobs. Connect using the /mcp endpoint.' : 'Praxis: authenticated diagnostic tools. Connect using the /mcp endpoint.'));
   app.get(`/.well-known/oauth-protected-resource${prefix}/mcp`, (_req, res) => res.json({
     resource: resourceUrl, authorization_servers: [issuer], scopes_supported: ['praxis:probe', ...(coding ? ['praxis:code'] : []), 'offline_access'], resource_name: 'Praxis',
