@@ -1,7 +1,6 @@
 import express from 'express';
-import { mkdirSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { mkdirSync, readFileSync, realpathSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { createTokenVerifier } from '../token-verifier.js';
 import { CodeStore } from './store.js';
@@ -72,12 +71,20 @@ export async function createCodingService(config) {
   return { app, jobs, workspaces, store, async close() { stopped = true; clearInterval(timer); await pending; store.close(); } };
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+function isEntrypoint() {
+  if (!process.argv[1]) return false;
+  try {
+    // systemd launches through current/, while Node normally resolves the module to its immutable release.
+    return realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url));
+  } catch { return false; } // An importing process may supply an argv[1] that is not a file.
+}
+
+if (isEntrypoint()) {
   const configPath = process.env.PRAXIS_CODING_CONFIG;
   if (!configPath) throw new Error('Protected coding configuration is required');
   const config = JSON.parse(readFileSync(configPath, 'utf8'));
   const service = await createCodingService(config);
-  const http = service.app.listen(config.port || 8792, '127.0.0.1', () => console.log(JSON.stringify({ event: 'coding_listening', release: config.release })));
+  const http = service.app.listen(config.port ?? 8792, '127.0.0.1', () => console.log(JSON.stringify({ event: 'coding_listening', release: config.release, port: http.address().port })));
   const shutdown = () => { http.close(async () => { await service.close(); process.exit(0); }); setTimeout(() => process.exit(1), 10000).unref(); };
   process.on('SIGTERM', shutdown); process.on('SIGINT', shutdown);
 }
