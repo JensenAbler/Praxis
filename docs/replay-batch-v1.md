@@ -1,8 +1,8 @@
 # Replay batch v1
 
-This batch tests three harder historical tasks before changing Praxis's current tools. Six new runs cover three coding problems, two independent repeats, and recovery of a nonempty artifact. **The new agent and phone runs have not run.** The three projects are registered, their graders are calibrated, and their starting test outcomes are recorded. Preparation results do not count as agent success.
+This batch is complete. The owner supplied six implementation/recovery pairs covering three coding problems, two independent repeats, and recovery of a nonempty artifact. All six saved candidates subsequently passed the calibrated independent behavioral checks. [Results and recurring friction](evidence/replay-batch-v1-results.md) distinguish owner-reported phone behavior, preserved server state, and operator grading. The four buffer/provider full suites retained the documented baseline recording failure.
 
-The runtime stays at `coding-a41abbbbb51e`, with its existing pinned container image. New fixtures, private task packets, and trusted evaluators do not change that tool surface. The [batch manifest](../eval/batch-v1.json) records stable run identities; the [case catalog](../eval/catalog.json) pins starting commits and prompt hashes.
+The batch used `coding-a41abbbbb51e` and its pinned container image throughout. Its manifest remains the historical baseline for the subsequent [0.3 tool improvements](tool-quality-v03.md); do not reuse its completed run IDs for new attempts. The [batch manifest](../eval/batch-v1.json) records stable run identities and actual workspace revisions; the [case catalog](../eval/catalog.json) pins starting commits and prompt hashes. The remaining sections preserve the original batch procedure and preparation evidence.
 
 ## Readiness evidence
 

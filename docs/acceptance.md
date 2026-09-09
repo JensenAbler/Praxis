@@ -1,8 +1,10 @@
 # Praxis acceptance
 
-The first coding workflow is accepted for one actual iPhone task and fresh-conversation recovery on runtime `coding-a41abbbbb51e` at `https://mcp.jensenabler.com/praxis/mcp`. [The phone report](evidence/iphone-coding-report.md) records the accepted case and remaining friction. Automated local, Linux, and authenticated-client evidence are recorded separately from native ChatGPT and iPhone observations. The full original specification and later roadmap are not represented as complete.
+Praxis 0.3.0 is deployed as `coding-98c4f1d79036`. It passed [99 Linux tests](evidence/tool-quality-v03-linux.json), [seven authenticated MCP fixture groups with actual Podman](evidence/tool-quality-v03-mcp.json), and [guarded activation with preserved existing state](evidence/tool-quality-v03-deployment.json). The fixture verifies large-file multi-patch edits and a final summary recovered after output overflow. ChatGPT action metadata was refreshed. A new native phone task/performance comparison remains pending.
 
-## Coding workflow
+The preceding runtime `coding-a41abbbbb51e` completed the first actual iPhone task and fresh-conversation recovery at `https://mcp.jensenabler.com/praxis/mcp`, followed by [six varied implementations and recoveries](evidence/replay-batch-v1-results.md). All six saved candidates passed independent behavioral checks; four full suites retain their documented baseline recording failure. Automated local, Linux, and authenticated-client evidence are recorded separately from native ChatGPT and iPhone observations. The full original specification and later roadmap are not represented as complete.
+
+## Historical first coding workflow evidence
 
 | Check | Status | Evidence and scope |
 | --- | --- | --- |

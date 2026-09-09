@@ -1,0 +1,31 @@
+{
+  "evidenceKind": "native-browser-Praxis-action-metadata-refresh",
+  "observedAt": "2026-09-09T20:42:47Z",
+  "appId": "asdk_app_6aa18e1760dc81919cb05f7e2c199665",
+  "appName": "Praxis",
+  "endpoint": "https://mcp.jensenabler.com/praxis/mcp",
+  "method": "Clicked Refresh in the installed connection settings, then inspected changed visible action schemas.",
+  "verifiedArguments": {
+    "job_status": [
+      "includeCommand"
+    ],
+    "job_logs": [
+      "view",
+      "query",
+      "stream"
+    ],
+    "workspace_diff": [
+      "maxBytes",
+      "limit"
+    ]
+  },
+  "verifiedDescriptions": [
+    "Sequential same-file patches use the original file hash.",
+    "Diff limits explicitly count UTF-8 bytes.",
+    "Job status provides recent output; tail starts at newest retained records."
+  ],
+  "nativePhoneRun": false,
+  "newAuthorizationPrompt": false,
+  "toolExecutionNotVerifiedByMetadataRefresh": true,
+  "otherObservation": "A call through the current Codex task cached praxis.probe_capabilities binding before refresh returned Unknown tool. That binding failure is separate from the successful authenticated MCP fixture and native browser discovery."
+}
