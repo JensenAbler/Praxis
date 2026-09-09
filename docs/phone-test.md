@@ -4,7 +4,7 @@ Connect **Praxis Probe** first. Use the same account as the iPhone. Record the m
 
 ## Complete the connection
 
-**Praxis Probe is connected through OAuth in ChatGPT**, and the refreshed settings list all nine tools. Open a new iPhone conversation and attach Praxis Probe. Mobile tool calls and fresh-conversation recovery are still unverified. If reauthorization is needed later, use the private probe password and allow access; the bootstrap password file is `C:\Users\Jensen\.codex\praxis-probe-private\login.txt`.
+**Praxis Probe is connected through OAuth in ChatGPT**, and the refreshed settings list all nine tools. The first iPhone run and reported fresh-conversation recovery have passed; [recorded evidence](evidence/iphone-probe-report.md) includes server corroboration and remaining friction. These prompts are retained for future reruns. If reauthorization is needed later, use the private probe password and allow access; the bootstrap password file is `C:\Users\Jensen\.codex\praxis-probe-private\login.txt`.
 
 For reference, the observed web setup was:
 

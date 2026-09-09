@@ -8,7 +8,7 @@ Nine authenticated tools provide capability discovery, synthetic responses, a co
 
 ## Connect and test
 
-**Praxis Probe is connected through OAuth in the owner's ChatGPT account.** ChatGPT's refreshed connection settings list all nine tools. No model API key is needed. Attach it to a new iPhone conversation and use [the setup details and phone test prompts](docs/phone-test.md). Actual iPhone calls and fresh-conversation job recovery remain to be tested.
+**Praxis Probe is connected through OAuth in the owner's ChatGPT account.** The first actual iPhone run and reported fresh-conversation recovery passed, corroborated by server records; see [the evidence and remaining friction](docs/evidence/iphone-probe-report.md). All nine tools are listed in ChatGPT. No model API key is needed. [Setup details and repeatable phone prompts](docs/phone-test.md) remain available for later client/version checks.
 
 ChatGPT account/workspace availability and mobile tool exposure must be verified in the actual account. Current setup guidance is [Connect and test a plugin](https://developers.openai.com/plugins/deploy/connect-chatgpt). If the app does not expose connection creation, create it in the web account settings first, then check its availability in a new iPhone conversation. Schema changes require refreshing connection metadata and starting a new conversation. Claude can be tested separately through its remote MCP connection flow; compatibility is not claimed until observed.
 

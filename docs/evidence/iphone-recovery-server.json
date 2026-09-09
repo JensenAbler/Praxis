@@ -1,0 +1,677 @@
+{
+  "evidenceType": "Read-only SSH verification of owner-supplied iPhone reports; server has no chat identifier",
+  "verifiedAt": "2026-09-09T04:20:10.505641+00:00",
+  "job": {
+    "id": "7ec860cd-9558-44ed-b5a6-74421006bf96",
+    "label": "iPhone recovery probe v1",
+    "status": "completed",
+    "duration_seconds": 120,
+    "interval_seconds": 5,
+    "created_at": "2026-09-09T04:11:33.639Z",
+    "started_at": "2026-09-09T04:11:33.834Z",
+    "finished_at": "2026-09-09T04:13:33.924Z"
+  },
+  "sameIdempotencyKeyCount": 1,
+  "sameLabelCount": 1,
+  "records": [
+    {
+      "sequence": 1,
+      "event": "STARTED",
+      "runId": "7ec860cd-9558-44ed-b5a6-74421006bf96",
+      "utc": "2026-09-09T04:11:33.835Z",
+      "elapsedSeconds": 0
+    },
+    {
+      "sequence": 2,
+      "event": "HEARTBEAT",
+      "runId": "7ec860cd-9558-44ed-b5a6-74421006bf96",
+      "utc": "2026-09-09T04:11:38.854Z",
+      "elapsedSeconds": 5.01639,
+      "heartbeat": 1
+    },
+    {
+      "sequence": 3,
+      "event": "HEARTBEAT",
+      "runId": "7ec860cd-9558-44ed-b5a6-74421006bf96",
+      "utc": "2026-09-09T04:11:43.875Z",
+      "elapsedSeconds": 10.037564,
+      "heartbeat": 2
+    },
+    {
+      "sequence": 4,
+      "event": "HEARTBEAT",
+      "runId": "7ec860cd-9558-44ed-b5a6-74421006bf96",
+      "utc": "2026-09-09T04:11:48.897Z",
+      "elapsedSeconds": 15.059086,
+      "heartbeat": 3
+    },
+    {
+      "sequence": 5,
+      "event": "HEARTBEAT",
+      "runId": "7ec860cd-9558-44ed-b5a6-74421006bf96",
+      "utc": "2026-09-09T04:11:53.917Z",
+      "elapsedSeconds": 20.078799,
+      "heartbeat": 4
+    },
+    {
+      "sequence": 6,
+      "event": "HEARTBEAT",
+      "runId": "7ec860cd-9558-44ed-b5a6-74421006bf96",
+      "utc": "2026-09-09T04:11:58.937Z",
+      "elapsedSeconds": 25.099529,
+      "heartbeat": 5
+    },
+    {
+      "sequence": 7,
+      "event": "HEARTBEAT",
+      "runId": "7ec860cd-9558-44ed-b5a6-74421006bf96",
+      "utc": "2026-09-09T04:12:03.960Z",
+      "elapsedSeconds": 30.122523,
+      "heartbeat": 6
+    },
+    {
+      "sequence": 8,
+      "event": "HEARTBEAT",
+      "runId": "7ec860cd-9558-44ed-b5a6-74421006bf96",
+      "utc": "2026-09-09T04:12:08.983Z",
+      "elapsedSeconds": 35.145393,
+      "heartbeat": 7
+    },
+    {
+      "sequence": 9,
+      "event": "HEARTBEAT",
+      "runId": "7ec860cd-9558-44ed-b5a6-74421006bf96",
+      "utc": "2026-09-09T04:12:14.002Z",
+      "elapsedSeconds": 40.164508,
+      "heartbeat": 8
+    },
+    {
+      "sequence": 10,
+      "event": "HEARTBEAT",
+      "runId": "7ec860cd-9558-44ed-b5a6-74421006bf96",
+      "utc": "2026-09-09T04:12:19.022Z",
+      "elapsedSeconds": 45.184707,
+      "heartbeat": 9
+    },
+    {
+      "sequence": 11,
+      "event": "HEARTBEAT",
+      "runId": "7ec860cd-9558-44ed-b5a6-74421006bf96",
+      "utc": "2026-09-09T04:12:23.843Z",
+      "elapsedSeconds": 50.005478,
+      "heartbeat": 10
+    },
+    {
+      "sequence": 12,
+      "event": "HEARTBEAT",
+      "runId": "7ec860cd-9558-44ed-b5a6-74421006bf96",
+      "utc": "2026-09-09T04:12:28.862Z",
+      "elapsedSeconds": 55.024705,
+      "heartbeat": 11
+    },
+    {
+      "sequence": 13,
+      "event": "HEARTBEAT",
+      "runId": "7ec860cd-9558-44ed-b5a6-74421006bf96",
+      "utc": "2026-09-09T04:12:33.882Z",
+      "elapsedSeconds": 60.044453,
+      "heartbeat": 12
+    },
+    {
+      "sequence": 14,
+      "event": "HEARTBEAT",
+      "runId": "7ec860cd-9558-44ed-b5a6-74421006bf96",
+      "utc": "2026-09-09T04:12:38.902Z",
+      "elapsedSeconds": 65.06443,
+      "heartbeat": 13
+    },
+    {
+      "sequence": 15,
+      "event": "HEARTBEAT",
+      "runId": "7ec860cd-9558-44ed-b5a6-74421006bf96",
+      "utc": "2026-09-09T04:12:43.924Z",
+      "elapsedSeconds": 70.086758,
+      "heartbeat": 14
+    },
+    {
+      "sequence": 16,
+      "event": "HEARTBEAT",
+      "runId": "7ec860cd-9558-44ed-b5a6-74421006bf96",
+      "utc": "2026-09-09T04:12:48.945Z",
+      "elapsedSeconds": 75.107356,
+      "heartbeat": 15
+    },
+    {
+      "sequence": 17,
+      "event": "HEARTBEAT",
+      "runId": "7ec860cd-9558-44ed-b5a6-74421006bf96",
+      "utc": "2026-09-09T04:12:53.964Z",
+      "elapsedSeconds": 80.125872,
+      "heartbeat": 16
+    },
+    {
+      "sequence": 18,
+      "event": "HEARTBEAT",
+      "runId": "7ec860cd-9558-44ed-b5a6-74421006bf96",
+      "utc": "2026-09-09T04:12:58.982Z",
+      "elapsedSeconds": 85.144406,
+      "heartbeat": 17
+    },
+    {
+      "sequence": 19,
+      "event": "HEARTBEAT",
+      "runId": "7ec860cd-9558-44ed-b5a6-74421006bf96",
+      "utc": "2026-09-09T04:13:04.002Z",
+      "elapsedSeconds": 90.164849,
+      "heartbeat": 18
+    },
+    {
+      "sequence": 20,
+      "event": "HEARTBEAT",
+      "runId": "7ec860cd-9558-44ed-b5a6-74421006bf96",
+      "utc": "2026-09-09T04:13:09.026Z",
+      "elapsedSeconds": 95.188487,
+      "heartbeat": 19
+    },
+    {
+      "sequence": 21,
+      "event": "HEARTBEAT",
+      "runId": "7ec860cd-9558-44ed-b5a6-74421006bf96",
+      "utc": "2026-09-09T04:13:13.847Z",
+      "elapsedSeconds": 100.009084,
+      "heartbeat": 20
+    },
+    {
+      "sequence": 22,
+      "event": "HEARTBEAT",
+      "runId": "7ec860cd-9558-44ed-b5a6-74421006bf96",
+      "utc": "2026-09-09T04:13:18.867Z",
+      "elapsedSeconds": 105.029406,
+      "heartbeat": 21
+    },
+    {
+      "sequence": 23,
+      "event": "HEARTBEAT",
+      "runId": "7ec860cd-9558-44ed-b5a6-74421006bf96",
+      "utc": "2026-09-09T04:13:23.885Z",
+      "elapsedSeconds": 110.047437,
+      "heartbeat": 22
+    },
+    {
+      "sequence": 24,
+      "event": "HEARTBEAT",
+      "runId": "7ec860cd-9558-44ed-b5a6-74421006bf96",
+      "utc": "2026-09-09T04:13:28.905Z",
+      "elapsedSeconds": 115.067798,
+      "heartbeat": 23
+    },
+    {
+      "sequence": 25,
+      "event": "HEARTBEAT",
+      "runId": "7ec860cd-9558-44ed-b5a6-74421006bf96",
+      "utc": "2026-09-09T04:13:33.924Z",
+      "elapsedSeconds": 120.086503,
+      "heartbeat": 24
+    },
+    {
+      "sequence": 26,
+      "event": "COMPLETED",
+      "runId": "7ec860cd-9558-44ed-b5a6-74421006bf96",
+      "utc": "2026-09-09T04:13:33.924Z",
+      "elapsedSeconds": 120.086503
+    }
+  ],
+  "reportedRequestReceipts": [
+    {
+      "sequence": 5,
+      "recordedAt": "2026-09-09T04:11:01.838Z",
+      "requestId": "7fa84c7f-efa6-4146-b610-b97964e7d26d",
+      "kind": "tool",
+      "tool": "probe_capabilities",
+      "era": "modern",
+      "durationMs": 0.635,
+      "resultJsonBytes": 885,
+      "ok": true,
+      "errorCode": null
+    },
+    {
+      "sequence": 7,
+      "recordedAt": "2026-09-09T04:11:07.699Z",
+      "requestId": "d1083a5e-bd00-47ef-8eee-ed4628191918",
+      "kind": "tool",
+      "tool": "probe_response",
+      "era": "modern",
+      "durationMs": 0.212,
+      "resultJsonBytes": 4362,
+      "ok": true,
+      "errorCode": null
+    },
+    {
+      "sequence": 9,
+      "recordedAt": "2026-09-09T04:11:17.107Z",
+      "requestId": "992d7fff-16b9-4ed9-abf6-97ae0173de18",
+      "kind": "tool",
+      "tool": "probe_failure",
+      "era": "modern",
+      "durationMs": 0.129,
+      "resultJsonBytes": 361,
+      "ok": false,
+      "errorCode": "FIXTURE_ERROR"
+    },
+    {
+      "sequence": 11,
+      "recordedAt": "2026-09-09T04:11:22.604Z",
+      "requestId": "b8bbe6d1-e494-4c13-bc3e-70e6a74d8b73",
+      "kind": "tool",
+      "tool": "probe_capabilities",
+      "era": "modern",
+      "durationMs": 0.036,
+      "resultJsonBytes": 885,
+      "ok": true,
+      "errorCode": null
+    },
+    {
+      "sequence": 13,
+      "recordedAt": "2026-09-09T04:11:33.642Z",
+      "requestId": "0f85cd4a-712e-45cf-847d-a7c787a90d9f",
+      "kind": "tool",
+      "tool": "probe_job_start",
+      "era": "modern",
+      "durationMs": 3.64,
+      "resultJsonBytes": 392,
+      "ok": true,
+      "errorCode": null
+    },
+    {
+      "sequence": 15,
+      "recordedAt": "2026-09-09T04:11:49.625Z",
+      "requestId": "9c47967b-fff9-4bf5-a97b-569dc78bfa27",
+      "kind": "tool",
+      "tool": "probe_job_start",
+      "era": "modern",
+      "durationMs": 0.269,
+      "resultJsonBytes": 415,
+      "ok": true,
+      "errorCode": null
+    }
+  ],
+  "observationsSinceFirstProbe": [
+    {
+      "sequence": 5,
+      "recordedAt": "2026-09-09T04:11:01.838Z",
+      "requestId": "7fa84c7f-efa6-4146-b610-b97964e7d26d",
+      "kind": "tool",
+      "tool": "probe_capabilities",
+      "era": "modern",
+      "durationMs": 0.635,
+      "resultJsonBytes": 885,
+      "ok": true,
+      "errorCode": null
+    },
+    {
+      "sequence": 6,
+      "recordedAt": "2026-09-09T04:11:01.849Z",
+      "requestId": "b37fb398-920e-4736-adce-1c6eb07dd769",
+      "kind": "http",
+      "method": "POST",
+      "status": 200,
+      "aborted": false,
+      "protocol": "2026-07-28",
+      "durationMs": 24
+    },
+    {
+      "sequence": 7,
+      "recordedAt": "2026-09-09T04:11:07.699Z",
+      "requestId": "d1083a5e-bd00-47ef-8eee-ed4628191918",
+      "kind": "tool",
+      "tool": "probe_response",
+      "era": "modern",
+      "durationMs": 0.212,
+      "resultJsonBytes": 4362,
+      "ok": true,
+      "errorCode": null
+    },
+    {
+      "sequence": 8,
+      "recordedAt": "2026-09-09T04:11:07.724Z",
+      "requestId": "4e096af7-9097-4247-be2b-7488e73bae22",
+      "kind": "http",
+      "method": "POST",
+      "status": 200,
+      "aborted": false,
+      "protocol": "2026-07-28",
+      "durationMs": 32
+    },
+    {
+      "sequence": 9,
+      "recordedAt": "2026-09-09T04:11:17.107Z",
+      "requestId": "992d7fff-16b9-4ed9-abf6-97ae0173de18",
+      "kind": "tool",
+      "tool": "probe_failure",
+      "era": "modern",
+      "durationMs": 0.129,
+      "resultJsonBytes": 361,
+      "ok": false,
+      "errorCode": "FIXTURE_ERROR"
+    },
+    {
+      "sequence": 10,
+      "recordedAt": "2026-09-09T04:11:17.110Z",
+      "requestId": "f0f97c1b-347a-41cb-a9d5-9b3a46fba507",
+      "kind": "http",
+      "method": "POST",
+      "status": 200,
+      "aborted": false,
+      "protocol": "2026-07-28",
+      "durationMs": 7
+    },
+    {
+      "sequence": 11,
+      "recordedAt": "2026-09-09T04:11:22.604Z",
+      "requestId": "b8bbe6d1-e494-4c13-bc3e-70e6a74d8b73",
+      "kind": "tool",
+      "tool": "probe_capabilities",
+      "era": "modern",
+      "durationMs": 0.036,
+      "resultJsonBytes": 885,
+      "ok": true,
+      "errorCode": null
+    },
+    {
+      "sequence": 12,
+      "recordedAt": "2026-09-09T04:11:22.607Z",
+      "requestId": "1a6bbe4b-1c67-43e9-9824-854118d11d54",
+      "kind": "http",
+      "method": "POST",
+      "status": 200,
+      "aborted": false,
+      "protocol": "2026-07-28",
+      "durationMs": 7
+    },
+    {
+      "sequence": 13,
+      "recordedAt": "2026-09-09T04:11:33.642Z",
+      "requestId": "0f85cd4a-712e-45cf-847d-a7c787a90d9f",
+      "kind": "tool",
+      "tool": "probe_job_start",
+      "era": "modern",
+      "durationMs": 3.64,
+      "resultJsonBytes": 392,
+      "ok": true,
+      "errorCode": null
+    },
+    {
+      "sequence": 14,
+      "recordedAt": "2026-09-09T04:11:33.648Z",
+      "requestId": "71cb8007-fc09-4788-b820-bfede83d0597",
+      "kind": "http",
+      "method": "POST",
+      "status": 200,
+      "aborted": false,
+      "protocol": "2026-07-28",
+      "durationMs": 17
+    },
+    {
+      "sequence": 15,
+      "recordedAt": "2026-09-09T04:11:49.625Z",
+      "requestId": "9c47967b-fff9-4bf5-a97b-569dc78bfa27",
+      "kind": "tool",
+      "tool": "probe_job_start",
+      "era": "modern",
+      "durationMs": 0.269,
+      "resultJsonBytes": 415,
+      "ok": true,
+      "errorCode": null
+    },
+    {
+      "sequence": 16,
+      "recordedAt": "2026-09-09T04:11:49.628Z",
+      "requestId": "2fde1552-ba70-4001-a259-f332c8e50b42",
+      "kind": "http",
+      "method": "POST",
+      "status": 200,
+      "aborted": false,
+      "protocol": "2026-07-28",
+      "durationMs": 10
+    },
+    {
+      "sequence": 17,
+      "recordedAt": "2026-09-09T04:16:11.613Z",
+      "requestId": "46b7fb19-ce3a-4829-87e1-862a61db9d4e",
+      "kind": "tool",
+      "tool": "probe_capabilities",
+      "era": "modern",
+      "durationMs": 0.049,
+      "resultJsonBytes": 885,
+      "ok": true,
+      "errorCode": null
+    },
+    {
+      "sequence": 18,
+      "recordedAt": "2026-09-09T04:16:11.617Z",
+      "requestId": "1a294a66-438d-41ed-887f-ba930267a49d",
+      "kind": "http",
+      "method": "POST",
+      "status": 200,
+      "aborted": false,
+      "protocol": "2026-07-28",
+      "durationMs": 9
+    },
+    {
+      "sequence": 19,
+      "recordedAt": "2026-09-09T04:16:12.149Z",
+      "requestId": "58352227-79a8-4a4d-8c6e-fe66a8eda901",
+      "kind": "tool",
+      "tool": "probe_jobs_list",
+      "era": "modern",
+      "durationMs": 0.465,
+      "resultJsonBytes": 795,
+      "ok": true,
+      "errorCode": null
+    },
+    {
+      "sequence": 20,
+      "recordedAt": "2026-09-09T04:16:12.153Z",
+      "requestId": "399e4b1e-cd09-49ee-a509-be96974b171d",
+      "kind": "http",
+      "method": "POST",
+      "status": 200,
+      "aborted": false,
+      "protocol": "2026-07-28",
+      "durationMs": 8
+    },
+    {
+      "sequence": 21,
+      "recordedAt": "2026-09-09T04:16:19.501Z",
+      "requestId": "0150652e-038d-4119-afe9-36173dde13eb",
+      "kind": "tool",
+      "tool": "probe_job_status",
+      "era": "modern",
+      "durationMs": 0.322,
+      "resultJsonBytes": 439,
+      "ok": true,
+      "errorCode": null
+    },
+    {
+      "sequence": 22,
+      "recordedAt": "2026-09-09T04:16:19.503Z",
+      "requestId": "8aea7fc4-a460-4fc0-bc8a-98f128b094b7",
+      "kind": "http",
+      "method": "POST",
+      "status": 200,
+      "aborted": false,
+      "protocol": "2026-07-28",
+      "durationMs": 7
+    },
+    {
+      "sequence": 23,
+      "recordedAt": "2026-09-09T04:16:20.469Z",
+      "requestId": "5393b4f1-eee4-4575-a3e4-144af591eb6c",
+      "kind": "tool",
+      "tool": "probe_job_logs",
+      "era": "modern",
+      "durationMs": 0.413,
+      "resultJsonBytes": 951,
+      "ok": true,
+      "errorCode": null
+    },
+    {
+      "sequence": 24,
+      "recordedAt": "2026-09-09T04:16:20.471Z",
+      "requestId": "3d1532ca-cdb3-46ca-b4a3-cca4e7f6a470",
+      "kind": "http",
+      "method": "POST",
+      "status": 200,
+      "aborted": false,
+      "protocol": "2026-07-28",
+      "durationMs": 8
+    },
+    {
+      "sequence": 25,
+      "recordedAt": "2026-09-09T04:16:32.797Z",
+      "requestId": "9b75bfe0-7a47-4a85-bc26-c2db66355006",
+      "kind": "tool",
+      "tool": "probe_job_logs",
+      "era": "modern",
+      "durationMs": 0.351,
+      "resultJsonBytes": 979,
+      "ok": true,
+      "errorCode": null
+    },
+    {
+      "sequence": 26,
+      "recordedAt": "2026-09-09T04:16:32.804Z",
+      "requestId": "4cf18a90-139d-4843-9845-dd7f8476362f",
+      "kind": "http",
+      "method": "POST",
+      "status": 200,
+      "aborted": false,
+      "protocol": "2026-07-28",
+      "durationMs": 15
+    },
+    {
+      "sequence": 27,
+      "recordedAt": "2026-09-09T04:16:33.434Z",
+      "requestId": "9a06ef06-80d2-470a-aff9-cf6a07cce9d5",
+      "kind": "tool",
+      "tool": "probe_job_logs",
+      "era": "modern",
+      "durationMs": 0.458,
+      "resultJsonBytes": 987,
+      "ok": true,
+      "errorCode": null
+    },
+    {
+      "sequence": 28,
+      "recordedAt": "2026-09-09T04:16:33.444Z",
+      "requestId": "e2c6a045-b45e-4f7b-95a3-3409a5d148fc",
+      "kind": "http",
+      "method": "POST",
+      "status": 200,
+      "aborted": false,
+      "protocol": "2026-07-28",
+      "durationMs": 16
+    },
+    {
+      "sequence": 29,
+      "recordedAt": "2026-09-09T04:16:34.603Z",
+      "requestId": "03e20f5c-d0bc-447d-aab4-1510ba239587",
+      "kind": "tool",
+      "tool": "probe_job_logs",
+      "era": "modern",
+      "durationMs": 0.366,
+      "resultJsonBytes": 988,
+      "ok": true,
+      "errorCode": null
+    },
+    {
+      "sequence": 30,
+      "recordedAt": "2026-09-09T04:16:34.608Z",
+      "requestId": "14fdccc6-0fe5-4835-a5da-a5100c76664d",
+      "kind": "http",
+      "method": "POST",
+      "status": 200,
+      "aborted": false,
+      "protocol": "2026-07-28",
+      "durationMs": 9
+    },
+    {
+      "sequence": 31,
+      "recordedAt": "2026-09-09T04:16:35.155Z",
+      "requestId": "44b6711a-d094-476c-a43c-14e86fcd0fe8",
+      "kind": "tool",
+      "tool": "probe_job_logs",
+      "era": "modern",
+      "durationMs": 1.598,
+      "resultJsonBytes": 993,
+      "ok": true,
+      "errorCode": null
+    },
+    {
+      "sequence": 32,
+      "recordedAt": "2026-09-09T04:16:35.161Z",
+      "requestId": "58c7a3e6-f8f5-41c2-9b29-a4a150b32681",
+      "kind": "http",
+      "method": "POST",
+      "status": 200,
+      "aborted": false,
+      "protocol": "2026-07-28",
+      "durationMs": 13
+    },
+    {
+      "sequence": 33,
+      "recordedAt": "2026-09-09T04:16:36.497Z",
+      "requestId": "6cbf53bf-7161-419f-846a-a1b5173a2c9b",
+      "kind": "tool",
+      "tool": "probe_job_logs",
+      "era": "modern",
+      "durationMs": 0.282,
+      "resultJsonBytes": 342,
+      "ok": true,
+      "errorCode": null
+    },
+    {
+      "sequence": 34,
+      "recordedAt": "2026-09-09T04:16:36.501Z",
+      "requestId": "4fb5c09b-1de1-4478-a6b3-a73d1e5d5991",
+      "kind": "http",
+      "method": "POST",
+      "status": 200,
+      "aborted": false,
+      "protocol": "2026-07-28",
+      "durationMs": 10
+    },
+    {
+      "sequence": 35,
+      "recordedAt": "2026-09-09T04:16:37.063Z",
+      "requestId": "1c6fdc54-f086-4739-be0a-af5c7dc54d53",
+      "kind": "tool",
+      "tool": "probe_job_logs",
+      "era": "modern",
+      "durationMs": 2.34,
+      "resultJsonBytes": 199,
+      "ok": true,
+      "errorCode": null
+    },
+    {
+      "sequence": 36,
+      "recordedAt": "2026-09-09T04:16:37.067Z",
+      "requestId": "b9506815-ac6a-4a26-8136-f0714cef10d9",
+      "kind": "http",
+      "method": "POST",
+      "status": 200,
+      "aborted": false,
+      "protocol": "2026-07-28",
+      "durationMs": 8
+    }
+  ],
+  "checks": {
+    "completed": true,
+    "allReportedRequestIdsFound": true,
+    "recordSequencesContinuous": true,
+    "heartbeatNumbersContinuous": true,
+    "matchingRunIds": true,
+    "exactFinalRecordMatched": true,
+    "onePersistedJobForKey": true
+  }
+}
