@@ -1,0 +1,50 @@
+[Unit]
+Description=Praxis isolated coding backend
+After=network.target srv-praxis\x2dcode-storage.mount
+Requires=srv-praxis\x2dcode-storage.mount
+ConditionPathExists=/etc/praxis-code/config.json
+
+[Service]
+Type=simple
+User=praxis-code
+Group=praxis-code
+WorkingDirectory=/srv/praxis-probe/current
+Environment=NODE_ENV=production
+Environment=PRAXIS_CODING_CONFIG=/etc/praxis-code/config.json
+Environment=HOME=/var/lib/praxis-code
+Environment=XDG_RUNTIME_DIR=/run/praxis-code
+Environment=CONTAINERS_STORAGE_CONF=/etc/praxis-code/storage.conf
+ExecStart=/usr/bin/node /srv/praxis-probe/current/src/code/server.js
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=15
+RuntimeDirectory=praxis-code
+RuntimeDirectoryMode=0700
+RuntimeDirectoryPreserve=yes
+UMask=0077
+MemoryMax=1536M
+MemorySwapMax=0
+CPUQuota=100%
+TasksMax=256
+KillMode=control-group
+OOMPolicy=kill
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+RestrictRealtime=yes
+LockPersonality=yes
+PrivateTmp=yes
+ReadWritePaths=/var/lib/praxis-code /srv/praxis-code/storage /run/praxis-code
+InaccessiblePaths=-/etc/praxis-probe -/var/lib/praxis-probe -/opt/podcast-discord -/opt/podcast-production -/srv/apocrypha
+IPAddressDeny=any
+IPAddressAllow=localhost
+# Rootless Podman needs the setuid newuidmap/newgidmap helpers. The container
+# itself drops all capabilities and enables no-new-privileges in the runner.
+NoNewPrivileges=no
+
+[Install]
+WantedBy=multi-user.target

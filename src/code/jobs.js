@@ -4,7 +4,7 @@ import { join, resolve, relative, isAbsolute } from 'node:path';
 import { containerName } from './runner.js';
 
 export const CODE_JOB_LIMITS = Object.freeze({
-  timeoutSeconds: 900, activeJobs: 1, retainedJobs: 200, logBytes: 1048576, logRecords: 8192,
+  timeoutSeconds: 900, preparationTimeoutSeconds: 120, activeJobs: 1, retainedJobs: 200, logBytes: 1048576, logRecords: 8192,
   artifacts: 16, artifactBytes: 524288, artifactTotalBytes: 2097152,
 });
 const ACTIVE = ['queued', 'starting', 'running', 'canceling'];
@@ -81,6 +81,7 @@ function publicJob(row, summary = false) {
     createdAt: row.created_at, updatedAt: row.updated_at, startedAt: row.started_at, finishedAt: row.finished_at,
     exitCode: row.exit_code, signal: row.signal, cancellationRequested: Boolean(row.cancel_requested),
     terminationReason: row.termination_reason, executionError: row.execution_error,
+    ...(row.termination_reason === 'timeout_inferred' ? { terminationExplanation: 'The container stopped at its configured deadline, but the runtime did not provide a process exit code. Timeout is inferred, and execution will not be repeated automatically.' } : {}),
     outputBytes: row.output_bytes, truncated: Boolean(row.truncated),
     artifactPaths: request.artifactPaths, artifactErrors: JSON.parse(row.artifact_errors),
   };
@@ -187,11 +188,13 @@ export class CodeJobs {
     page(cursor, limit);
     return this.store.transaction(() => {
       const job = this.row(owner, jobId);
-      const rows = this.db.prepare('SELECT * FROM code_records WHERE job_id=? AND sequence>? ORDER BY sequence LIMIT ?').all(jobId, cursor, limit + 1);
+      // Node SQLite TEXT reads can stop at embedded NUL even though SQLite retained all bytes.
+      const rows = this.db.prepare('SELECT sequence,timestamp,stream,CAST(text AS BLOB) AS text_bytes,partial FROM code_records WHERE job_id=? AND sequence>? ORDER BY sequence LIMIT ?')
+        .all(jobId, cursor, limit + 1).map(row => ({ ...row, text: Buffer.from(row.text_bytes).toString('utf8') }));
       const selected = [];
       let pageBytes = 0;
       for (const row of rows.slice(0, limit)) {
-        const bytes = Buffer.byteLength(row.text) + 200;
+        const bytes = Buffer.byteLength(JSON.stringify({ sequence: row.sequence, timestamp: row.timestamp, stream: row.stream, text: row.text, partial: Boolean(row.partial) }));
         if (selected.length && pageBytes + bytes > 49152) break;
         selected.push(row); pageBytes += bytes;
       }
@@ -330,7 +333,7 @@ export class CodeJobs {
     const latest = this.row(job.owner, job.id);
     const reason = forcedReason ?? latest.termination_reason ?? (state.oomKilled ? 'memory_limit' : 'exit');
     const status = reason === 'cancelled' ? 'cancelled' : reason === 'timeout' ? 'timed_out'
-      : reason === 'interrupted' ? 'interrupted' : state.exitCode === 0 && !executionError ? 'completed' : 'failed';
+      : ['interrupted', 'timeout_inferred', 'exit_unconfirmed'].includes(reason) ? 'interrupted' : state.exitCode === 0 && !executionError ? 'completed' : 'failed';
     this.store.transaction(() => {
       const current = this.row(job.owner, job.id);
       if (!ACTIVE.includes(current.status)) return;
@@ -338,10 +341,12 @@ export class CodeJobs {
       this.db.prepare(`UPDATE code_jobs SET status=?,updated_at=?,finished_at=?,exit_code=?,signal=?,termination_reason=?,
         execution_error=?,revision_after=?,artifact_errors=? WHERE id=?`)
         .run(status, time, state.finishedAt ?? time, state.exitCode ?? null, state.signal ?? null, reason, executionError, revision, JSON.stringify(artifactErrors), job.id);
-      this.record(job.id, 'system', `${status.toUpperCase()}${state.exitCode == null ? '' : ` exit=${state.exitCode}`}`, time);
+      this.record(job.id, 'system', `${status.toUpperCase()}${state.exitCode == null ? ' exit=unknown' : ` exit=${state.exitCode}`} reason=${reason}${state.monitorExitCode == null ? '' : ` monitorExit=${state.monitorExitCode}`}`, time);
     });
     // Metadata and copied output are already durable. Cleanup failure leaves diagnostic material.
-    try { await this.runner.remove({ name: containerName(job.id) }); } catch { /* Retain; never erase a running or ambiguous container. */ }
+    if (status !== 'interrupted' && state.exitCode != null) {
+      try { await this.runner.remove({ name: containerName(job.id) }); } catch { /* Retain; never erase a running or ambiguous container. */ }
+    }
   }
 
   async reconcile(job, { startup = false } = {}) {
@@ -364,7 +369,11 @@ export class CodeJobs {
     }
     const timeout = JSON.parse(job.request_json).timeoutSeconds;
     const elapsed = state.startedAt && state.finishedAt ? Date.parse(state.finishedAt) - Date.parse(state.startedAt) : 0;
-    const reason = job.termination_reason ?? (state.exitCode === 137 && elapsed >= timeout * 1000 ? 'timeout' : undefined);
+    const monitorExitCode = state.monitorExitCode ?? state.exitCode;
+    // Conmon can report -1 when its independent timer fires. Timing plus this sentinel supports an inference,
+    // not a claimed POSIX exit status or proof that the worker itself requested termination.
+    const reason = job.termination_reason ?? (monitorExitCode === -1 && elapsed >= timeout * 1000 ? 'timeout_inferred'
+      : state.exitCode == null ? 'exit_unconfirmed' : undefined);
     await this.finish(job, state, reason);
   }
 
@@ -409,7 +418,8 @@ export class CodeJobs {
           await this.finish(this.row(job.owner, job.id), { exists: false }, 'interrupted'); return;
         }
         const created = await this.runner.create({ job: { id: job.id, ...request }, workspacePath: workspace.path });
-        this.db.prepare('UPDATE code_jobs SET container_id=?,launch_intent_at=?,updated_at=? WHERE id=?').run(created.id, this.clock(), this.clock(), job.id);
+        this.db.prepare('UPDATE code_jobs SET container_id=?,launch_intent_at=?,updated_at=?,runner_cursor=?,log_fingerprint=? WHERE id=?')
+          .run(created.id, this.clock(), this.clock(), created.logCursor ?? 0, created.logFingerprint ?? null, job.id);
         // Cancellation can arrive while create awaits. A created-but-unstarted container is safe to retain/finish.
         job = this.row(job.owner, job.id);
         if (job.cancel_requested) { await this.finish(job, { exists: true, status: 'created', exitCode: null }, 'cancelled'); return; }

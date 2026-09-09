@@ -192,6 +192,19 @@ test('failed cancellation retains lock and retries observation; timeout is a dis
   assert.equal(result.status, 'timed_out'); assert.equal(result.terminationReason, 'timeout');
 });
 
+test('independent monitor timeout sentinel is an explicit inference, not a fabricated POSIX exit', async t => {
+  const f = fixture(t);
+  const job = f.jobs.start(request({ timeoutSeconds: 1 })); await f.jobs.tick();
+  const name = containerName(job.id);
+  Object.assign(f.runner.containers.get(name), { running: false, status: 'exited', exitCode: null, monitorExitCode: -1, finishedAt: '2026-01-01T00:00:01.100Z' });
+  await f.jobs.tick();
+  const result = f.jobs.get({ owner: 'jensen', jobId: job.id });
+  assert.equal(result.status, 'interrupted'); assert.equal(result.exitCode, null);
+  assert.equal(result.terminationReason, 'timeout_inferred');
+  assert.ok(f.runner.containers.has(name), 'Unconfirmed terminal execution should preserve runtime diagnostics.');
+  assert.equal(f.runner.started, 1);
+});
+
 test('output retention and pages remain bounded for noisy commands', async t => {
   const f = fixture(t);
   const job = f.jobs.start(request()); await f.jobs.tick();
@@ -222,6 +235,17 @@ test('tiny output records cannot expand private SQLite beyond the record retenti
   await f.jobs.tick();
   assert.equal(f.store.db.prepare("SELECT COUNT(*) AS count FROM code_records WHERE job_id=? AND stream!='system'").get(job.id).count, CODE_JOB_LIMITS.logRecords);
   assert.equal(f.jobs.get({ owner: 'jensen', jobId: job.id }).truncated, true);
+});
+
+test('JSON escaping cannot bypass the log response byte budget', async t => {
+  const f = fixture(t);
+  const job = f.jobs.start(request()); await f.jobs.tick();
+  f.runner.containers.get(containerName(job.id)).records.push({ timestamp: '2026-01-01T00:00:00.100Z', stream: 'stdout', text: '\u0000'.repeat(60000) });
+  await f.jobs.tick();
+  const result = f.jobs.logs({ owner: 'jensen', jobId: job.id, limit: 100 });
+  assert.equal(result.hasMore, true);
+  assert.ok(Buffer.byteLength(JSON.stringify(result)) < 55000);
+  assert.ok(result.records.some(record => record.stream === 'stdout' && record.text.includes('\u0000')), 'Stored NUL output must not be silently cut off by the SQLite TEXT getter.');
 });
 
 test('a second live process lease cannot supervise the same durable queue', async t => {
@@ -273,7 +297,19 @@ test('Podman arguments contain only fixed sandbox policy, exact argv, and no inh
   assert.deepEqual(call.args.slice(-3), job.argv);
   assert.equal(call.env.GITHUB_TOKEN, undefined); assert.equal(call.env.SSH_AUTH_SOCK, undefined);
   assert.equal(call.args.includes('--privileged'), false);
+  assert.deepEqual(call.args.slice(0, runner.globalArgs.length), runner.globalArgs);
   assert.throws(() => new PodmanRunner({ image: 'node:latest', workspaceRoot: f.workspace, logDirectory: f.directory }), { code: 'RUNNER_CONFIG' });
+});
+
+test('log recycling before the first poll is detectable from the persisted pre-launch seed', async t => {
+  const f = fixture(t);
+  const runner = new PodmanRunner({ image: `sha256:${'b'.repeat(64)}`, workspaceRoot: join(f.directory, 'workspaces'), logDirectory: join(f.directory, 'logs'),
+    invoke: async () => ({ code: 0, stdout: 'c'.repeat(64), stderr: '' }) });
+  const job = f.jobs.start(request());
+  const created = await runner.create({ job: { ...job, env: {} }, workspacePath: f.workspace });
+  writeFileSync(runner.logPath(created.name), '2026-01-01T00:00:01.000Z stdout F retained tail\n');
+  const result = await runner.logs({ name: created.name, cursor: created.logCursor, fingerprint: created.logFingerprint, final: true });
+  assert.equal(result.truncated, true); assert.equal(result.records[0].text, 'retained tail\n');
 });
 
 test('real log-file reader identifies recycling and retains an incomplete terminal tail explicitly', async t => {

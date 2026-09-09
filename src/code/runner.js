@@ -45,7 +45,7 @@ export function containerName(jobId) {
 
 /** The containing systemd unit supplies aggregate CPU/memory/PID limits. */
 export class PodmanRunner {
-  constructor({ image, workspaceRoot, logDirectory, storageRoot = '/srv/praxis-code/storage/containers', runRoot = '/run/praxis-code/storage', binary = '/usr/bin/podman', env, invoke = command }) {
+  constructor({ image, workspaceRoot, logDirectory, storageRoot = '/srv/praxis-code/storage/containers', runRoot = '/run/praxis-code/storage', runtimeBinary = '/usr/bin/crun', binary = '/usr/bin/podman', env, invoke = command }) {
     if (typeof image !== 'string' || !/^(?:[a-z0-9./:_-]+@)?sha256:[0-9a-f]{64}$/.test(image)) {
       throw new RunnerError('RUNNER_CONFIG', 'The executor image must be an immutable SHA-256 digest.');
     }
@@ -54,7 +54,7 @@ export class PodmanRunner {
     this.workspaceRoot = resolve(workspaceRoot);
     this.logDirectory = resolve(logDirectory);
     this.binary = binary;
-    this.globalArgs = ['--root', resolve(storageRoot), '--runroot', resolve(runRoot), '--cgroup-manager=cgroupfs'];
+    this.globalArgs = ['--root', resolve(storageRoot), '--runroot', resolve(runRoot), '--cgroup-manager=cgroupfs', `--runtime=${runtimeBinary}`];
     // No process.env spread: OAuth, SSH, proxy, and registry credentials cannot flow in accidentally.
     this.env = { PATH: '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin', LANG: 'C.UTF-8', ...env };
     this.invoke = invoke;
@@ -83,6 +83,10 @@ export class PodmanRunner {
     const seed = Buffer.from(`${new Date().toISOString()} stdout F PRAXIS_LOG_START ${name}\n`);
     const seededLog = await open(this.logPath(name), 'wx', 0o600);
     try { await seededLog.writeFile(seed); await seededLog.sync(); } finally { await seededLog.close(); }
+    if (process.platform !== 'win32') {
+      const directory = await open(this.logDirectory, 'r');
+      try { await directory.sync(); } finally { await directory.close(); }
+    }
     const logFingerprint = `${seed.length}:${createHash('sha256').update(seed).digest('hex')}`;
     const args = [
       '--events-backend=none', 'create', '--name', name, '--pull=never',
@@ -104,7 +108,8 @@ export class PodmanRunner {
     for (const [key, value] of Object.entries(job.env)) args.push('--env', `${key}=${value}`);
     // Empty image entrypoint ensures that argv is exactly the sandbox command supplied by the caller.
     args.push('--entrypoint=', this.image, ...job.argv);
-    const result = await this.call(args);
+    // Initial keep-id preparation may materialize a shifted image layer. It remains a persisted starting job.
+    const result = await this.call(args, 120000);
     if (result.code !== 0) throw new RunnerError('CONTAINER_CREATE_FAILED', 'Container preparation failed. The persisted job will be reconciled before another execution is allowed.');
     const id = result.stdout.trim();
     if (!/^[0-9a-f]{64}$/.test(id)) throw new RunnerError('RUNNER_RESPONSE', 'Container creation returned an invalid identifier.');
@@ -131,7 +136,8 @@ export class PodmanRunner {
     const state = value.State;
     return {
       exists: true, id: value.Id, pid: state.Pid ?? null, status: state.Status, running: Boolean(state.Running),
-      exitCode: state.Running || ['configured', 'created'].includes(state.Status) ? null : state.ExitCode,
+      exitCode: state.Running || ['configured', 'created'].includes(state.Status) || state.ExitCode < 0 ? null : state.ExitCode,
+      monitorExitCode: state.Running || ['configured', 'created'].includes(state.Status) ? null : state.ExitCode,
       signal: null, oomKilled: Boolean(state.OOMKilled),
       startedAt: state.StartedAt && !state.StartedAt.startsWith('0001-') ? state.StartedAt : null,
       finishedAt: state.FinishedAt && !state.FinishedAt.startsWith('0001-') ? state.FinishedAt : null,
@@ -151,7 +157,7 @@ export class PodmanRunner {
     const path = this.logPath(name);
     let handle;
     try { handle = await open(path, 'r'); } catch (error) {
-      if (error.code === 'ENOENT') return { records: [], cursor, fingerprint, truncated: false, hasMore: false };
+      if (error.code === 'ENOENT') return { records: [], cursor, fingerprint, truncated: cursor > 0 || Boolean(fingerprint), hasMore: false };
       throw error;
     }
     try {
