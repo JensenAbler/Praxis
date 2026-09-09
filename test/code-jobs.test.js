@@ -9,7 +9,7 @@ import { CodeJobs, CODE_JOB_LIMITS } from '../src/code/jobs.js';
 import { containerName, PodmanRunner } from '../src/code/runner.js';
 
 class FakeRunner {
-  constructor() { this.containers = new Map(); this.created = 0; this.started = 0; this.stopped = 0; }
+  constructor() { this.image = `sha256:${'b'.repeat(64)}`; this.containers = new Map(); this.created = 0; this.started = 0; this.stopped = 0; }
   async create({ job }) {
     this.created++;
     const name = containerName(job.id);
@@ -89,6 +89,70 @@ test('jobs persist before execution, require revisions, enforce owner/idempotenc
   assert.throws(() => f.jobs.start(request({ idempotencyKey: 'test-key-0002' })), { code: 'ACTIVE_JOB_LIMIT' });
   assert.throws(() => f.jobs.get({ owner: 'other', jobId: job.id }), { code: 'NOT_FOUND' });
   assert.equal(new CodeJobs(f.options).get({ owner: 'jensen', jobId: job.id }).status, 'queued');
+});
+
+test('registry network is explicit, persisted, gated before scheduling, and part of idempotency', t => {
+  const f = fixture(t);
+  assert.throws(() => f.jobs.start(request({ network: 'host' })), { code: 'INVALID_ARGUMENT' });
+  assert.throws(() => f.jobs.start(request({ network: 'registries' })), { code: 'DEPENDENCY_NETWORK_DISABLED' });
+  assert.equal(f.store.db.prepare('SELECT COUNT(*) AS n FROM code_jobs').get().n, 0);
+  f.runner.registryAccessEnabled = true;
+  const job = f.jobs.start(request({ network: 'registries', argv: ['npm', 'ci', '--ignore-scripts'] }));
+  assert.equal(job.network, 'registries');
+  assert.equal(new CodeJobs(f.options).get({ owner: 'jensen', jobId: job.id }).network, 'registries');
+  assert.throws(() => f.jobs.start(request({ network: 'none', argv: ['npm', 'ci', '--ignore-scripts'] })), { code: 'IDEMPOTENCY_CONFLICT' });
+});
+
+test('dependency preparation is a durable offline operation and retries recover it across image changes', t => {
+  const f = fixture(t);
+  assert.throws(() => f.jobs.prepareDependencies(request()), { code: 'DEPENDENCY_PREPARATION_DISABLED' });
+  f.jobs.dependencyDirectory = join(f.directory, 'bundles');
+  const input = request({ label: 'Prepare fixture dependencies' });
+  const job = f.jobs.prepareDependencies(input);
+  assert.equal(job.network, 'none');
+  assert.equal(job.argv[0], 'python3');
+  assert.ok(job.argv[2].includes('DEPENDENCIES_PREPARED'));
+  f.runner.image = `sha256:${'c'.repeat(64)}`;
+  assert.equal(f.jobs.prepareDependencies(input).id, job.id);
+  assert.throws(() => f.jobs.prepareDependencies({ ...input, expectedRevision: 'different' }), { code: 'IDEMPOTENCY_CONFLICT' });
+});
+
+test('dependency bundles seal only after successful terminal execution and survive manager recovery', async t => {
+  const f = fixture(t);
+  f.options.dependencyDirectory = join(f.directory, 'bundles');
+  f.jobs.dependencyDirectory = f.options.dependencyDirectory;
+  mkdirSync(join(f.workspace, '.cache'));
+  const packageJson = '{"name":"fixture","version":"1.0.0"}';
+  const packageLock = '{"lockfileVersion":3,"packages":{}}';
+  writeFileSync(join(f.workspace, 'package.json'), packageJson);
+  writeFileSync(join(f.workspace, 'package-lock.json'), packageLock);
+  writeFileSync(join(f.workspace, '.cache', 'praxis-dependencies.tar'), Buffer.alloc(10240));
+  writeFileSync(join(f.workspace, '.cache', 'praxis-dependencies.json'), JSON.stringify({
+    packageJsonSha256: createHash('sha256').update(packageJson).digest('hex'),
+    packageLockSha256: createHash('sha256').update(packageLock).digest('hex'), shrinkwrapSha256: null,
+    platform: 'linux', arch: 'x64', nodeVersion: 'v22.22.0', nodeMajor: 22,
+  }));
+  const job = f.jobs.prepareDependencies(request());
+  assert.equal(f.jobs.get({ owner: 'jensen', jobId: job.id }).preparedDependenciesId, undefined);
+  await f.jobs.tick(); f.runner.complete(containerName(job.id)); await f.jobs.tick();
+  const saved = new CodeJobs(f.options).get({ owner: 'jensen', jobId: job.id });
+  assert.equal(saved.status, 'completed');
+  assert.match(saved.preparedDependenciesId, /^[0-9a-f]{64}$/);
+  assert.equal(saved.dependencyBundle.revision, 'revision-after-command');
+  assert.equal(saved.dependencyBundle.image, f.runner.image);
+  assert.equal(createHash('sha256').update(readFileSync(join(f.options.dependencyDirectory, `${saved.preparedDependenciesId}.tar`))).digest('hex'), saved.preparedDependenciesId);
+  assert.equal(JSON.parse(readFileSync(join(f.options.dependencyDirectory, `${saved.preparedDependenciesId}.json`))).jobId, job.id);
+  // The archive is candidate data; safe extraction is separately enforced by the deployment helper.
+});
+
+test('a queued preparation never silently switches executor image', async t => {
+  const f = fixture(t);
+  f.jobs.dependencyDirectory = join(f.directory, 'bundles');
+  const job = f.jobs.prepareDependencies(request());
+  f.runner.image = `sha256:${'c'.repeat(64)}`;
+  await f.jobs.tick();
+  assert.equal(f.runner.created, 0);
+  assert.equal(f.jobs.get({ owner: 'jensen', jobId: job.id }).executionError, 'RUNNER_IMAGE_CHANGED');
 });
 
 test('completion preserves paginated output and immutable artifacts across manager recreation', async t => {

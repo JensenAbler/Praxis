@@ -2,6 +2,7 @@ import { randomUUID, createHash } from 'node:crypto';
 import { mkdirSync, lstatSync, openSync, readSync, closeSync, writeFileSync, fsyncSync, renameSync, constants, realpathSync } from 'node:fs';
 import { join, resolve, relative, isAbsolute } from 'node:path';
 import { containerName } from './runner.js';
+import { dependencyPackCommand, sealDependencies } from './dependencies.js';
 
 export const CODE_JOB_LIMITS = Object.freeze({
   timeoutSeconds: 900, preparationTimeoutSeconds: 120, activeJobs: 1, retainedJobs: 200, logBytes: 1048576, logRecords: 8192,
@@ -60,7 +61,7 @@ function safeRelative(value, allowDot = false) {
   return value;
 }
 function inputValue(input) {
-  const { owner, idempotencyKey, workspaceId, expectedRevision, label = '', argv, cwd = '.', env = {}, timeoutSeconds = 300, artifactPaths = [] } = input;
+  const { owner, idempotencyKey, workspaceId, expectedRevision, label = '', argv, cwd = '.', env = {}, timeoutSeconds = 300, artifactPaths = [], network = 'none' } = input;
   ownerValue(owner);
   requireValue(typeof idempotencyKey === 'string' && /^[a-zA-Z0-9._:-]{8,128}$/.test(idempotencyKey), 'idempotencyKey must contain 8–128 letters, numbers, dots, underscores, colons, or hyphens.');
   requireValue(typeof workspaceId === 'string' && workspaceId.length <= 100 && workspaceId.length > 0, 'workspaceId is required.');
@@ -76,7 +77,10 @@ function inputValue(input) {
   requireValue(Array.isArray(artifactPaths) && artifactPaths.length <= CODE_JOB_LIMITS.artifacts, 'At most 16 artifact paths may be requested.');
   artifactPaths.forEach(path => safeRelative(path));
   requireValue(new Set(artifactPaths).size === artifactPaths.length, 'Artifact paths must be unique.');
-  return { owner, idempotencyKey, workspaceId, expectedRevision, label, argv, cwd, env: Object.fromEntries(Object.entries(env).sort(([a], [b]) => a.localeCompare(b))), timeoutSeconds, artifactPaths };
+  requireValue(['none', 'registries'].includes(network), 'network must be none or registries.');
+  // Omit the offline default so old persisted idempotency requests remain equal.
+  return { owner, idempotencyKey, workspaceId, expectedRevision, label, argv, cwd, env: Object.fromEntries(Object.entries(env).sort(([a], [b]) => a.localeCompare(b))), timeoutSeconds, artifactPaths,
+    ...(network === 'registries' ? { network } : {}) };
 }
 
 function publicJob(row, summary = false) {
@@ -85,7 +89,7 @@ function publicJob(row, summary = false) {
   return {
     id: row.id, workspaceId: row.workspace_id, label: request.label, status: row.status,
     argv, argvTruncated: summary && (request.argv.length > argv.length || request.argv.some(arg => arg.length > 256)),
-    cwd: request.cwd, timeoutSeconds: request.timeoutSeconds, network: 'none',
+    cwd: request.cwd, timeoutSeconds: request.timeoutSeconds, network: request.network ?? 'none',
     expectedRevision: request.expectedRevision, revisionAfter: row.revision_after,
     revisionVerified: Boolean(row.revision_after) && !row.execution_error,
     createdAt: row.created_at, updatedAt: row.updated_at, startedAt: row.started_at, finishedAt: row.finished_at,
@@ -99,9 +103,10 @@ function publicJob(row, summary = false) {
 
 /** Durable scheduling only. Enforcement is the real runner and its enclosing OS configuration. */
 export class CodeJobs {
-  constructor({ store, dataDirectory, runner, workspaces, clock = now }) {
+  constructor({ store, dataDirectory, runner, workspaces, dependencyDirectory, clock = now }) {
     this.store = store; this.db = store.db; this.runner = runner; this.workspaces = workspaces;
     this.dataDirectory = resolve(dataDirectory); this.clock = clock; this.busy = false;
+    this.dependencyDirectory = dependencyDirectory && resolve(dependencyDirectory);
     mkdirSync(join(this.dataDirectory, 'artifacts'), { recursive: true, mode: 0o700 });
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS code_jobs (
@@ -127,6 +132,9 @@ export class CodeJobs {
         UNIQUE(job_id,name)
       );
       CREATE TABLE IF NOT EXISTS code_runner_lock (singleton INTEGER PRIMARY KEY CHECK(singleton=1), pid INTEGER NOT NULL, token TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS code_dependency_bundles (
+        job_id TEXT PRIMARY KEY REFERENCES code_jobs(id), bundle_id TEXT NOT NULL, manifest_json TEXT NOT NULL
+      );
       CREATE TABLE IF NOT EXISTS code_output_state (
         job_id TEXT PRIMARY KEY REFERENCES code_jobs(id), observed_bytes INTEGER NOT NULL DEFAULT 0,
         observed_records INTEGER NOT NULL DEFAULT 0, head_limit INTEGER NOT NULL DEFAULT 0,
@@ -165,16 +173,30 @@ export class CodeJobs {
       VALUES (?,(SELECT COALESCE(MAX(sequence),0)+1 FROM code_records WHERE job_id=?),?,?,?,?)`).run(jobId, jobId, timestamp, stream, text, partial ? 1 : 0);
   }
 
-  start(input) {
+  prepareDependencies(input) {
+    if (!this.dependencyDirectory) throw new CodeJobError('DEPENDENCY_PREPARATION_DISABLED', 'Dependency bundle export is not configured.');
+    return this.start({ owner: input.owner, workspaceId: input.workspaceId, expectedRevision: input.expectedRevision,
+      idempotencyKey: input.idempotencyKey, label: input.label ?? 'Prepare deployment dependencies',
+      timeoutSeconds: input.timeoutSeconds ?? 300, argv: dependencyPackCommand(this.runner.image) }, { dependencyPreparation: true });
+  }
+
+  start(input, { dependencyPreparation = false } = {}) {
     const request = inputValue(input);
+    if (dependencyPreparation) request.dependencyPreparation = true;
     const { owner, idempotencyKey } = request;
     const requestJson = JSON.stringify(request);
     return this.store.transaction(() => {
       const existing = this.db.prepare('SELECT * FROM code_jobs WHERE owner=? AND idempotency_key=?').get(owner, idempotencyKey);
       if (existing) {
-        if (existing.request_json !== requestJson) throw new CodeJobError('IDEMPOTENCY_CONFLICT', 'This idempotency key belongs to a different command. Use a new key only for intentionally new work.');
+        const previous = JSON.parse(existing.request_json);
+        // Preparation is a fixed service operation. Its implementation/image can
+        // change between releases; retries still recover the original operation.
+        const samePreparation = dependencyPreparation && previous.dependencyPreparation
+          && JSON.stringify({ ...previous, argv: null }) === JSON.stringify({ ...request, argv: null });
+        if (existing.request_json !== requestJson && !samePreparation) throw new CodeJobError('IDEMPOTENCY_CONFLICT', 'This idempotency key belongs to a different command. Use a new key only for intentionally new work.');
         return publicJob(existing);
       }
+      if (request.network === 'registries' && !this.runner.registryAccessEnabled) throw new CodeJobError('DEPENDENCY_NETWORK_DISABLED', 'Registry access is not configured; no job was started.');
       const blocker = this.db.prepare(`SELECT id,owner,workspace_id,status FROM code_jobs WHERE status IN ${ACTIVE_SQL} LIMIT 1`).get();
       if (blocker) throw new CodeJobError('ACTIVE_JOB_LIMIT', blocker.owner === owner
         ? `One command may be active at a time. Existing job ${blocker.id} in workspace ${blocker.workspace_id} is ${blocker.status}. Observe that job; retry this submission with identical inputs and the same idempotency key after it becomes terminal.`
@@ -234,7 +256,9 @@ export class CodeJobs {
         room -= Buffer.byteLength(JSON.stringify(value));
         if (!room) break;
       }
+      const dependencyBundle = this.db.prepare('SELECT bundle_id,manifest_json FROM code_dependency_bundles WHERE job_id=?').get(jobId);
       return { ...publicJob(job, !includeCommand), outputRetention: this.outputRetention(job),
+        ...(dependencyBundle ? { preparedDependenciesId: dependencyBundle.bundle_id, dependencyBundle: JSON.parse(dependencyBundle.manifest_json) } : {}),
         recentOutput: { view: hasTail ? 'tail' : 'head', records: records.reverse(),
           excerpt: true, explanation: 'A bounded recent-output excerpt, not a parsed test result. Inspect the recorded exit code and output; use job_logs for more.' } };
     });
@@ -440,6 +464,14 @@ export class CodeJobs {
       artifactErrors = this.snapshotArtifacts(job, workspace.path);
       const refreshed = await this.workspaces.refreshAfterJob({ owner: job.owner, workspaceId: job.workspace_id });
       revision = refreshed?.revision ?? this.workspaces.getExecutionWorkspace({ owner: job.owner, workspaceId: job.workspace_id }).revision;
+      if (JSON.parse(job.request_json).dependencyPreparation && state.exitCode === 0 && !forcedReason && !job.termination_reason && !executionError) {
+        const existing = this.db.prepare('SELECT 1 FROM code_dependency_bundles WHERE job_id=?').get(job.id);
+        if (!existing) {
+          const bundle = sealDependencies({ workspacePath: workspace.path, directory: this.dependencyDirectory,
+            workspaceId: job.workspace_id, revision, jobId: job.id, image: JSON.parse(job.request_json).argv.at(-1) });
+          this.db.prepare('INSERT INTO code_dependency_bundles(job_id,bundle_id,manifest_json) VALUES (?,?,?)').run(job.id, bundle.archiveSha256, JSON.stringify(bundle));
+        }
+      }
     } catch (error) { executionError = error.code ?? 'WORKSPACE_REFRESH_FAILED'; }
     const latest = this.row(job.owner, job.id);
     const reason = forcedReason ?? latest.termination_reason ?? (state.oomKilled ? 'memory_limit' : 'exit');
@@ -526,6 +558,10 @@ export class CodeJobs {
         }
         if (workspace.revision !== request.expectedRevision) {
           this.db.prepare("UPDATE code_jobs SET execution_error='STALE_REVISION' WHERE id=?").run(job.id);
+          await this.finish(this.row(job.owner, job.id), { exists: false }, 'interrupted'); return;
+        }
+        if (request.dependencyPreparation && request.argv.at(-1) !== this.runner.image) {
+          this.db.prepare("UPDATE code_jobs SET execution_error='RUNNER_IMAGE_CHANGED' WHERE id=?").run(job.id);
           await this.finish(this.row(job.owner, job.id), { exists: false }, 'interrupted'); return;
         }
         const created = await this.runner.create({ job: { id: job.id, ...request }, workspacePath: workspace.path });

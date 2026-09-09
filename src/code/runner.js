@@ -45,7 +45,7 @@ export function containerName(jobId) {
 
 /** The containing systemd unit supplies aggregate CPU/memory/PID limits. */
 export class PodmanRunner {
-  constructor({ image, workspaceRoot, logDirectory, storageRoot = '/srv/praxis-code/storage/containers', runRoot = '/run/praxis-code/storage', runtimeBinary = '/usr/bin/crun', binary = '/usr/bin/podman', env, invoke = command }) {
+  constructor({ image, workspaceRoot, logDirectory, dependencyProxySocket, dependencyRelayPath, storageRoot = '/srv/praxis-code/storage/containers', runRoot = '/run/praxis-code/storage', runtimeBinary = '/usr/bin/crun', binary = '/usr/bin/podman', env, invoke = command }) {
     if (typeof image !== 'string' || !/^(?:[a-z0-9./:_-]+@)?sha256:[0-9a-f]{64}$/.test(image)) {
       throw new RunnerError('RUNNER_CONFIG', 'The executor image must be an immutable SHA-256 digest.');
     }
@@ -58,7 +58,12 @@ export class PodmanRunner {
     // No process.env spread: OAuth, SSH, proxy, and registry credentials cannot flow in accidentally.
     this.env = { PATH: '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin', LANG: 'C.UTF-8', ...env };
     this.invoke = invoke;
+    this.dependencyProxySocket = dependencyProxySocket && resolve(dependencyProxySocket);
+    this.dependencyRelayPath = dependencyRelayPath && resolve(dependencyRelayPath);
+    if (Boolean(this.dependencyProxySocket) !== Boolean(this.dependencyRelayPath)) throw new RunnerError('RUNNER_CONFIG', 'Registry access requires both a protected socket and relay path.');
   }
+
+  get registryAccessEnabled() { return Boolean(this.dependencyProxySocket && this.dependencyRelayPath); }
 
   async call(args, timeoutMs) { return this.invoke(this.binary, [...this.globalArgs, ...args], this.env, timeoutMs); }
 
@@ -68,6 +73,8 @@ export class PodmanRunner {
   }
 
   async create({ job, workspacePath }) {
+    if (job.network && !['none', 'registries'].includes(job.network)) throw new RunnerError('RUNNER_INPUT', 'Unknown network policy.');
+    if (job.network === 'registries' && !this.registryAccessEnabled) throw new RunnerError('DEPENDENCY_NETWORK_DISABLED', 'Registry access is not configured; this job has not been started.');
     const name = containerName(job.id);
     const root = await realpath(this.workspaceRoot);
     const workspace = await realpath(workspacePath);
@@ -106,8 +113,18 @@ export class PodmanRunner {
       '--env', 'GIT_TERMINAL_PROMPT=0', '--env', 'NPM_CONFIG_CACHE=/tmp/npm-cache',
     ];
     for (const [key, value] of Object.entries(job.env)) args.push('--env', `${key}=${value}`);
+    let argv = job.argv;
+    if (job.network === 'registries') {
+      for (const path of [this.dependencyProxySocket, this.dependencyRelayPath]) {
+        if (/[\r\n,]/.test(path) || await realpath(path) !== path || (await lstat(path)).isSymbolicLink()) throw new RunnerError('RUNNER_CONFIG', 'Registry transport paths must be canonical and unlinked.');
+      }
+      if (!(await lstat(this.dependencyProxySocket)).isSocket() || !(await lstat(this.dependencyRelayPath)).isFile()) throw new RunnerError('RUNNER_CONFIG', 'Registry transport is unavailable.');
+      args.push('--mount', `type=bind,src=${this.dependencyProxySocket},dst=/run/praxis-registry.sock,ro`,
+        '--mount', `type=bind,src=${this.dependencyRelayPath},dst=/run/praxis-registry-relay.mjs,ro`);
+      argv = ['node', '/run/praxis-registry-relay.mjs', ...job.argv];
+    }
     // Empty image entrypoint ensures that argv is exactly the sandbox command supplied by the caller.
-    args.push('--entrypoint=', this.image, ...job.argv);
+    args.push('--entrypoint=', this.image, ...argv);
     // Initial keep-id preparation may materialize a shifted image layer. It remains a persisted starting job.
     const result = await this.call(args, 120000);
     if (result.code !== 0) throw new RunnerError('CONTAINER_CREATE_FAILED', 'Container preparation failed. The persisted job will be reconciled before another execution is allowed.');

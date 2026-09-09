@@ -1,0 +1,34 @@
+[Unit]
+Description=Praxis public package registry transport
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=praxis-dependencies
+Group=praxis-code
+ExecStart=/usr/bin/python3 /usr/local/lib/praxis/registry-proxy.py
+Restart=on-failure
+RestartSec=3
+RuntimeDirectory=praxis-dependencies
+RuntimeDirectoryMode=0750
+UMask=0117
+MemoryMax=128M
+CPUQuota=25%
+TasksMax=24
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=/run/praxis-dependencies
+InaccessiblePaths=-/etc/praxis-probe -/var/lib/praxis-probe -/etc/praxis-git -/var/lib/praxis-git -/opt/podcast-discord -/opt/podcast-production -/srv/apocrypha
+
+[Install]
+WantedBy=multi-user.target
