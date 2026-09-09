@@ -402,6 +402,8 @@ class Host:
         if self.fence.exists():
             fence = json.loads(self.fence.read_text())
             require(fence.get('state') == 'active' or fence.get('operationId') == operation, 'Cannot open another activation fence.')
+            if fence.get('state') == 'active' and fence.get('operationId') == operation:
+                return
         atomic_json(self.fence, {'state': 'active', 'release': self.active()['release'], 'operationId': operation}, 0o644)
 
     def release_reservation(self, operation):

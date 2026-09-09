@@ -247,8 +247,9 @@ class Qualification:
         command += ['--property=' + prop for prop in properties]
         command += ['--working-directory=' + str(self.source), '/usr/bin/env', '-i', 'PATH=/usr/bin:/bin',
                     'HOME=' + str(self.state), 'LANG=C.UTF-8', 'NODE_ENV=test', 'CI=true',
-                    'npm_config_cache=' + str(self.state / 'npm-cache'), 'npm_config_userconfig=/dev/null',
-                    'npm_config_globalconfig=/dev/null', 'PYTHONDONTWRITEBYTECODE=1', *argv]
+                    'npm_config_cache=' + str(self.state / 'npm-cache'),
+                    'npm_config_userconfig=' + str(self.state / 'npm-user.conf'),
+                    'npm_config_globalconfig=' + str(self.state / 'npm-global.conf'), 'PYTHONDONTWRITEBYTECODE=1', *argv]
         try:
             result = self.run(command, timeout=timeout + 45, check=False)
             self.results[name] = {'unit': unit, 'exitCode': result.returncode, 'privateNetwork': True}
@@ -276,6 +277,10 @@ class Qualification:
         self.logs.mkdir(mode=0o700)
         self.state.mkdir(mode=0o700)
         os.chown(self.state, self.uid, self.gid)
+        for name in ('npm-user.conf', 'npm-global.conf'):
+            path = self.state / name
+            path.touch(mode=0o600)
+            os.chown(path, self.uid, self.gid)
         before = file_hash(self.archive)
         extract_archive(self.archive, self.commit, self.source)
         require(file_hash(self.archive) == before, 'Source archive changed during extraction.')

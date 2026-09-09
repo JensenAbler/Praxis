@@ -393,6 +393,11 @@ KillMode=control-group
 NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=yes
+InaccessiblePaths=-/opt -/etc/letsencrypt -/srv/apocrypha
+InaccessiblePaths=-/etc/praxis-code -/etc/praxis-control -/etc/praxis-git -/etc/praxis-probe -/etc/praxis-updater
+InaccessiblePaths=-/var/lib/praxis-bootstrap -/var/lib/praxis-code -/var/lib/praxis-code-disk -/var/lib/praxis-control -/var/lib/praxis-deploy -/var/lib/praxis-git -/var/lib/praxis-probe -/var/lib/praxis-stage -/var/lib/praxis-updater
+InaccessiblePaths=-/srv/praxis-app -/srv/praxis-code -/srv/praxis-control -/srv/praxis-git-exchange -/srv/praxis-probe -/srv/praxis-qualification -/srv/praxis-qualified -/srv/praxis-stage
+InaccessiblePaths=-/run/praxis-code -/run/praxis-control -/run/praxis-dependencies -/run/praxis-git -/run/praxis-registry -/run/praxis-registry-relay
 TemporaryFileSystem=/tmp:rw,size=64M,mode=1777 /var/tmp:rw,size=16M,mode=1777
 ReadWritePaths=/tmp /var/tmp
 PrivateDevices=yes

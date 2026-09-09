@@ -22,6 +22,8 @@ import uuid
 
 CONFIG = pathlib.Path('/etc/praxis-updater/config.json')
 TERMINAL = {'ready', 'completed', 'failed', 'rolled_back'}
+CONFIRMED = {'activation_confirmed': ('completed', 'completed'),
+             'restoration_confirmed': ('rolled_back', 'restored')}
 
 
 class UpdateError(Exception):
@@ -189,6 +191,8 @@ class Updater:
                 self.save(row, 'ready', 'tested', value)
                 return True
             value = json.loads(row['result']) if row['result'] else None
+            if row['phase'] in CONFIRMED:
+                return self.finish_decision(row)
             if row['phase'] in ('drain_intent', 'switch_intent', 'switched', 'rollback_intent'):
                 # Recovery observes the target before choosing restoration. A
                 # lost response never triggers an additional blind restart.
@@ -224,12 +228,15 @@ class Updater:
                 health = self.host.health(target)
                 value['health'] = health
                 require(health.get('ok'), 'CANDIDATE_UNHEALTHY', 'Activated application failed authenticated readiness.')
-                self.host.open(row['id'])
-                self.save(row, 'completed', 'completed', value)
             except Exception as error:
                 return self.restore(row, value, error)
-            return True
+            return self.confirm(row, 'activation_confirmed', value)
         except Exception as error:
+            # A durable completion decision may already have opened admission.
+            # Leave it recoverable; never re-health or restore over newer work.
+            persisted = self.row(row['id'])
+            if persisted['phase'] in CONFIRMED:
+                return False
             # An uncertain drain/switch must retain its fence. Only explicit
             # successful health/recovery opens it after these phases begin.
             if row['phase'] not in ('drain_intent', 'switch_intent', 'switched', 'rollback_intent'):
@@ -248,14 +255,13 @@ class Updater:
             return True
         try:
             active = self.host.active()
+            health = None
             if row['phase'] != 'drain_intent' and active['release'] == value['release']:
                 health = self.host.health(value['release'])
-                if health.get('ok'):
-                    self.host.open(row['id'])
-                    self.save(row, 'completed', 'completed', {**value, 'health': health, 'reconciled': True})
-                    return True
         except Exception as error:
             return self.restore(row, value, error)
+        if health and health.get('ok'):
+            return self.confirm(row, 'activation_confirmed', {**value, 'health': health, 'reconciled': True})
         return self.restore(row, value, UpdateError('INTERRUPTED_ACTIVATION', 'Interrupted activation could not establish candidate readiness.'))
 
     def restore(self, row, value, error):
@@ -265,12 +271,34 @@ class Updater:
                 self.host.restore(value['previousRelease'], row['id'])
             health = self.host.health(value['previousRelease'])
             require(health.get('ok'), 'RESTORATION_FAILED', 'Previous application did not pass authenticated readiness; protected recovery tools remain available.')
-            self.host.open(row['id'])
-            self.save(row, 'rolled_back', 'restored', {**value, 'activeRelease': value['previousRelease'], 'restorationHealth': health},
-                      {'code': getattr(error, 'code', 'ACTIVATION_FAILED'), 'message': str(error)[:500]})
         except Exception as restore_error:
             self.save(row, 'failed', 'restoration_failed', value,
                       {'code': 'RESTORATION_FAILED', 'message': str(restore_error)[:500]})
+            return True
+        return self.confirm(row, 'restoration_confirmed',
+                            {**value, 'activeRelease': value['previousRelease'], 'restorationHealth': health},
+                            {'code': getattr(error, 'code', 'ACTIVATION_FAILED'), 'message': str(error)[:500]})
+
+    def confirm(self, row, phase, value, error=None):
+        # Commit the health-backed decision before admitting any new work. A
+        # restart after open must finish this decision, not inspect health again.
+        row = self.save(row, 'running', phase, value, error)
+        return self.finish_decision(row)
+
+    def finish_decision(self, row):
+        status, phase = CONFIRMED[row['phase']]
+        value = json.loads(row['result'])
+        error = json.loads(row['error']) if row['error'] else None
+        try:
+            # Host.open is idempotent for an already-active owned fence and
+            # performs no service restart, drain, or authenticated health check.
+            self.host.open(row['id'])
+        except Exception as open_error:
+            value['finalizationError'] = {'code': 'FENCE_OPEN_PENDING', 'message': str(open_error)[:500]}
+            self.save(row, 'running', row['phase'], value, error)
+            return False
+        value.pop('finalizationError', None)
+        self.save(row, status, phase, value, error)
         return True
 
 

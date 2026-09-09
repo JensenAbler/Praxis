@@ -323,6 +323,28 @@ class ProjectTests(unittest.TestCase):
 
 
 class ValidationTests(unittest.TestCase):
+    def test_generated_units_mask_protected_host_data_without_hiding_app_source(self):
+        worker = deployment.ProjectDeployment()
+        required = {
+            '/opt', '/etc/letsencrypt', '/srv/apocrypha',
+            *('/etc/' + name for name in ('praxis-code', 'praxis-control', 'praxis-git', 'praxis-probe', 'praxis-updater')),
+            *('/var/lib/' + name for name in ('praxis-bootstrap', 'praxis-code', 'praxis-code-disk', 'praxis-control',
+                                             'praxis-deploy', 'praxis-git', 'praxis-probe', 'praxis-stage', 'praxis-updater')),
+            *('/srv/' + name for name in ('praxis-app', 'praxis-code', 'praxis-control', 'praxis-git-exchange',
+                                         'praxis-probe', 'praxis-qualification', 'praxis-qualified', 'praxis-stage')),
+            *('/run/' + name for name in ('praxis-code', 'praxis-control', 'praxis-dependencies', 'praxis-git',
+                                         'praxis-registry', 'praxis-registry-relay')),
+        }
+        for runtime in ('node', 'python', 'static'):
+            unit = worker._unit({'projectId': PROJECT, 'port': 18700, 'runtime': runtime}).decode()
+            masks = [path for line in unit.splitlines() if line.startswith('InaccessiblePaths=')
+                     for path in line.split('=', 1)[1].split()]
+            self.assertTrue(all(path.startswith('-/') for path in masks))
+            self.assertTrue(required.issubset({path[1:] for path in masks}))
+            current = '/srv/praxis-apps/' + PROJECT + '/current'
+            self.assertFalse(any(current == path[1:] or current.startswith(path[1:] + '/') for path in masks))
+            self.assertIn('WorkingDirectory=', unit)
+
     def test_no_arbitrary_project_paths_commands_domains_or_env(self):
         for name in ('command', 'path', 'unit', 'domain', 'environment', 'port'):
             with self.assertRaises(deployment.ProjectDeploymentError):

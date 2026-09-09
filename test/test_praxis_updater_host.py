@@ -157,6 +157,16 @@ class HostPolicy(unittest.TestCase):
         self.host.open(operation)
         self.assertFalse(self.host.reservation_held(operation))
 
+    def test_already_open_owned_fence_needs_no_service_observation(self):
+        operation = str(uuid.uuid4())
+        module.atomic_json(self.host.fence, {'state': 'active', 'operationId': operation, 'release': 'candidate'})
+        before = self.host.fence.read_bytes()
+        def no_active(): raise AssertionError('Already-open finalization must not inspect the service')
+        self.host.active = no_active
+        self.host.open(operation)
+        self.assertEqual(self.host.fence.read_bytes(), before)
+        self.assertEqual(self.commands, [])
+
     @unittest.skipUnless(hasattr(os, 'geteuid') and os.geteuid() == 0, 'Protected evidence fixtures run as root only in isolated Linux qualification.')
     def test_diagnostics_are_bounded_fixed_phase_excerpts_and_reject_linked_files(self):
         operation = str(uuid.uuid4())

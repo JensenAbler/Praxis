@@ -122,20 +122,20 @@ test('generation fence blocks admissions while diagnosis, receipts and independe
 test('publication admission holds the updater idle-check lease through its fence check and insert', async t => {
   const f = fixture(t), observer = new DatabaseSync(f.databasePath);
   try {
-  const policy = f.broker.policy.bind(f.broker);
-  let observed = false;
-  f.broker.policy = (...args) => {
-    assert.throws(() => observer.exec('BEGIN IMMEDIATE'), /locked|busy/i);
-    observed = true;
-    return policy(...args);
-  };
-  const admitted = f.submit('sync', { projectId: 'praxis' });
-  assert.equal(observed, true);
-  observer.exec('BEGIN IMMEDIATE');
-  assert.equal(observer.prepare('SELECT status FROM git_operations WHERE id=?').get(admitted.operationId).status, 'queued');
-  observer.exec('COMMIT');
-  f.setFence('draining');
-  assert.throws(() => f.submit('sync', { projectId: 'praxis' }), { code: 'UPDATE_IN_PROGRESS' });
-  observer.exec('BEGIN IMMEDIATE'); observer.exec('COMMIT');
+    const policy = f.broker.policy.bind(f.broker);
+    let observed = false;
+    f.broker.policy = (...args) => {
+      assert.throws(() => observer.exec('BEGIN IMMEDIATE'), /locked|busy/i);
+      observed = true;
+      return policy(...args);
+    };
+    const admitted = f.submit('sync', { projectId: 'praxis' });
+    assert.equal(observed, true);
+    observer.exec('BEGIN IMMEDIATE');
+    assert.equal(observer.prepare('SELECT status FROM git_operations WHERE id=?').get(admitted.operationId).status, 'queued');
+    observer.exec('COMMIT');
+    f.setFence('draining');
+    assert.throws(() => f.submit('sync', { projectId: 'praxis' }), { code: 'UPDATE_IN_PROGRESS' });
+    observer.exec('BEGIN IMMEDIATE'); observer.exec('COMMIT');
   } finally { observer.close(); }
 });

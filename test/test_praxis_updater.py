@@ -222,6 +222,70 @@ class UpdaterTests(unittest.TestCase):
         status = self.updater.call({'action': 'status', 'owner': 'jensen', 'operationId': request['operationId']})
         self.assertNotIn('diagnostics', status)
 
+    def test_crash_after_open_finalizes_recorded_decision_without_disrupting_new_work(self):
+        for mode in ('activation', 'restoration', 'reconciled_activation'):
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as directory:
+                host = Host()
+                updater = module.Updater(directory, host, clock=lambda: 1000)
+                try:
+                    plan = {'action': 'plan', 'owner': 'jensen', 'operationId': str(uuid.uuid4()),
+                            'idempotencyKey': str(uuid.uuid4()), 'expectedRelease': 'old',
+                            'exportId': str(uuid.uuid4()), 'sourceCommit': 'a' * 40, 'sourceDigest': 'b' * 64}
+                    updater.call(plan)
+                    updater.tick()
+                    prepared = updater.receipt(updater.row(plan['operationId']))
+                    request = {**self.apply(prepared), 'expectedRelease': 'old'}
+                    updater.call(request)
+                    if mode == 'restoration':
+                        host.healthy['candidate'] = False
+                    elif mode == 'reconciled_activation':
+                        updater.save(updater.row(request['operationId']), 'running', 'switch_intent',
+                                     {'release': 'candidate', 'previousRelease': 'old'})
+                        host.release, host.fenced = 'candidate', True
+                    save = updater.save
+                    def crash_after_open(row, status, phase, *args, **kwargs):
+                        if status in ('completed', 'rolled_back'):
+                            self.assertFalse(host.fenced)
+                            raise SystemExit('Worker lost after opening admission')
+                        return save(row, status, phase, *args, **kwargs)
+                    updater.save = crash_after_open
+                    with self.assertRaises(SystemExit): updater.tick()
+                    expected_phase = 'restoration_confirmed' if mode == 'restoration' else 'activation_confirmed'
+                    self.assertEqual(updater.row(request['operationId'])['phase'], expected_phase)
+                    self.assertFalse(host.fenced)
+                    before = list(host.switches)
+                    host.busy = True  # New work was admitted after the fence opened.
+                    def no_health(target): raise AssertionError('Finalization must not re-check health over newly admitted work')
+                    host.health = no_health
+                    with module.contextlib.closing(module.Updater(directory, host, clock=lambda: 1000)) as recovered:
+                        self.assertTrue(recovered.tick())
+                        outcome = recovered.receipt(recovered.row(request['operationId']))
+                    self.assertEqual(outcome['status'], 'rolled_back' if mode == 'restoration' else 'completed')
+                    if mode == 'restoration': self.assertEqual(outcome['error']['code'], 'CANDIDATE_UNHEALTHY')
+                    self.assertEqual(host.switches, before)
+                    self.assertFalse(host.fenced)
+                finally:
+                    updater.close()
+
+    def test_unconfirmed_fence_open_retries_only_finalization(self):
+        request = self.apply(self.plan())
+        self.updater.call(request)
+        original_open = self.host.open
+        def unavailable(operation): raise TimeoutError('Opening fence temporarily unavailable')
+        self.host.open = unavailable
+        self.assertFalse(self.updater.tick())
+        row = self.updater.row(request['operationId'])
+        self.assertEqual(row['phase'], 'activation_confirmed')
+        self.assertIn('finalizationError', row['result'])
+        self.assertTrue(self.host.fenced)
+        before = list(self.host.switches)
+        def no_health(target): raise AssertionError('The durable decision must not be re-evaluated')
+        self.host.health, self.host.open = no_health, original_open
+        self.assertTrue(self.updater.tick())
+        self.assertEqual(self.host.switches, before)
+        self.assertFalse(self.host.fenced)
+        self.assertNotIn('finalizationError', self.updater.row(row['id'])['result'])
+
     def test_failed_restoration_explicit_identical_retry_recovers_same_operation(self):
         request = self.apply(self.plan())
         self.updater.call(request)
