@@ -12,9 +12,96 @@
       "promptIncluded": false,
       "checker": "speech-first-v1",
       "entrypoint": "podcast-generator.js",
-      "allowedModules": ["podcast-generator.js", "anthropic-messages.js"],
+      "allowedModules": [
+        "podcast-generator.js",
+        "anthropic-messages.js"
+      ],
       "provenance": "Clean parent-commit replay. Historical unrelated dirty Markdown files and server lockfile changes are not reconstructed. The reference is an outcome example, not the only acceptable implementation.",
-      "constraints": ["No live model, Discord, TTS, deployment, or production calls", "No credentials or external network", "Keep reference source and original private prompt outside the public repository and candidate task context until the authorized prompt handoff"]
+      "constraints": [
+        "No live model, Discord, TTS, deployment, or production calls",
+        "No credentials or external network",
+        "Keep reference source and original private prompt outside the public repository and candidate task context until the authorized prompt handoff"
+      ]
+    },
+    {
+      "id": "buffer-settling",
+      "title": "Remove adaptive delay while preserving concurrent buffer synchronization",
+      "repository": "JensenAbler/podcast-discord",
+      "baseCommit": "35d1bb2d723f7bf3960bb9cbe2a484b7d6feb0ab",
+      "referenceCommit": "b1e8e61fe9878b566ab0aa173fcb4119bf31219c",
+      "promptSha256": "f35ef2d183af92a4def42c801ea65c1f7816e1610a19b203444b26e73a4d16f5",
+      "promptEncoding": "UTF-8, LF, final newline",
+      "promptIncluded": false,
+      "checker": "buffer-settling-v1",
+      "entrypoint": "conversation-buffer.js",
+      "allowedModules": [
+        "conversation-buffer.js"
+      ],
+      "sourceTaskId": "019f5fb6-d752-7101-b37a-0f109d4ebef0",
+      "sourceTaskTitle": "Remove adaptive buffer grace",
+      "promptAdaptation": "None. Exact first implementation turn; later deployment turn is excluded.",
+      "provenance": "Direct parent-commit replay of the implementation identified in the saved task. Historical uncommitted working-tree state is not reconstructed. The reference is an outcome example, not the only acceptable implementation.",
+      "constraints": [
+        "No live model, Discord, ASR, TTS, deployment, or production calls",
+        "No credentials or external network",
+        "Keep reference source and original private prompt outside the public repository and candidate task context until the authorized prompt handoff",
+        "Behavioral checker loads the exported ConversationBuffer from its existing module with virtual timers; documentation, receiver-policy preservation, and candidate-authored deterministic tests still need diff review"
+      ]
+    },
+    {
+      "id": "provider-stream-errors",
+      "title": "Distinguish provider streaming failures from intentional silence",
+      "repository": "JensenAbler/podcast-discord",
+      "baseCommit": "8b098f28c96ecbde424d66fbd1ac03f0767d2fed",
+      "referenceCommit": "cf6de19d8b894ce6b6f49334e31ee65b7d01a874",
+      "promptSha256": "1ba7e7dabc78387317c868a9a6c95397c88487c1491a242c67b0d901429f8608",
+      "originalPromptSha256": "f1f6697508eef696da86b3063fa11cb339474d00f364c1f548eb13d57e2b681e",
+      "promptEncoding": "UTF-8, LF, final newline",
+      "promptIncluded": false,
+      "checker": "provider-stream-errors-v1",
+      "entrypoint": "podcast-generator.js",
+      "allowedModules": [
+        "podcast-generator.js",
+        "anthropic-messages.js"
+      ],
+      "provenance": {
+        "threadId": "019eb572-fb7d-7481-ac3f-ea9491d77ce5",
+        "threadTitle": "Reorder response schema",
+        "turnId": "019ef4f8-4174-7080-83c6-d2a096a0fb1c",
+        "replayType": "adapted-historical-bug",
+        "adaptation": "Context-dependent forensic request converted into a self-contained task with synthetic SSE evidence, no live episode access. Partial JSON compatibility and explicit fault boundaries are stated as behavior requirements.",
+        "referenceRole": "Outcome example, not an exact-diff oracle",
+        "startingState": "Clean Git parent; unrelated dirty scratchpads and remote lock changes not reconstructed."
+      },
+      "constraints": [
+        "Offline mocked provider responses only; no credentials, network, Discord, TTS, or production actions.",
+        "Reference source and original/private worker prompts stay outside the public repository and expected solutions outside worker context.",
+        "Checkers require a trusted read-only mount in an unprivileged OS sandbox."
+      ]
+    },
+    {
+      "id": "vad-flap",
+      "title": "Prevent non-speech receiver audio from contaminating later utterances",
+      "repository": "JensenAbler/podcast-discord",
+      "baseCommit": "8b507b5d9678606823758eb6ed7cde05896a2cef",
+      "referenceCommit": "b961a9c600b3cec410339389f17a67f1b4a83499",
+      "promptSha256": "07c365dc091f67aba6913579d244dd5488e2c078853d5ce951878a6b6117d76a",
+      "originalPromptSha256": "fee76d2a8c7b786617e89befd607dafbb87326cd294b9e6243bfff0562cdae7d",
+      "promptEncoding": "UTF-8, LF, final newline",
+      "promptIncluded": false,
+      "checker": "vad-flap-v1",
+      "entrypoint": "audio-receiver.js",
+      "allowedModules": [
+        "audio-receiver.js",
+        "silence-detector.js",
+        "speaker-tracker.js"
+      ],
+      "provenance": "Reconstructed offline debugging task from a historical recording investigation; the clean parent precedes the reference fix. Synthetic incident context replaces inaccessible live audio/log investigation. Reference is an outcome example, not an exact-diff target.",
+      "constraints": [
+        "No live Discord, ASR, codec, provider, production deployment or external network access.",
+        "Keep original prompt, private source and reference implementation outside public Git and candidate context.",
+        "Review semantic scope separately from mocked behavioral checks."
+      ]
     }
   ]
 }

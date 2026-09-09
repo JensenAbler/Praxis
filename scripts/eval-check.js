@@ -3,9 +3,9 @@
 import { readFileSync, realpathSync } from 'node:fs';
 import { resolve, relative, dirname, sep, isAbsolute } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
-import vm from 'node:vm';
+import { bounded, loadCandidate } from '../eval/checkers/support.js';
+export { bounded, loadCandidate } from '../eval/checkers/support.js';
 
 const SELF = fileURLToPath(import.meta.url);
 const DEFAULT_CATALOG = resolve(dirname(SELF), '../eval/catalog.json');
@@ -13,12 +13,6 @@ const ORDER = ['speech', 'shouldRespond', 'bigBrain', 'bigHeart'];
 const inside = (root, path) => { const part = relative(root, path); return part === '' || (!part.startsWith(`..${sep}`) && part !== '..' && !isAbsolute(part)); };
 const ensure = (condition, message) => { if (!condition) throw new Error(message); };
 const plain = value => JSON.parse(JSON.stringify(value));
-
-export async function bounded(promise, milliseconds = 1200) {
-  let timer;
-  try { return await Promise.race([promise, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Required result did not settle before the deadline')), milliseconds); })]); }
-  finally { clearTimeout(timer); }
-}
 
 // Conservative mechanical checks; semantic preservation still needs a diff review.
 export function inspectPromptOrder(text) {
@@ -29,40 +23,6 @@ export function inspectPromptOrder(text) {
     || /\{\s*shouldRespond\s*:[^}\n]*\bspeech\s*:/i.test(normalized)
     || /\b(?:emit|output|serialize|write)\s+(?:the\s+)?shouldRespond\s+(?:field\s+)?(?:first|before\s+speech)\b/i.test(normalized);
   return { recognizedSpeechFirstShape: list || jsonShape, contradiction };
-}
-
-function loadCandidate(workspace, entry) {
-  const cache = new Map(), hashes = {}, timers = new Set();
-  let fetchHandler = async () => { throw new Error('No mock response was registered; network access is prohibited'); };
-  const context = vm.createContext({
-    console: { log() {}, warn() {}, error() {} }, process: { env: Object.freeze({}) },
-    URL, AbortController, TextEncoder, TextDecoder, ReadableStream, Response, Headers,
-    fetch: (...args) => fetchHandler(...args),
-    setTimeout: (fn, ms, ...args) => { const timer = setTimeout(() => { timers.delete(timer); fn(...args); }, ms); timers.add(timer); return timer; },
-    clearTimeout: timer => { timers.delete(timer); clearTimeout(timer); }
-  }, { codeGeneration: { strings: false, wasm: false } });
-  function load(name) {
-    ensure(entry.allowedModules.includes(name), 'Candidate requested a module outside the evaluation allowlist');
-    if (cache.has(name)) return cache.get(name).exports;
-    const path = realpathSync(resolve(workspace, name));
-    ensure(inside(workspace, path), 'Candidate module escapes its workspace');
-    const source = readFileSync(path, 'utf8');
-    ensure(Buffer.byteLength(source) <= 2 * 1024 * 1024, 'Candidate module exceeds the size limit');
-    hashes[name] = createHash('sha256').update(source).digest('hex');
-    const module = { exports: {} }; cache.set(name, module);
-    const token = `__load${cache.size}`;
-    context[token] = { module, require(request) {
-      ensure(typeof request === 'string' && request.startsWith('./') && !request.includes('..'), 'Only allowlisted relative modules may load');
-      const dependency = request.slice(2).endsWith('.js') ? request.slice(2) : `${request.slice(2)}.js`;
-      return load(dependency);
-    } };
-    try { new vm.Script(`(function(require,module,exports){\n${source}\n})(${token}.require,${token}.module,${token}.module.exports)`, { filename: name }).runInContext(context, { timeout: 1000 }); }
-    finally { delete context[token]; }
-    return module.exports;
-  }
-  context.subject = load(entry.entrypoint);
-  return { hashes, context, evaluate(code) { return new vm.Script(code).runInContext(context, { timeout: 1000 }); },
-    mockFetch(handler) { fetchHandler = handler; }, close() { for (const timer of timers) clearTimeout(timer); } };
 }
 
 function controlledResponse() {
@@ -80,7 +40,18 @@ export async function checkReplay({ workspace, caseId = 'speech-first', catalogP
   ensure(!inside(workspace, realpathSync(SELF)) && !inside(workspace, catalogPath), 'Trusted checker and catalog must be outside the editable candidate workspace');
   const catalog = JSON.parse(readFileSync(catalogPath, 'utf8'));
   const entry = catalog.cases.find(item => item.id === caseId);
-  ensure(entry?.checker === 'speech-first-v1', 'Unknown evaluation case or checker');
+  const extensions = {
+    'buffer-settling-v1': ['../eval/checkers/buffer-settling.js', 'checkBufferSettling'],
+    'provider-stream-errors-v1': ['../eval/checkers/provider-stream-errors.js', 'checkProviderStreamErrors'],
+    'vad-flap-v1': ['../eval/checkers/vad-flap.js', 'checkVadFlap'],
+  };
+  ensure(entry && (entry.checker === 'speech-first-v1' || Object.hasOwn(extensions, entry.checker)), 'Unknown evaluation case or checker');
+  if (entry.checker !== 'speech-first-v1') {
+    const [modulePath, exportName] = extensions[entry.checker];
+    const checkerPath = realpathSync(fileURLToPath(new URL(modulePath, import.meta.url)));
+    ensure(!inside(workspace, checkerPath), 'Trusted checker must be outside the editable candidate workspace');
+    return (await import(modulePath))[exportName]({ workspace, entry });
+  }
   const checks = [];
   const run = async (id, task) => {
     try { const detail = await bounded(Promise.resolve().then(task), 4500); checks.push({ id, passed: true, ...(detail || {}) }); }
