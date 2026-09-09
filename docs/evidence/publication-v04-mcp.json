@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "evidenceType": "authenticated-MCP-client-with-real-rootless-container",
-  "sourceCommit": "d5a6b8d6613bbb805cdee46937a86150f49e5b0b",
-  "release": "coding-d5a6b8d6613b",
-  "collectedAt": "2026-09-09T14:50:50.575806-07:00",
+  "sourceCommit": "abc97268f6d98bb80d72e388d3fb2a30b3d33205",
+  "release": "coding-abc97268f6d9",
+  "collectedAt": "2026-09-09T14:58:13.766405-07:00",
   "status": "completed",
   "scope": "Automated synthetic coding fixture using temporary signing authority, real Podman commands, gateway recreation, and fresh MCP client recovery. It does not exercise live GitHub publication or production deployment.",
   "systemd": {
@@ -22,8 +22,8 @@
   },
   "fixtureReceipt": {
     "evidenceKind": "authenticated-MCP-client-temporary-authority",
-    "fixtureId": "a9c0c276-2eb7-4441-8ba0-6c9089c739cf",
-    "startedAt": "2026-09-09T21:46:25.252Z",
+    "fixtureId": "eaf54261-d541-4da0-8961-a1554883240e",
+    "startedAt": "2026-09-09T21:56:50.524Z",
     "authentication": "Ephemeral fixture issuer and signing keys; no live OAuth authority, owner password, or ChatGPT sign-in.",
     "executor": "Real PodmanRunner, using the protected fixed image and existing dedicated container storage.",
     "gatewayRestartMode": "Gateway application instance and HTTP listener recreated in the same fixture process; coding backend remains alive.",
@@ -33,14 +33,14 @@
         "gatewayInsufficientScopeDenied": true,
         "backendMissingMalformedAndProbeTokenDenied": true,
         "codeTokenCannotUseProbeTools": true,
-        "passedAt": "2026-09-09T21:46:26.144Z"
+        "passedAt": "2026-09-09T21:56:51.141Z"
       },
       {
         "name": "source_discovery_and_create",
-        "workspaceId": "de6c37de-19d0-4673-b688-9dc24b4b3a9c",
-        "createOperationId": "1e2b4094-2c97-4f5d-9d71-e4b91b6448be",
+        "workspaceId": "187afd58-2b5f-4992-9d0a-9c457129f47e",
+        "createOperationId": "3a24055d-43a9-4828-bcef-161ee5a8c1d1",
         "createIdempotencyVerified": true,
-        "passedAt": "2026-09-09T21:46:26.622Z"
+        "passedAt": "2026-09-09T21:56:51.398Z"
       },
       {
         "name": "all_edit_actions_and_conflicts",
@@ -56,14 +56,14 @@
         "smallPatchesToLargeFile": true,
         "sameFileSequentialPatches": true,
         "structuredInvalidArgument": true,
-        "passedAt": "2026-09-09T21:46:27.154Z"
+        "passedAt": "2026-09-09T21:56:51.651Z"
       },
       {
         "name": "real_command_and_gateway_restart",
-        "jobId": "93ac2100-2395-430a-ae96-d6f27ecd7ce0",
-        "runningStartedAt": "2026-09-09T21:46:27.689Z",
+        "jobId": "7ee2a1cd-409f-4124-92e2-9ae24b065e65",
+        "runningStartedAt": "2026-09-09T21:56:52.102Z",
         "realContainerRunningAfterGatewayRestart": true,
-        "passedAt": "2026-09-09T21:46:27.917Z"
+        "passedAt": "2026-09-09T21:56:52.303Z"
       },
       {
         "name": "fresh_client_recovers_completed_job",
@@ -71,7 +71,7 @@
         "sameJob": true,
         "backendBootIdUnchanged": true,
         "jobIdempotencyVerified": true,
-        "passedAt": "2026-09-09T21:46:33.241Z"
+        "passedAt": "2026-09-09T21:56:57.526Z"
       },
       {
         "name": "persisted_logs_artifact_diff_and_mutation_receipts",
@@ -81,11 +81,11 @@
         "artifactHashIndependentlyVerified": true,
         "diffPages": 5,
         "mutationReceiptRecovered": true,
-        "passedAt": "2026-09-09T21:46:33.876Z"
+        "passedAt": "2026-09-09T21:56:57.932Z"
       },
       {
         "name": "noisy_job_retains_final_output",
-        "jobId": "569b0af5-6197-451a-89e6-50add7e58a10",
+        "jobId": "f3cd7e36-f162-4095-8942-3cbfd004104c",
         "exitCode": 0,
         "finalSummaryInStatus": true,
         "finalSummaryInFilteredTail": true,
@@ -94,48 +94,48 @@
         "fullCommandRecoverable": true,
         "outputRetention": {
           "mode": "head-and-tail",
-          "headBytes": 875310,
+          "headBytes": 874770,
           "headLimitReached": true,
           "runnerLogLoss": true,
-          "observedOutputBytes": 1845415,
-          "observedRecordCount": 17225,
+          "observedOutputBytes": 1845088,
+          "observedRecordCount": 17230,
           "observationStartsAfterLegacyHead": false,
-          "skippedContainerLogBytes": 1077304,
-          "tailBytes": 27505,
+          "skippedContainerLogBytes": 1077766,
+          "tailBytes": 27396,
           "tailRecords": 256,
-          "firstTailSequence": 16970,
-          "lastTailSequence": 17225,
-          "tailEvictedRecords": 16969,
+          "firstTailSequence": 16975,
+          "lastTailSequence": 17230,
+          "tailEvictedRecords": 16974,
           "completeOriginalOutput": false,
           "explanation": "Head records keep their original sequence. The separate rolling tail contains only observed output fragments; its sequence does not match head sequences. Tail eviction does not itself mean the head lost output. Runner loss or skipped container bytes can mean output was never observed."
         },
-        "passedAt": "2026-09-09T21:46:35.811Z"
+        "passedAt": "2026-09-09T21:56:59.567Z"
       }
     ],
     "status": "completed",
-    "release": "coding-d5a6b8d6613b",
+    "release": "coding-abc97268f6d9",
     "image": "sha256:a807793c27f53bf93480fc3dcfe73b2ab1b6bdf8b3aa1aca820118fd43767170",
     "source": {
       "kind": "synthetic immutable fixture",
       "baseRevision": "52db39666413aaf7f666d93f1e5a9d5ccab6bb7ea054d452b72265bd36d8e7ac"
     },
-    "backendBootId": "9dfb5942-06bb-4540-92fb-10c44f8aad55",
+    "backendBootId": "df3859f6-0108-44de-966e-58b4d08897fe",
     "replayProjects": [],
-    "workspaceId": "de6c37de-19d0-4673-b688-9dc24b4b3a9c",
-    "createOperationId": "1e2b4094-2c97-4f5d-9d71-e4b91b6448be",
-    "applyOperationId": "44d8d88a-c443-46e1-a7c0-23f95df00764",
-    "jobId": "93ac2100-2395-430a-ae96-d6f27ecd7ce0",
-    "gatewayRestartedAt": "2026-09-09T21:46:27.917Z",
-    "jobStartedAt": "2026-09-09T21:46:27.689Z",
-    "jobFinishedAt": "2026-09-09T14:46:32.751571652-07:00",
+    "workspaceId": "187afd58-2b5f-4992-9d0a-9c457129f47e",
+    "createOperationId": "3a24055d-43a9-4828-bcef-161ee5a8c1d1",
+    "applyOperationId": "0098ee18-b538-41d6-bcbb-fa48e48bf960",
+    "jobId": "7ee2a1cd-409f-4124-92e2-9ae24b065e65",
+    "gatewayRestartedAt": "2026-09-09T21:56:52.303Z",
+    "jobStartedAt": "2026-09-09T21:56:52.102Z",
+    "jobFinishedAt": "2026-09-09T14:56:57.142650184-07:00",
     "jobExitCode": 0,
     "artifact": {
-      "id": "5be19927e4e8276eb73e42f94fc17986997d3a877dd605079ae460479c84c992",
+      "id": "bb3e52db8c23932435e3801e2f4a15cdc2d6d8a19816f9628732fb90a1912f55",
       "bytes": 64,
       "sha256": "44f1a2c4a5955545a5cd3e1aeadcf884e1bb5dbcea5074a6f72a38fd761c7a94"
     },
-    "finishedAt": "2026-09-09T21:46:35.849Z",
-    "elapsedMilliseconds": 10597,
+    "finishedAt": "2026-09-09T21:56:59.596Z",
+    "elapsedMilliseconds": 9072,
     "fixtureStateRetained": true
   },
   "limits": [
