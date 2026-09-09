@@ -73,6 +73,7 @@ try {
     'answer.cjs': 'exports.answer = 41;\n',
     'rename-me.txt': 'Rename this fixture file.\n',
     'delete-me.txt': 'Delete this fixture file.\n',
+    'large.txt': 'LARGE_ONE=41;\nLARGE_TWO=41;\n' + 'Unchanged fixture padding.\n'.repeat(7000),
   };
   for (const [name, content] of Object.entries(files)) writeFileSync(join(snapshotPath, name), content, { mode: 0o444, flag: 'wx' });
   const baseRevision = sha256(JSON.stringify(files));
@@ -146,7 +147,7 @@ try {
       instructionsSha256: sha256(inspected.instructions), validationCommandsVerified: true });
   }
   assert.equal((await call(client, 'project_inspect', { projectId: 'host-fixture' })).revision, baseRevision);
-  assert.equal((await call(client, 'files_list', { projectId: 'host-fixture' })).files.length, 3);
+  assert.equal((await call(client, 'files_list', { projectId: 'host-fixture' })).files.length, 4);
   const createRequest = { projectId: 'host-fixture', baseRevision, idempotencyKey: `create-${fixtureId}`, label: `Host MCP recovery ${fixtureId}` };
   const created = await call(client, 'workspace_create', createRequest), workspaceId = created.workspaceId;
   receipt.workspaceId = workspaceId; receipt.createOperationId = created.operationId;
@@ -158,11 +159,15 @@ try {
   const answer = await call(client, 'file_read', { workspaceId, path: 'answer.cjs' });
   const rename = await call(client, 'file_read', { workspaceId, path: 'rename-me.txt' });
   const deletion = await call(client, 'file_read', { workspaceId, path: 'delete-me.txt' });
+  const large = await call(client, 'file_read', { workspaceId, path: 'large.txt', lineCount: 2 });
+  assert.ok(Buffer.byteLength(files['large.txt']) > 131072);
   const editRequest = { workspaceId, expectedRevision: answer.revision, idempotencyKey: `apply-${fixtureId}`, changes: [
     { action: 'patch', path: 'answer.cjs', expectedSha256: answer.sha256, oldText: '= 41', newText: '= 42' },
     { action: 'write', path: 'created.txt', expectedSha256: null, content: 'Created by authenticated MCP.\n' },
     { action: 'rename', path: 'rename-me.txt', to: 'renamed.txt', expectedSha256: rename.sha256 },
     { action: 'delete', path: 'delete-me.txt', expectedSha256: deletion.sha256 },
+    { action: 'patch', path: 'large.txt', expectedSha256: large.sha256, oldText: 'LARGE_ONE=41', newText: 'LARGE_ONE=42' },
+    { action: 'patch', path: 'large.txt', expectedSha256: large.sha256, oldText: 'LARGE_TWO=41', newText: 'LARGE_TWO=42' },
   ] };
   const edited = await call(client, 'workspace_apply', editRequest);
   receipt.applyOperationId = edited.operationId;
@@ -172,7 +177,14 @@ try {
   assert.equal(stale.structuredContent.error.code, 'REVISION_CONFLICT');
   const pathEscape = await client.callTool({ name: 'file_read', arguments: { workspaceId, path: '../backend/coding.sqlite' } });
   assert.equal(pathEscape.isError, true);
-  mark(phase, { actions: ['patch', 'write', 'rename', 'delete'], editIdempotencyVerified: true, staleRevisionDenied: true, pathEscapeDenied: true });
+  assert.deepEqual((await call(client, 'file_read', { workspaceId, path: 'large.txt', lineCount: 2 })).lines.map(line => line.text), ['LARGE_ONE=42;', 'LARGE_TWO=42;']);
+  const invalidLimit = await client.callTool({ name: 'job_logs', arguments: { jobId: 'not-created', limit: 200 } });
+  assert.equal(invalidLimit.isError, true);
+  assert.equal(invalidLimit.structuredContent.error.code, 'INVALID_ARGUMENT');
+  assert.ok(invalidLimit.structuredContent.requestId);
+  assert.equal((await call(client, 'workspace_inspect', { workspaceId })).revision, edited.result.revision);
+  mark(phase, { actions: ['patch', 'write', 'rename', 'delete'], editIdempotencyVerified: true, staleRevisionDenied: true, pathEscapeDenied: true,
+    smallPatchesToLargeFile: true, sameFileSequentialPatches: true, structuredInvalidArgument: true });
 
   phase = 'real_command_and_gateway_restart';
   const command = [
@@ -246,7 +258,7 @@ try {
   assert.equal(inspected.revision, finished.revisionAfter);
   let diff = '', diffCursor = 0, diffPages = 0;
   do {
-    const page = await call(fresh, 'workspace_diff', { workspaceId, expectedRevision: inspected.revision, cursor: diffCursor, limit: 256 }); diffPages++;
+    const page = await call(fresh, 'workspace_diff', { workspaceId, expectedRevision: inspected.revision, cursor: diffCursor, maxBytes: 256 }); diffPages++;
     diff += page.diff; diffCursor = page.nextCursor; assert.ok(diffPages < 100);
   } while (diffCursor !== null);
   assert.match(diff, /\+exports.answer = 42/); assert.match(diff, /deleted file mode/); assert.match(diff, /new file mode/);
@@ -255,6 +267,27 @@ try {
   assert.ok((await call(fresh, 'operations_list', { workspaceId })).operations.some(operation => operation.operationId === edited.operationId));
   receipt.artifact = { id: artifact.id, bytes: artifactBytes.length, sha256: artifact.sha256 };
   mark(phase, { logPages, logRecords: records.length, artifactPages, artifactHashIndependentlyVerified: true, diffPages, mutationReceiptRecovered: true });
+
+  phase = 'noisy_job_retains_final_output';
+  const noisyCommand = "for (let i=0;i<24000;i++) console.log('noise '+i+' '+'.'.repeat(96)); console.log('HOST_NOISY_FINAL: 1 passed, 0 failed');";
+  const noisy = await call(fresh, 'job_start', { workspaceId, expectedRevision: inspected.revision,
+    idempotencyKey: `noisy-${fixtureId}`, label: 'Bounded head and rolling tail fixture', argv: ['node', '-e', noisyCommand], timeoutSeconds: 30 });
+  fixtureJobId = noisy.id;
+  const noisyFinished = await awaitStatus(fresh, noisy.id, 'completed', 180000);
+  assert.equal(noisyFinished.exitCode, 0);
+  assert.equal(noisyFinished.outputRetention.mode, 'head-and-tail');
+  assert.equal(noisyFinished.truncated, true);
+  assert.ok(noisyFinished.recentOutput.records.some(record => record.text.includes('HOST_NOISY_FINAL: 1 passed, 0 failed')));
+  const tail = await call(fresh, 'job_logs', { jobId: noisy.id, view: 'tail', query: 'HOST_NOISY_FINAL', stream: 'stdout' });
+  assert.equal(tail.records.length, 1);
+  assert.equal(tail.hasMore, false);
+  const compact = await call(fresh, 'job_status', { jobId: job.id });
+  const full = await call(fresh, 'job_status', { jobId: job.id, includeCommand: true });
+  assert.deepEqual(full.argv, jobRequest.argv);
+  assert.ok(JSON.stringify(compact.argv).length < JSON.stringify(full.argv).length);
+  assert.ok(JSON.stringify(noisyFinished.recentOutput).length < 10000);
+  mark(phase, { jobId: noisy.id, exitCode: noisyFinished.exitCode, finalSummaryInStatus: true, finalSummaryInFilteredTail: true,
+    headTruncationExplicit: true, statusCommandCompact: true, fullCommandRecoverable: true, outputRetention: noisyFinished.outputRetention });
   receipt.status = 'completed';
 } catch (error) {
   receipt.status = 'failed';

@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { CodeStore } from '../src/code/store.js';
 import { WorkspaceManager } from '../src/code/workspaces.js';
-import { sha256 } from '../src/code/paths.js';
+import { sha256, LIMITS } from '../src/code/paths.js';
 
 function fixture(t, { readme = 'Welcome\nFind this line\nFind another line\n' } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'praxis-workspace-'));
@@ -75,6 +75,120 @@ test('owner, revision, hash and batch preconditions reject before any effects', 
     { action: 'delete', path: 'README.md', expectedSha256: 'stale' }] }), { code: 'HASH_CONFLICT' });
   assert.equal(workspaces.filesList({ owner, workspaceId }).files.some(file => file.path === 'new.txt'), false);
   assert.equal(workspaces.inspect({ owner, workspaceId }).revision, initial.revision);
+});
+
+test('small patches edit large Unicode source while preserving input and resulting-file limits', t => {
+  const original = '🙂'.repeat((LIMITS.fileBytes - 4) / 4) + '\nEND';
+  assert.ok(original.length > LIMITS.writeCharacters);
+  assert.equal(Buffer.byteLength(original), LIMITS.fileBytes);
+  const { workspaces, workspacePath, owner, workspaceId } = fixture(t, { readme: original });
+  const read = workspaces.read({ owner, workspaceId, path: 'README.md' });
+  const applied = workspaces.apply({ owner, workspaceId, expectedRevision: read.revision, idempotencyKey: 'large-unicode-patch', changes: [
+    { action: 'patch', path: 'README.md', expectedSha256: read.sha256, oldText: '\nEND', newText: '\nFIN' },
+  ] });
+  const expected = original.slice(0, -3) + 'FIN';
+  assert.equal(readFileSync(join(workspacePath, 'README.md'), 'utf8'), expected);
+  const common = { owner, workspaceId, expectedRevision: applied.result.revision };
+  const hash = sha256(expected), patch = { action: 'patch', path: 'README.md', expectedSha256: hash, oldText: '\nFIN', newText: '\nFIN🙂' };
+  assert.throws(() => workspaces.apply({ ...common, idempotencyKey: 'large-unicode-overflow', changes: [patch] }), { code: 'LIMIT_EXCEEDED' });
+  for (const field of ['oldText', 'newText']) {
+    assert.throws(() => workspaces.apply({ ...common, idempotencyKey: `large-input-${field}`, changes: [
+      { ...patch, [field]: 'x'.repeat(LIMITS.writeCharacters + 1) },
+    ] }), { code: 'VALIDATION_ERROR' });
+  }
+  assert.throws(() => workspaces.apply({ ...common, idempotencyKey: 'large-full-write', changes: [
+    { action: 'write', path: 'new.txt', expectedSha256: null, content: 'x'.repeat(LIMITS.writeCharacters + 1) },
+  ] }), { code: 'VALIDATION_ERROR' });
+  assert.throws(() => workspaces.apply({ ...common, idempotencyKey: 'large-total-request', changes: ['one.txt', 'two.txt'].map(path =>
+    ({ action: 'write', path, expectedSha256: null, content: 'x'.repeat(LIMITS.writeCharacters) })) }), { code: 'LIMIT_EXCEEDED' });
+  assert.equal(workspaces.inspect({ owner, workspaceId }).revision, common.expectedRevision);
+  assert.equal(readFileSync(join(workspacePath, 'README.md'), 'utf8'), expected);
+});
+
+test('same-file patches apply sequentially using the original hash and journal one final effect', t => {
+  const { workspaces, workspacePath, store, owner, workspaceId } = fixture(t, { readme: 'start\n' });
+  const read = workspaces.read({ owner, workspaceId, path: 'README.md' });
+  const args = { owner, workspaceId, expectedRevision: read.revision, idempotencyKey: 'sequential-patches', changes: [
+    { action: 'patch', path: 'README.md', expectedSha256: read.sha256, oldText: 'start', newText: 'middle' },
+    { action: 'write', path: 'other.txt', expectedSha256: null, content: 'Other file\n' },
+    { action: 'patch', path: 'README.md', expectedSha256: read.sha256, oldText: 'middle', newText: 'finish' },
+  ] };
+  const applied = workspaces.apply(args);
+  assert.deepEqual(applied.result.changedPaths, ['README.md', 'other.txt']);
+  const plan = JSON.parse(store.db.prepare('SELECT plan_json FROM operations WHERE id = ?').get(applied.operationId).plan_json);
+  assert.equal(plan.files.length, 2);
+  assert.equal(plan.files[0].before, read.sha256);
+  assert.equal(Buffer.from(plan.files[0].content, 'base64').toString(), 'finish\n');
+  assert.equal(readFileSync(join(workspacePath, 'README.md'), 'utf8'), 'finish\n');
+  assert.deepEqual(workspaces.apply(args), applied);
+});
+
+test('every sequential patch is validated before any file or receipt changes', t => {
+  const { workspaces, workspacePath, owner, workspaceId } = fixture(t, { readme: 'start\n' });
+  const read = workspaces.read({ owner, workspaceId, path: 'README.md' });
+  const first = { action: 'patch', path: 'README.md', expectedSha256: read.sha256, oldText: 'start', newText: 'middle middle' };
+  const invalidSteps = [
+    [{ ...first, oldText: 'middle middle', newText: 'finish', expectedSha256: sha256('middle middle\n') }, 'HASH_CONFLICT'],
+    [{ ...first, oldText: 'missing', newText: 'finish' }, 'PATCH_CONFLICT'],
+    [{ ...first, oldText: 'middle', newText: 'finish' }, 'PATCH_CONFLICT'],
+  ];
+  invalidSteps.forEach(([last, code], index) => {
+    assert.throws(() => workspaces.apply({ owner, workspaceId, expectedRevision: read.revision, idempotencyKey: `failed-late-patch-${index}`, changes: [
+      { action: 'write', path: 'new.txt', expectedSha256: null, content: 'Must not be created' }, first, last,
+    ] }), { code });
+    assert.equal(workspaces.inspect({ owner, workspaceId }).revision, read.revision);
+    assert.equal(workspaces.operationsList({ owner, workspaceId }).operations.length, 1);
+    assert.equal(readFileSync(join(workspacePath, 'README.md'), 'utf8'), 'start\n');
+    assert.equal(workspaces.filesList({ owner, workspaceId }).files.some(file => file.path === 'new.txt'), false);
+  });
+});
+
+test('repeated patch paths do not allow mixed actions, rename reuse or ancestor conflicts', t => {
+  const { workspaces, owner, workspaceId } = fixture(t, { readme: 'start\n' });
+  const read = workspaces.read({ owner, workspaceId, path: 'README.md' });
+  const patch = { action: 'patch', path: 'README.md', expectedSha256: read.sha256, oldText: 'start', newText: 'finish' };
+  const conflictingBatches = [
+    [patch, { action: 'write', path: 'README.md', expectedSha256: read.sha256, content: 'overwrite' }],
+    [{ action: 'write', path: 'README.md', expectedSha256: read.sha256, content: 'overwrite' }, patch],
+    [patch, { action: 'delete', path: 'README.md', expectedSha256: read.sha256 }],
+    [patch, { action: 'rename', path: 'README.md', to: 'GUIDE.md', expectedSha256: read.sha256 }],
+    [{ action: 'rename', path: 'README.md', to: 'GUIDE.md', expectedSha256: read.sha256 },
+      { ...patch, path: 'GUIDE.md', expectedSha256: null }],
+    [{ action: 'write', path: 'new', expectedSha256: null, content: 'parent' },
+      { action: 'write', path: 'new/child', expectedSha256: null, content: 'child' }],
+  ];
+  conflictingBatches.forEach((changes, index) => {
+    assert.throws(() => workspaces.apply({ owner, workspaceId, expectedRevision: read.revision, idempotencyKey: `conflicting-path-${index}`, changes }), { code: 'VALIDATION_ERROR' });
+    assert.equal(workspaces.inspect({ owner, workspaceId }).revision, read.revision);
+    assert.equal(workspaces.operationsList({ owner, workspaceId }).operations.length, 1);
+  });
+});
+
+test('sequential patch journal resumes a partial batch without reapplying patches', t => {
+  const f = fixture(t, { readme: 'start\n' }), { workspaces, workspacePath, owner, workspaceId, store } = f;
+  const read = workspaces.read({ owner, workspaceId, path: 'README.md' });
+  const args = { owner, workspaceId, expectedRevision: read.revision, idempotencyKey: 'sequential-crash-replay', changes: [
+    { action: 'patch', path: 'README.md', expectedSha256: read.sha256, oldText: 'start', newText: 'middle' },
+    { action: 'patch', path: 'README.md', expectedSha256: read.sha256, oldText: 'middle', newText: 'finish' },
+    { action: 'write', path: 'second.txt', expectedSha256: null, content: 'Second file\n' },
+  ] };
+  let operationId;
+  workspaces._execute = id => { operationId = id; throw new Error('Simulated process interruption'); };
+  assert.throws(() => workspaces.apply(args), /Simulated process interruption/);
+  const prepared = store.db.prepare('SELECT status, plan_json FROM operations WHERE id = ?').get(operationId);
+  assert.equal(prepared.status, 'prepared');
+  const plan = JSON.parse(prepared.plan_json);
+  assert.equal(plan.files.length, 2);
+  assert.equal(Buffer.from(plan.files[0].content, 'base64').toString(), 'finish\n');
+  // A crash can occur between complete file writes, but never journals intermediate patch text.
+  writeFileSync(join(workspacePath, 'README.md'), Buffer.from(plan.files[0].content, 'base64'));
+  const recovered = f.reopen();
+  const receipt = recovered.operationRead({ owner, operationId });
+  assert.equal(receipt.status, 'completed');
+  assert.deepEqual(receipt.result.changedPaths, ['README.md', 'second.txt']);
+  assert.equal(readFileSync(join(workspacePath, 'README.md'), 'utf8'), 'finish\n');
+  assert.equal(readFileSync(join(workspacePath, 'second.txt'), 'utf8'), 'Second file\n');
+  assert.deepEqual(recovered.apply(args), receipt);
 });
 
 test('filesystem tools reject traversal, protected names and linked contents without blocking sandbox cleanup', t => {
@@ -151,6 +265,24 @@ test('diff pagination accounts for renames, additions, deletions, binary content
   assert.equal(all.length, first.totalCharacters);
   assert.throws(() => workspaces.diff({ owner, workspaceId, expectedRevision: 'outdated' }), { code: 'REVISION_CONFLICT' });
   assert.equal(applied.status, 'completed');
+});
+
+test('diff maxBytes names its unit and stays compatible with legacy limit', t => {
+  const { workspaces, owner, workspaceId } = fixture(t, { readme: 'before\n'.repeat(100) });
+  const read = workspaces.read({ owner, workspaceId, path: 'README.md' });
+  workspaces.apply({ owner, workspaceId, expectedRevision: read.revision, idempotencyKey: 'diff-page-byte-alias', changes: [
+    { action: 'write', path: 'README.md', expectedSha256: read.sha256, content: 'after\n'.repeat(100) },
+  ] });
+  const args = { owner, workspaceId };
+  const legacy = workspaces.diff({ ...args, limit: 256 });
+  assert.ok(legacy.nextCursor !== null);
+  assert.ok(Buffer.byteLength(legacy.diff) <= 256);
+  assert.deepEqual(workspaces.diff({ ...args, maxBytes: 256 }), legacy);
+  assert.deepEqual(workspaces.diff({ ...args, maxBytes: 256, limit: 256 }), legacy);
+  assert.throws(() => workspaces.diff({ ...args, maxBytes: 512, limit: 256 }), { code: 'INVALID_ARGUMENT' });
+  for (const maxBytes of [0, 100, 32769, 1024.5]) {
+    assert.throws(() => workspaces.diff({ ...args, maxBytes }), { code: 'INVALID_ARGUMENT' });
+  }
 });
 
 test('prepared edit journal resumes after a partial write without duplicating its changes', t => {

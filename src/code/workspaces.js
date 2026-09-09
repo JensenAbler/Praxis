@@ -320,43 +320,52 @@ export class WorkspaceManager {
       const row = this._row(owner, workspaceId); this._ready(row); this._idle(row);
       const state = this._refresh(row);
       requireValue(expectedRevision === row.revision, 'Workspace revision changed; inspect it before editing.', 'REVISION_CONFLICT');
-      const files = [], touched = new Set();
-      const touch = path => {
+      const stagedFiles = new Map(), patchText = new Map(), touched = new Map();
+      const touch = (path, action) => {
         normalizePath(path);
         requireValue(!path.split('/').some(part => IGNORED.has(part)), 'Filesystem edits cannot target excluded dependency/cache paths.', 'PATH_REJECTED');
-        requireValue(!touched.has(path), 'Each path may be changed only once per batch.'); touched.add(path);
+        requireValue(!touched.has(path) || (action === 'patch' && touched.get(path) === 'patch'),
+          'Only sequential patch actions may share a path within a batch; use the original file hash for every patch.');
+        touched.set(path, action);
         const target = safePath(row.path, path);
         requireValue(!existsSync(target) || lstatSync(target).isFile(), 'Edit targets must be files, not directories.', 'PATH_REJECTED');
       };
       for (const change of changes) {
         requireValue(change && ['write', 'patch', 'rename', 'delete'].includes(change.action), 'Unsupported edit action.');
-        touch(change.path);
+        touch(change.path, change.action);
         const before = state.entries[change.path];
         requireValue(!before || before.kind === 'file', 'Unsafe entries must be removed by a sandbox command.', 'UNSAFE_PATH');
         requireValue(change.expectedSha256 === (before?.sha256 ?? null), 'File hash changed or file existence precondition failed.', 'HASH_CONFLICT');
         requireValue(before || change.action === 'write', 'This operation requires an existing file.', 'NOT_FOUND');
         requireValue(change.executable === undefined || typeof change.executable === 'boolean', 'executable must be boolean.');
-        const mode = change.executable === undefined ? before?.mode || '100644' : change.executable ? '100755' : '100644';
-        if (change.action === 'delete') files.push({ path: change.path, before: before.sha256, content: null, mode });
+        const mode = change.executable === undefined ? stagedFiles.get(change.path)?.mode || before?.mode || '100644' : change.executable ? '100755' : '100644';
+        if (change.action === 'delete') stagedFiles.set(change.path, { path: change.path, before: before.sha256, content: null, mode });
         if (change.action === 'rename') {
-          touch(change.to);
+          touch(change.to, 'rename');
           requireValue(!state.entries[change.to] && !existsSync(safePath(row.path, change.to)), 'Rename destination already exists.', 'HASH_CONFLICT');
-          files.push({ path: change.to, before: null, content: readSafe(row.path, change.path).toString('base64'), mode });
-          files.push({ path: change.path, before: before.sha256, content: null, mode });
+          stagedFiles.set(change.to, { path: change.to, before: null, content: readSafe(row.path, change.path).toString('base64'), mode });
+          stagedFiles.set(change.path, { path: change.path, before: before.sha256, content: null, mode });
         }
         if (change.action === 'write' || change.action === 'patch') {
           let content = change.content;
           if (change.action === 'patch') {
-            requireValue(typeof change.oldText === 'string' && change.oldText.length > 0 && typeof change.newText === 'string', 'patch requires nonempty oldText and string newText.');
-            const old = textOf(readSafe(row.path, change.path)), position = old.indexOf(change.oldText);
+            requireValue(typeof change.oldText === 'string' && change.oldText.length > 0 && change.oldText.length <= LIMITS.writeCharacters
+              && typeof change.newText === 'string' && change.newText.length <= LIMITS.writeCharacters,
+            `patch requires nonempty oldText and string newText, each at most ${LIMITS.writeCharacters} characters.`);
+            const old = patchText.has(change.path) ? patchText.get(change.path) : textOf(readSafe(row.path, change.path)), position = old.indexOf(change.oldText);
             requireValue(position >= 0 && old.indexOf(change.oldText, position + 1) < 0, 'oldText must match exactly once.', 'PATCH_CONFLICT');
             content = old.slice(0, position) + change.newText + old.slice(position + change.oldText.length);
+          } else {
+            requireValue(typeof content === 'string' && content.length <= LIMITS.writeCharacters, 'File content must be text within the write limit.');
           }
-          requireValue(typeof content === 'string' && content.length <= LIMITS.writeCharacters && Buffer.byteLength(content) <= LIMITS.fileBytes, 'File content must be text within the write limit.');
-          files.push({ path: change.path, before: before?.sha256 ?? null, content: Buffer.from(content).toString('base64'), mode });
+          requireValue(Buffer.byteLength(content) <= LIMITS.fileBytes, `The resulting file exceeds the ${LIMITS.fileBytes}-byte file limit.`, 'LIMIT_EXCEEDED');
+          if (change.action === 'patch') patchText.set(change.path, content);
+          stagedFiles.set(change.path, { path: change.path, before: before?.sha256 ?? null, content: Buffer.from(content).toString('base64'), mode });
         }
       }
-      for (const path of touched) for (const other of touched) requireValue(path === other || !path.startsWith(`${other}/`), 'Batch paths cannot be parents of each other.');
+      for (const path of touched.keys()) for (const other of touched.keys()) requireValue(path === other || !path.startsWith(`${other}/`), 'Batch paths cannot be parents of each other.');
+      // Journal one final effect per file, so replay accepts only its original or fully staged hash.
+      const files = [...stagedFiles.values()];
       let resultingBytes = state.bytes, resultingEntries = state.entryCount;
       const newDirectories = new Set();
       for (const file of files) {
@@ -380,7 +389,12 @@ export class WorkspaceManager {
     return typeof prepared === 'string' ? this._execute(prepared) : prepared;
   }
 
-  diff({ owner, workspaceId, expectedRevision, cursor = 0, limit = 16384 }) {
+  diff({ owner, workspaceId, expectedRevision, cursor = 0, limit, maxBytes }) {
+    requireValue(limit === undefined || maxBytes === undefined || limit === maxBytes,
+      'Use maxBytes for diff page bytes; legacy limit must agree when both are supplied.', 'INVALID_ARGUMENT');
+    if (maxBytes !== undefined) requireValue(Number.isSafeInteger(maxBytes) && maxBytes >= 256 && maxBytes <= 32768,
+      'maxBytes must be 256–32768 bytes.', 'INVALID_ARGUMENT');
+    limit = maxBytes ?? limit ?? 16384;
     page(cursor, limit, 32768);
     return this.store.transaction(() => {
       const row = this._row(owner, workspaceId); this._ready(row); this._idle(row);

@@ -5,6 +5,7 @@ import { containerName } from './runner.js';
 
 export const CODE_JOB_LIMITS = Object.freeze({
   timeoutSeconds: 900, preparationTimeoutSeconds: 120, activeJobs: 1, retainedJobs: 200, logBytes: 1048576, logRecords: 8192,
+  tailBytes: 65536, tailRecords: 256, statusOutputBytes: 4096, statusOutputRecords: 12,
   artifacts: 16, artifactBytes: 524288, artifactTotalBytes: 2097152,
 });
 const ACTIVE = ['queued', 'starting', 'running', 'canceling'];
@@ -31,6 +32,15 @@ function utf8Prefix(bytes, maximum) {
   let end = Math.min(bytes.length, maximum);
   if (end < bytes.length) while (end > 0 && (bytes[end] & 0xc0) === 0x80) end--;
   return bytes.subarray(0, end);
+}
+function utf8Suffix(bytes, maximum) {
+  let start = Math.max(0, bytes.length - maximum);
+  while (start < bytes.length && (bytes[start] & 0xc0) === 0x80) start++;
+  return bytes.subarray(start);
+}
+function outputRecord(row) {
+  return { sequence: row.sequence, timestamp: row.timestamp, stream: row.stream,
+    text: row.text_bytes === undefined ? row.text : Buffer.from(row.text_bytes).toString('utf8'), partial: Boolean(row.partial) };
 }
 function syncDirectory(directory) {
   if (process.platform === 'win32') return; // Windows directory handles cannot use this Node interface.
@@ -117,6 +127,17 @@ export class CodeJobs {
         UNIQUE(job_id,name)
       );
       CREATE TABLE IF NOT EXISTS code_runner_lock (singleton INTEGER PRIMARY KEY CHECK(singleton=1), pid INTEGER NOT NULL, token TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS code_output_state (
+        job_id TEXT PRIMARY KEY REFERENCES code_jobs(id), observed_bytes INTEGER NOT NULL DEFAULT 0,
+        observed_records INTEGER NOT NULL DEFAULT 0, head_limit INTEGER NOT NULL DEFAULT 0,
+        runner_loss INTEGER NOT NULL DEFAULT 0, skipped_container_bytes INTEGER NOT NULL DEFAULT 0,
+        legacy_head INTEGER NOT NULL DEFAULT 0, continuation_json TEXT NOT NULL DEFAULT 'null'
+      );
+      CREATE TABLE IF NOT EXISTS code_tail_records (
+        job_id TEXT NOT NULL REFERENCES code_jobs(id), sequence INTEGER NOT NULL,
+        timestamp TEXT NOT NULL, stream TEXT NOT NULL, text TEXT NOT NULL, partial INTEGER NOT NULL DEFAULT 0,
+        bytes INTEGER NOT NULL, PRIMARY KEY(job_id,sequence)
+      );
     `);
   }
 
@@ -154,7 +175,10 @@ export class CodeJobs {
         if (existing.request_json !== requestJson) throw new CodeJobError('IDEMPOTENCY_CONFLICT', 'This idempotency key belongs to a different command. Use a new key only for intentionally new work.');
         return publicJob(existing);
       }
-      if (this.db.prepare(`SELECT 1 FROM code_jobs WHERE status IN ${ACTIVE_SQL} LIMIT 1`).get()) throw new CodeJobError('ACTIVE_JOB_LIMIT', 'One command may be active at a time. Inspect or cancel the existing job.');
+      const blocker = this.db.prepare(`SELECT id,owner,workspace_id,status FROM code_jobs WHERE status IN ${ACTIVE_SQL} LIMIT 1`).get();
+      if (blocker) throw new CodeJobError('ACTIVE_JOB_LIMIT', blocker.owner === owner
+        ? `One command may be active at a time. Existing job ${blocker.id} in workspace ${blocker.workspace_id} is ${blocker.status}. Observe that job; retry this submission with identical inputs and the same idempotency key after it becomes terminal.`
+        : 'One command may be active at a time. Execution capacity is occupied. Retry this submission with identical inputs and the same idempotency key later.');
       if (this.db.prepare('SELECT COUNT(*) AS count FROM code_jobs').get().count >= CODE_JOB_LIMITS.retainedJobs) throw new CodeJobError('JOB_QUOTA_EXCEEDED', 'The retained job quota is full. Owner maintenance is required before starting more work.');
       const workspace = this.workspaces.getExecutionWorkspace({ owner, workspaceId: request.workspaceId });
       if (workspace && typeof workspace.then === 'function') throw new Error('getExecutionWorkspace must be synchronous inside the transaction.');
@@ -162,12 +186,59 @@ export class CodeJobs {
       const id = randomUUID(), time = this.clock();
       this.db.prepare(`INSERT INTO code_jobs(id,owner,workspace_id,idempotency_key,request_json,status,created_at,updated_at)
         VALUES (?,?,?,?,?,'queued',?,?)`).run(id, owner, request.workspaceId, idempotencyKey, requestJson, time, time);
+      this.db.prepare('INSERT INTO code_output_state(job_id) VALUES (?)').run(id);
       this.record(id, 'system', 'QUEUED', time);
       return publicJob(this.row(owner, id));
     });
   }
 
-  get({ owner, jobId }) { return publicJob(this.row(owner, jobId)); }
+  outputRetention(job) {
+    const state = this.db.prepare('SELECT * FROM code_output_state WHERE job_id=?').get(job.id);
+    const tail = this.db.prepare('SELECT MIN(sequence) AS first,MAX(sequence) AS last,COUNT(*) AS count,COALESCE(SUM(bytes),0) AS bytes FROM code_tail_records WHERE job_id=?').get(job.id);
+    return {
+      mode: state ? 'head-and-tail' : 'legacy-head-only', headBytes: job.output_bytes,
+      headLimitReached: state ? Boolean(state.head_limit) : null,
+      runnerLogLoss: state ? Boolean(state.runner_loss) : null,
+      observedOutputBytes: state?.observed_bytes ?? null, observedRecordCount: state?.observed_records ?? null,
+      observationStartsAfterLegacyHead: Boolean(state?.legacy_head),
+      skippedContainerLogBytes: state?.skipped_container_bytes ?? null,
+      tailBytes: tail.bytes, tailRecords: tail.count, firstTailSequence: tail.first, lastTailSequence: tail.last,
+      tailEvictedRecords: state ? state.observed_records - tail.count : null,
+      completeOriginalOutput: !ACTIVE.includes(job.status) && !job.truncated && !state?.legacy_head,
+      explanation: state
+        ? 'Head records keep their original sequence. The separate rolling tail contains only observed output fragments; its sequence does not match head sequences. Tail eviction does not itself mean the head lost output. Runner loss or skipped container bytes can mean output was never observed.'
+        : 'This job predates rolling-tail capture. Only its original head records are available; previously truncated output cannot be recovered.',
+    };
+  }
+
+  get({ owner, jobId, includeCommand = false }) {
+    requireValue(typeof includeCommand === 'boolean', 'includeCommand must be boolean.');
+    return this.store.transaction(() => {
+      const job = this.row(owner, jobId);
+      const hasTail = this.db.prepare('SELECT 1 FROM code_tail_records WHERE job_id=? LIMIT 1').get(jobId);
+      const table = hasTail ? 'code_tail_records' : 'code_records';
+      const rows = this.db.prepare(`SELECT sequence,timestamp,stream,CAST(text AS BLOB) AS text_bytes,partial FROM ${table} WHERE job_id=? ORDER BY sequence DESC LIMIT ?`)
+        .all(jobId, CODE_JOB_LIMITS.statusOutputRecords).map(outputRecord);
+      let room = CODE_JOB_LIMITS.statusOutputBytes;
+      const records = [];
+      for (const row of rows) {
+        const source = Buffer.from(row.text);
+        let bytes = utf8Suffix(source, room), value;
+        for (;;) {
+          value = { ...row, text: bytes.toString('utf8'), partial: row.partial || bytes.length < source.length };
+          if (Buffer.byteLength(JSON.stringify(value)) <= room || !bytes.length) break;
+          bytes = utf8Suffix(bytes, Math.floor(bytes.length / 2));
+        }
+        if (Buffer.byteLength(JSON.stringify(value)) > room || !bytes.length && source.length) break;
+        records.push(value);
+        room -= Buffer.byteLength(JSON.stringify(value));
+        if (!room) break;
+      }
+      return { ...publicJob(job, !includeCommand), outputRetention: this.outputRetention(job),
+        recentOutput: { view: hasTail ? 'tail' : 'head', records: records.reverse(),
+          excerpt: true, explanation: 'A bounded recent-output excerpt, not a parsed test result. Inspect the recorded exit code and output; use job_logs for more.' } };
+    });
+  }
 
   list({ owner, workspaceId, cursor = 0, limit = 20 }) {
     ownerValue(owner); page(cursor, limit);
@@ -184,13 +255,20 @@ export class CodeJobs {
     return { jobs, nextCursor: hasMore ? selected.at(-1).row_id : null, hasMore };
   }
 
-  logs({ owner, jobId, cursor = 0, limit = 50 }) {
+  logs({ owner, jobId, cursor = 0, limit = 50, view = 'head', query, stream }) {
     page(cursor, limit);
+    requireValue(['head', 'tail'].includes(view), 'view must be head or tail.');
+    requireValue(query === undefined || typeof query === 'string' && query.length > 0 && query.length <= 200, 'query must be a literal string of 1–200 characters.');
+    requireValue(stream === undefined || ['stdout', 'stderr', 'system'].includes(stream), 'stream must be stdout, stderr, or system.');
     return this.store.transaction(() => {
       const job = this.row(owner, jobId);
       // Node SQLite TEXT reads can stop at embedded NUL even though SQLite retained all bytes.
-      const rows = this.db.prepare('SELECT sequence,timestamp,stream,CAST(text AS BLOB) AS text_bytes,partial FROM code_records WHERE job_id=? AND sequence>? ORDER BY sequence LIMIT ?')
-        .all(jobId, cursor, limit + 1).map(row => ({ ...row, text: Buffer.from(row.text_bytes).toString('utf8') }));
+      const table = view === 'tail' ? 'code_tail_records' : 'code_records';
+      const condition = view === 'tail' ? '(?=0 OR sequence<?)' : 'sequence>?';
+      const rows = this.db.prepare(`SELECT sequence,timestamp,stream,CAST(text AS BLOB) AS text_bytes,partial FROM ${table}
+        WHERE job_id=? AND ${condition} AND (? IS NULL OR stream=?)
+        AND (? IS NULL OR instr(CAST(text AS BLOB),CAST(? AS BLOB))>0) ORDER BY sequence ${view === 'tail' ? 'DESC' : 'ASC'} LIMIT ?`)
+        .all(jobId, ...(view === 'tail' ? [cursor, cursor] : [cursor]), stream ?? null, stream ?? null, query ?? null, query ?? null, limit + 1).map(outputRecord);
       const selected = [];
       let pageBytes = 0;
       for (const row of rows.slice(0, limit)) {
@@ -200,12 +278,15 @@ export class CodeJobs {
       }
       const hasMore = rows.length > selected.length;
       return {
-        jobId, status: job.status,
-        records: selected.map(row => ({ sequence: row.sequence, timestamp: row.timestamp, stream: row.stream, text: row.text, partial: Boolean(row.partial) })),
-        nextCursor: selected.at(-1)?.sequence ?? cursor, hasMore, caughtUp: !hasMore,
+        jobId, status: job.status, view,
+        records: view === 'tail' ? selected.toReversed() : selected,
+        nextCursor: view === 'tail' ? hasMore ? selected.at(-1).sequence : null : selected.at(-1)?.sequence ?? cursor, hasMore, caughtUp: !hasMore,
         terminal: !ACTIVE.includes(job.status), truncated: Boolean(job.truncated), outputBytes: job.output_bytes,
+        outputRetention: this.outputRetention(job),
+        ...(query !== undefined || stream !== undefined ? { filter: { query, stream, scope: `Matching fragments in the retained ${view} only; skipped output and matches spanning fragments are not searched.` } } : {}),
+        pagination: view === 'tail' ? 'cursor 0 starts at the newest retained records; nextCursor retrieves older pages. Each page is chronological.' : 'nextCursor resumes after the last returned head sequence; retain hasMore/caughtUp to determine completion.',
         encoding: 'utf8', binaryDecoding: 'Non-UTF-8 output is displayed with replacement characters.',
-        retention: 'Bounded container logs are copied into persisted records; detected recycling marks truncated.',
+        retention: 'Immutable bounded head plus a separately sequenced rolling tail. Truncation and collection gaps are explicit in outputRetention.',
       };
     });
   }
@@ -247,29 +328,50 @@ export class CodeJobs {
     } finally { closeSync(fd); }
   }
 
-  async collect(job, final = false) {
-    if (job.output_bytes >= CODE_JOB_LIMITS.logBytes) return;
-    const existingCount = this.db.prepare("SELECT COUNT(*) AS count FROM code_records WHERE job_id=? AND stream!='system'").get(job.id).count;
-    if (existingCount >= CODE_JOB_LIMITS.logRecords) return;
-    const result = await this.runner.logs({ name: containerName(job.id), cursor: job.runner_cursor, fingerprint: job.log_fingerprint, limitBytes: 262144, final });
+  async collect(job, final = false, preferLatest = false) {
+    const saved = this.db.prepare('SELECT continuation_json FROM code_output_state WHERE job_id=?').get(job.id);
+    const result = await this.runner.logs({ name: containerName(job.id), cursor: job.runner_cursor, fingerprint: job.log_fingerprint,
+      continuation: saved ? JSON.parse(saved.continuation_json) : null, limitBytes: 262144, final, preferLatest });
     this.store.transaction(() => {
       const current = this.row(job.owner, job.id);
-      let bytes = current.output_bytes, truncated = Boolean(current.truncated || result.truncated), count = existingCount;
+      // Additive capture state never rewrites an existing job's head records or byte totals.
+      this.db.prepare('INSERT OR IGNORE INTO code_output_state(job_id,legacy_head) VALUES (?,1)').run(job.id);
+      const state = this.db.prepare('SELECT * FROM code_output_state WHERE job_id=?').get(job.id);
+      let bytes = current.output_bytes, truncated = Boolean(current.truncated || result.truncated);
+      let count = this.db.prepare("SELECT COUNT(*) AS count FROM code_records WHERE job_id=? AND stream!='system'").get(job.id).count;
+      let observedBytes = state.observed_bytes, observedRecords = state.observed_records, headLimit = state.head_limit;
+      const tail = this.db.prepare('SELECT sequence,timestamp,stream,CAST(text AS BLOB) AS text_bytes,partial,bytes FROM code_tail_records WHERE job_id=? ORDER BY sequence').all(job.id)
+        .map(row => ({ ...outputRecord(row), bytes: row.bytes }));
+      let tailBytes = tail.reduce((total, row) => total + row.bytes, 0);
       for (const record of result.records) {
         const source = Buffer.from(record.text);
-        const room = CODE_JOB_LIMITS.logBytes - bytes;
-        if (room <= 0 || count >= CODE_JOB_LIMITS.logRecords) { truncated = true; break; }
-        const selected = utf8Prefix(source, room);
-        // Split large messages so one record never defeats the record-count page limit.
-        for (let offset = 0; offset < selected.length;) {
-          if (count >= CODE_JOB_LIMITS.logRecords) { truncated = true; break; }
-          const chunk = utf8Prefix(selected.subarray(offset), 4096);
-          this.record(job.id, record.stream, chunk.toString('utf8'), record.timestamp, record.partial || source.length > 4096);
+        observedBytes += source.length;
+        // One source message may be huge. Head and tail fragments each stay at most 4 KiB.
+        for (let offset = 0; offset < source.length;) {
+          const chunk = utf8Prefix(source.subarray(offset), 4096);
+          const partial = Boolean(record.partial || source.length > 4096);
+          const fragment = { sequence: ++observedRecords, timestamp: record.timestamp, stream: record.stream, text: chunk.toString('utf8'), partial, bytes: chunk.length };
+          tail.push(fragment); tailBytes += chunk.length;
+          while (tail.length > CODE_JOB_LIMITS.tailRecords || tailBytes > CODE_JOB_LIMITS.tailBytes) tailBytes -= tail.shift().bytes;
+          if (count < CODE_JOB_LIMITS.logRecords && bytes < CODE_JOB_LIMITS.logBytes && !headLimit) {
+            const selected = utf8Prefix(chunk, CODE_JOB_LIMITS.logBytes - bytes);
+            if (selected.length) {
+              this.record(job.id, record.stream, selected.toString('utf8'), record.timestamp, partial || selected.length < chunk.length);
+              bytes += selected.length; count++;
+            }
+            if (selected.length < chunk.length) { truncated = true; headLimit = 1; }
+          } else { truncated = true; headLimit = 1; }
           offset += chunk.length;
-          bytes += chunk.length; count++;
         }
-        if (source.length > selected.length || bytes >= CODE_JOB_LIMITS.logBytes || count >= CODE_JOB_LIMITS.logRecords) truncated = true;
       }
+      // Persist only the bounded tail, even when a batch contains thousands of tiny fragments.
+      this.db.prepare('DELETE FROM code_tail_records WHERE job_id=?').run(job.id);
+      const insert = this.db.prepare('INSERT INTO code_tail_records(job_id,sequence,timestamp,stream,text,partial,bytes) VALUES (?,?,?,?,?,?,?)');
+      for (const row of tail) insert.run(job.id, row.sequence, row.timestamp, row.stream, row.text, row.partial ? 1 : 0, row.bytes);
+      this.db.prepare(`UPDATE code_output_state SET observed_bytes=?,observed_records=?,head_limit=?,runner_loss=?,continuation_json=?,
+        skipped_container_bytes=skipped_container_bytes+? WHERE job_id=?`)
+        .run(observedBytes, observedRecords, headLimit, state.runner_loss || result.truncated ? 1 : 0,
+          JSON.stringify(result.continuation ?? null), result.skippedBytes ?? 0, job.id);
       this.db.prepare('UPDATE code_jobs SET runner_cursor=?,log_fingerprint=?,output_bytes=?,truncated=?,updated_at=? WHERE id=?')
         .run(result.cursor, result.fingerprint ?? null, bytes, truncated ? 1 : 0, this.clock(), job.id);
     });
@@ -316,11 +418,20 @@ export class CodeJobs {
   async finish(job, state, forcedReason) {
     // Caller must first establish that the container is absent or has stopped.
     if (state.running) throw new CodeJobError('JOB_STILL_RUNNING', 'A running job cannot be finalized.');
+    let pendingOutput = false;
     for (let count = 0; count < 8; count++) {
       const current = this.row(job.owner, job.id);
-      if (current.output_bytes >= CODE_JOB_LIMITS.logBytes) break;
       const result = await this.collect(current, true);
-      if (!result?.hasMore) break;
+      pendingOutput = Boolean(result?.hasMore);
+      if (!pendingOutput) break;
+    }
+    if (pendingOutput) {
+      // Bound shutdown work while preserving the newest available diagnostics, even after huge output.
+      const result = await this.collect(this.row(job.owner, job.id), true, true);
+      if (result?.hasMore) {
+        this.db.prepare('UPDATE code_jobs SET truncated=1 WHERE id=?').run(job.id);
+        this.db.prepare('UPDATE code_output_state SET runner_loss=1 WHERE job_id=?').run(job.id);
+      }
     }
     let revision = null, artifactErrors = [], executionError = job.execution_error;
     try {

@@ -391,3 +391,182 @@ test('real log-file reader identifies recycling and retains an incomplete termin
   assert.equal(rotated.truncated, true); assert.equal(rotated.records[0].text, 'terminal tail');
   assert.equal(rotated.hasMore, false);
 });
+
+test('a durable rolling tail retains the final summary after the head cap without rewriting head records', async t => {
+  const f = fixture(t);
+  const job = f.jobs.start(request()); await f.jobs.tick();
+  const name = containerName(job.id);
+  f.runner.containers.get(name).records.push({ timestamp: '2026-01-01T00:00:00.100Z', stream: 'stdout', text: 'x'.repeat(CODE_JOB_LIMITS.logBytes + 10000) });
+  await f.jobs.tick();
+  const headBefore = f.store.db.prepare('SELECT sequence,timestamp,stream,CAST(text AS BLOB) AS text_bytes,partial FROM code_records WHERE job_id=? ORDER BY sequence').all(job.id);
+  f.runner.containers.get(name).records.push({ timestamp: '2026-01-01T00:00:00.900Z', stream: 'stdout', text: 'FINAL: 30 passed, 0 failed\n' });
+  f.runner.complete(name); await f.jobs.tick();
+  f.reopenStore();
+  const reopened = new CodeJobs(f.options);
+  const status = reopened.get({ owner: 'jensen', jobId: job.id });
+  assert.equal(status.status, 'completed');
+  assert.equal(status.outputBytes, CODE_JOB_LIMITS.logBytes);
+  assert.equal(status.outputRetention.headLimitReached, true);
+  assert.equal(status.outputRetention.runnerLogLoss, false);
+  assert.equal(status.outputRetention.completeOriginalOutput, false);
+  assert.ok(status.recentOutput.records.some(row => row.text.includes('FINAL: 30 passed, 0 failed')));
+  assert.deepEqual(f.store.db.prepare('SELECT sequence,timestamp,stream,CAST(text AS BLOB) AS text_bytes,partial FROM code_records WHERE job_id=? AND sequence<=? ORDER BY sequence').all(job.id, headBefore.at(-1).sequence), headBefore);
+  const tail = reopened.logs({ owner: 'jensen', jobId: job.id, view: 'tail', query: '30 passed', stream: 'stdout' });
+  assert.equal(tail.records.length, 1);
+  assert.equal(tail.hasMore, false); assert.equal(tail.nextCursor, null);
+  assert.equal(reopened.logs({ owner: 'jensen', jobId: job.id, query: '30 passed' }).records.length, 0);
+  assert.throws(() => reopened.logs({ owner: 'other', jobId: job.id, view: 'tail' }), { code: 'NOT_FOUND' });
+  assert.ok(Buffer.byteLength(JSON.stringify(status)) < 12000);
+});
+
+test('tail pagination starts newest, filters literally, and stays bounded with tiny fragments', async t => {
+  const f = fixture(t);
+  const job = f.jobs.start(request()); await f.jobs.tick();
+  const name = containerName(job.id);
+  f.runner.containers.get(name).records = Array.from({ length: CODE_JOB_LIMITS.logRecords + 20 }, (_, i) => ({ timestamp: '2026-01-01T00:00:00.100Z', stream: i % 2 ? 'stderr' : 'stdout', text: `${i}: [.*]\n` }));
+  await f.jobs.tick();
+  const status = f.jobs.get({ owner: 'jensen', jobId: job.id });
+  assert.equal(status.outputRetention.tailRecords, CODE_JOB_LIMITS.tailRecords);
+  assert.equal(status.outputRetention.tailEvictedRecords, CODE_JOB_LIMITS.logRecords + 20 - CODE_JOB_LIMITS.tailRecords);
+  assert.ok(status.outputRetention.tailBytes <= CODE_JOB_LIMITS.tailBytes);
+  let cursor = 0;
+  const seen = [];
+  do {
+    const page = f.jobs.logs({ owner: 'jensen', jobId: job.id, view: 'tail', cursor, limit: 3, query: '[.*]', stream: 'stderr' });
+    assert.deepEqual(page.records.map(row => row.sequence), page.records.map(row => row.sequence).toSorted((a, b) => a - b));
+    if (!cursor) assert.equal(page.records.at(-1).sequence, CODE_JOB_LIMITS.logRecords + 20);
+    seen.push(...page.records.map(row => row.sequence));
+    cursor = page.nextCursor;
+    assert.equal(page.hasMore, cursor !== null);
+  } while (cursor !== null);
+  assert.equal(seen.length, CODE_JOB_LIMITS.tailRecords / 2);
+  assert.equal(new Set(seen).size, seen.length);
+  assert.equal(f.jobs.logs({ owner: 'jensen', jobId: job.id, view: 'tail', query: '[.+]' }).records.length, 0);
+});
+
+test('legacy completed jobs keep their records and disclose unavailable historical tail output', async t => {
+  const f = fixture(t);
+  const job = f.jobs.start(request()); await f.jobs.tick();
+  const name = containerName(job.id);
+  f.runner.containers.get(name).records.push({ timestamp: '2026-01-01T00:00:00.100Z', stream: 'stdout', text: 'historical head\n' });
+  f.runner.complete(name); await f.jobs.tick();
+  f.store.db.exec('DROP TABLE code_tail_records; DROP TABLE code_output_state;');
+  f.store.db.prepare('UPDATE code_jobs SET truncated=1 WHERE id=?').run(job.id);
+  const original = f.store.db.prepare('SELECT * FROM code_records WHERE job_id=? ORDER BY sequence').all(job.id);
+  f.reopenStore();
+  const reopened = new CodeJobs(f.options);
+  const status = reopened.get({ owner: 'jensen', jobId: job.id });
+  assert.equal(status.outputRetention.mode, 'legacy-head-only');
+  assert.equal(status.outputRetention.runnerLogLoss, null);
+  assert.equal(status.outputRetention.completeOriginalOutput, false);
+  assert.equal(status.recentOutput.view, 'head');
+  assert.ok(status.recentOutput.records.at(-1).text.includes('COMPLETED exit=0'));
+  assert.deepEqual(f.store.db.prepare('SELECT * FROM code_records WHERE job_id=? ORDER BY sequence').all(job.id), original);
+  assert.equal(reopened.logs({ owner: 'jensen', jobId: job.id, view: 'tail' }).records.length, 0);
+  assert.equal(f.runner.started, 1);
+});
+
+test('status commands are compact by default and recent output respects JSON escaping budgets', async t => {
+  const f = fixture(t);
+  const argv = ['node', '-e', 'x'.repeat(8192)];
+  const job = f.jobs.start(request({ argv })); await f.jobs.tick();
+  f.runner.containers.get(containerName(job.id)).records.push({ timestamp: '2026-01-01T00:00:00.100Z', stream: 'stdout', text: '\u0000'.repeat(60000) + '🙂 done\n' });
+  await f.jobs.tick();
+  const status = f.jobs.get({ owner: 'jensen', jobId: job.id });
+  assert.equal(status.argvTruncated, true); assert.equal(status.argv[2].length, 256);
+  assert.deepEqual(f.jobs.get({ owner: 'jensen', jobId: job.id, includeCommand: true }).argv, argv);
+  assert.ok(Buffer.byteLength(JSON.stringify(status.recentOutput)) < CODE_JOB_LIMITS.statusOutputBytes + 300);
+  assert.ok(status.recentOutput.records.at(-1).text.endsWith('🙂 done\n'));
+  assert.ok(!status.recentOutput.records.some(row => row.text.includes('�')));
+});
+
+test('active-job rejection identifies only the requesting owner’s blocker', t => {
+  const f = fixture(t), job = f.jobs.start(request());
+  assert.throws(() => f.jobs.start(request({ idempotencyKey: 'another-work-1' })), error => error.code === 'ACTIVE_JOB_LIMIT' && error.message.includes(job.id) && !error.message.includes('cancel'));
+  assert.throws(() => f.jobs.start(request({ owner: 'other', idempotencyKey: 'another-work-2' })), error => error.code === 'ACTIVE_JOB_LIMIT' && !error.message.includes(job.id) && !error.message.includes(job.workspaceId));
+});
+
+test('terminal drain reaches the newest available summary past its bounded sequential-read budget', async t => {
+  const f = fixture(t);
+  const reader = new PodmanRunner({ image: `sha256:${'b'.repeat(64)}`, workspaceRoot: join(f.directory, 'workspaces'), logDirectory: join(f.directory, 'logs') });
+  mkdirSync(reader.logDirectory);
+  f.runner.logs = input => reader.logs(input);
+  const job = f.jobs.start(request()); await f.jobs.tick();
+  const name = containerName(job.id);
+  const raw = '2026-01-01T00:00:00.100Z stdout F ' + '🙂'.repeat(1300000) + '\n2026-01-01T00:00:00.900Z stdout F FINAL: 76 passed, 0 failed\n';
+  writeFileSync(reader.logPath(name), raw);
+  f.runner.complete(name); await f.jobs.tick();
+  const status = f.jobs.get({ owner: 'jensen', jobId: job.id });
+  assert.equal(status.status, 'completed');
+  assert.ok(status.recentOutput.records.some(row => row.text.includes('FINAL: 76 passed, 0 failed')));
+  assert.equal(status.outputRetention.runnerLogLoss, true);
+  assert.ok(status.outputRetention.skippedContainerLogBytes > 2000000);
+  assert.equal(status.outputRetention.completeOriginalOutput, false);
+  assert.ok(status.outputRetention.observedOutputBytes < Buffer.byteLength(raw));
+  assert.ok(status.outputRetention.tailBytes <= CODE_JOB_LIMITS.tailBytes);
+  assert.equal(f.jobs.row('jensen', job.id).runner_cursor, Buffer.byteLength(raw));
+  assert.ok(!f.jobs.logs({ owner: 'jensen', jobId: job.id }).records.some(row => row.text.includes('�')));
+});
+
+test('real reader preserves UTF-8 across forced long-line cuts and never stalls on malformed bytes', async t => {
+  const f = fixture(t);
+  const reader = new PodmanRunner({ image: `sha256:${'b'.repeat(64)}`, workspaceRoot: join(f.directory, 'workspaces'), logDirectory: join(f.directory, 'logs') });
+  mkdirSync(reader.logDirectory);
+  const name = containerName(f.jobs.start(request()).id);
+  const text = '🙂'.repeat(100) + '\n';
+  writeFileSync(reader.logPath(name), '2026-01-01T00:00:00.100Z stderr F ' + text);
+  let cursor = 0, fingerprint, continuation, output = '';
+  for (let i = 0; i < 20; i++) {
+    const page = await reader.logs({ name, cursor, fingerprint, continuation, limitBytes: 64, final: true });
+    assert.ok(page.cursor > cursor);
+    assert.ok(page.records.every(row => row.stream === 'stderr'));
+    output += page.records.map(row => row.text).join('');
+    cursor = page.cursor; fingerprint = page.fingerprint; continuation = page.continuation;
+    if (!page.hasMore) break;
+  }
+  assert.equal(output, text);
+  writeFileSync(reader.logPath(name), Buffer.alloc(256, 0x80));
+  const malformed = await reader.logs({ name, cursor: 0, limitBytes: 64 });
+  assert.equal(malformed.cursor, 64);
+});
+
+test('a record terminator exactly after a forced cut closes persisted stream continuation', async t => {
+  const f = fixture(t);
+  const reader = new PodmanRunner({ image: `sha256:${'b'.repeat(64)}`, workspaceRoot: join(f.directory, 'workspaces'), logDirectory: join(f.directory, 'logs') });
+  mkdirSync(reader.logDirectory);
+  const name = containerName(f.jobs.start(request()).id);
+  const prefix = '2026-01-01T00:00:00.100Z stderr F ';
+  const payload = 'x'.repeat(64 - Buffer.byteLength(prefix));
+  writeFileSync(reader.logPath(name), prefix + payload + '\n2026-01-01T00:00:00.200Z stdout F last\n');
+  const first = await reader.logs({ name, limitBytes: 64 });
+  assert.equal(first.cursor, 64); assert.equal(first.continuation.stream, 'stderr');
+  const second = await reader.logs({ name, cursor: first.cursor, fingerprint: first.fingerprint, continuation: JSON.parse(JSON.stringify(first.continuation)), limitBytes: 64, final: true });
+  assert.deepEqual(second.records.map(row => [row.stream, row.text]), [['stderr', '\n'], ['stdout', 'last\n']]);
+  assert.equal(second.continuation, null);
+});
+
+test('manager recreation preserves an unfinished stderr record continuation without duplicate execution', async t => {
+  const f = fixture(t);
+  const reader = new PodmanRunner({ image: `sha256:${'b'.repeat(64)}`, workspaceRoot: join(f.directory, 'workspaces'), logDirectory: join(f.directory, 'logs') });
+  mkdirSync(reader.logDirectory);
+  f.runner.logs = input => reader.logs(input);
+  const job = f.jobs.start(request()); await f.jobs.tick();
+  const name = containerName(job.id);
+  const payload = '🙂'.repeat(80000) + '\n';
+  writeFileSync(reader.logPath(name), '2026-01-01T00:00:00.100Z stderr F ' + payload);
+  await f.jobs.tick();
+  assert.equal(JSON.parse(f.store.db.prepare('SELECT continuation_json FROM code_output_state WHERE job_id=?').get(job.id).continuation_json).stream, 'stderr');
+  f.reopenStore();
+  const reopened = new CodeJobs(f.options);
+  f.runner.complete(name); await reopened.recover();
+  let cursor = 0, recovered = '';
+  for (;;) {
+    const result = reopened.logs({ owner: 'jensen', jobId: job.id, cursor, stream: 'stderr', limit: 100 });
+    recovered += result.records.map(row => row.text).join('');
+    cursor = result.nextCursor;
+    if (!result.hasMore) break;
+  }
+  assert.equal(recovered, payload);
+  assert.equal(reopened.get({ owner: 'jensen', jobId: job.id }).outputRetention.runnerLogLoss, false);
+  assert.equal(f.runner.started, 1);
+});

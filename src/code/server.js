@@ -7,7 +7,8 @@ import { CodeStore } from './store.js';
 import { WorkspaceManager, WorkspaceError, LIMITS as WORKSPACE_LIMITS } from './workspaces.js';
 import { CodeJobs, CodeJobError, CODE_JOB_LIMITS } from './jobs.js';
 import { PodmanRunner, RunnerError } from './runner.js';
-import { parseCodeCall } from './schema.js';
+import { codeTools, parseCodeCall } from './schema.js';
+import { correlationId, diagnosticRecord, errorRecovery, requestContext } from '../diagnostics.js';
 
 export async function createCodingService(config) {
   for (const path of [config.dataDirectory, config.workspaceDirectory]) mkdirSync(path, { recursive: true, mode: 0o700 });
@@ -23,21 +24,33 @@ export async function createCodingService(config) {
   const app = express();
   app.disable('x-powered-by');
   app.use((_req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
+  app.use('/call', (req, res, next) => {
+    const requestId = correlationId(req.get('x-praxis-request-id'));
+    res.set('X-Praxis-Request-Id', requestId);
+    requestContext.run({ requestId }, next);
+  });
   app.get('/healthz', (_req, res) => res.json({ ok: true, release: config.release, bootId }));
   app.post('/call', async (req, res, next) => {
     const match = /^Bearer ([^\s]+)$/.exec(req.get('authorization') || '');
     try { req.principal = await verify(match?.[1] || ''); return next(); }
-    catch { return res.status(401).json({ ok: false, error: { code: 'AUTHORIZATION_REQUIRED', message: 'An owner access token with praxis:code permission is required.' } }); }
+    catch { return res.status(401).json({ ok: false, requestId: requestContext.getStore().requestId, error: { code: 'AUTHORIZATION_REQUIRED', message: 'An owner access token with praxis:code permission is required.', ...errorRecovery('AUTHORIZATION_REQUIRED') } }); }
   }, express.json({ limit: '512kb' }), async (req, res) => {
     try {
       if (!req.body || Object.keys(req.body).some(key => !['action', 'args'].includes(key))) throw Object.assign(new Error('Expected action and args'), { code: 'INVALID_ARGUMENT' });
       const { tool, args } = parseCodeCall(req.body.action, req.body.args);
+      requestContext.getStore().action = req.body.action;
       const owner = req.principal.extra.subject;
       const data = req.body.action === 'capabilities' ? {
-        name: 'Praxis', apiVersion: '0.2.0', schemaVersion: 2, release: config.release, bootId,
+        name: 'Praxis', apiVersion: '0.3.0', schemaVersion: 3, release: config.release, bootId,
         scope: 'Registered immutable source snapshots and isolated coding workspaces. ChatGPT or Claude supplies reasoning.',
         workflow: ['projects_list', 'project_inspect', 'workspace_create', 'file_read/code_search', 'workspace_apply', 'job_start', 'job_status/job_logs', 'workspace_diff'],
         recovery: 'Use workspaces_list, jobs_list, and operations_list in a fresh conversation. Keep the same idempotency key and inputs after uncertain responses. A terminal or ambiguous command is never automatically rerun.',
+        usage: {
+          pagination: 'Omit optional page sizes initially. Copy nextCursor exactly; cursors are opaque and may not equal the number of returned rows. Diff maxBytes is a byte budget, while list/log limits count records.',
+          edits: 'Use exact-text patches for large files. Multiple patches to a file run in order with the original file hash; a rejected batch does not partially apply.',
+          jobRecovery: 'Read job_status first for actual exit status, recent output, and retention facts. Use job_logs view=tail for recent output or query/stream for targeted retained records; complete log scans are optional.',
+          diagnostics: 'Errors include a requestId and retry strategy. Preserve the requestId for diagnosis. A retry strategy never authorizes recreating ambiguous work.'
+        },
         execution: { network: 'none', runtime: config.runtimeDescription || 'Fixed container image', imageDigest: config.runnerConfig?.image,
           maxTimeoutSeconds: 900, maxActiveJobs: 1, cpuCores: 1, aggregateMemoryMiB: 1536, maxProcesses: 256,
           storage: 'Workspaces and container storage share an 8 GiB dedicated filesystem; writable root is disabled.' },
@@ -50,22 +63,28 @@ export async function createCodingService(config) {
           { operation: 'GitHub publication, deployment, maintenance, self-update, and browser operation', reason: 'Later milestones; these tools are not exposed.' }
         ]
       } : await (tool.target === 'jobs' ? jobs : workspaces)[tool.method]({ ...args, owner });
-      res.json({ ok: true, data });
+      res.json({ ok: true, requestId: requestContext.getStore().requestId, data });
     } catch (error) {
       const safe = error instanceof WorkspaceError || error instanceof CodeJobError || error instanceof RunnerError ||
         ['INVALID_ARGUMENT', 'UNKNOWN_ACTION'].includes(error.code);
       const code = safe ? error.code : error.code === 'ENOENT' ? 'NOT_FOUND' : error.code === 'ENOSPC' ? 'STORAGE_FULL' : 'INTERNAL_ERROR';
-      res.status(code === 'INTERNAL_ERROR' ? 500 : 400).json({ ok: false, error: { code,
-        message: safe ? error.message : code === 'NOT_FOUND' ? 'The requested source path no longer exists.' : code === 'STORAGE_FULL' ? 'Coding storage is full. Recover receipts and remove an eligible disposable workspace.' : 'The coding service could not finish this operation. Inspect persisted receipts before retrying.' } });
+      const context = requestContext.getStore();
+      const knownTool = typeof req.body?.action === 'string' && Object.hasOwn(codeTools, req.body.action) ? codeTools[req.body.action] : undefined;
+      if (!safe) console.error(JSON.stringify(diagnosticRecord('coding_request_failed', error, context)));
+      res.status(code === 'INTERNAL_ERROR' ? 500 : 400).json({ ok: false, requestId: context.requestId, error: { code,
+        message: safe ? error.message : code === 'NOT_FOUND' ? 'The requested source path no longer exists.' : code === 'STORAGE_FULL' ? 'Coding storage is full. Recover receipts and remove an eligible disposable workspace.' : 'The coding service could not finish this operation.',
+        ...errorRecovery(code, knownTool && !knownTool.write),
+        ...(Array.isArray(error.issues) ? { issues: error.issues.slice(0, 5) } : {}) } });
     }
   });
   app.use((_req, res) => res.status(404).json({ error: 'not_found' }));
-  app.use((error, _req, res, _next) => res.status(error.type === 'entity.too.large' ? 413 : 400).json({ ok: false, error: { code: 'INVALID_ARGUMENT', message: 'Malformed or oversized coding request' } }));
+  app.use((error, _req, res, _next) => res.status(error.type === 'entity.too.large' ? 413 : 400).json({ ok: false, requestId: requestContext.getStore()?.requestId,
+    error: { code: 'INVALID_ARGUMENT', message: 'Malformed or oversized coding request', ...errorRecovery('INVALID_ARGUMENT') } }));
   let stopped = false;
   let pending;
   const timer = setInterval(() => {
     if (stopped || pending) return;
-    pending = Promise.resolve().then(() => jobs.tick()).catch(() => console.error(JSON.stringify({ event: 'coding_tick_failed' }))).finally(() => { pending = undefined; });
+    pending = Promise.resolve().then(() => jobs.tick()).catch(error => console.error(JSON.stringify(diagnosticRecord('coding_tick_failed', error)))).finally(() => { pending = undefined; });
   }, config.pollIntervalMs || 500);
   timer.unref();
   return { app, jobs, workspaces, store, async close() { stopped = true; clearInterval(timer); await pending; store.close(); } };

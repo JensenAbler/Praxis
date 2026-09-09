@@ -74,7 +74,7 @@ async function fixture(t) {
     for (const server of [http, backendHttp]) await new Promise(resolve => server.close(resolve));
     await gateway.close(); await backend.close(); rmSync(directory, { recursive: true, force: true });
   });
-  return { connect, token, backendUrl, baseUrl, runner, async restartGateway() { await gateway.close(); gateway = await createApp(gatewayConfig); } };
+  return { connect, token, backendUrl, baseUrl, runner, backend, gateway, async restartGateway() { await gateway.close(); gateway = await createApp(gatewayConfig); } };
 }
 
 async function call(client, name, args = {}) {
@@ -181,4 +181,157 @@ test('authenticated coding tools edit, run, survive gateway restart, and recover
   assert.equal(Buffer.from(report.content, report.encoding).toString(), 'fixture check passed\n');
   const receipt = await call(fresh, 'operation_read', { operationId: edit.operationId });
   assert.equal(receipt.status, 'completed');
+});
+
+test('discovered coding contracts explain page units, large-file patches, compact status, and focused logs', async t => {
+  const f = await fixture(t), client = await f.connect();
+  const catalog = (await client.listTools()).tools;
+  const tool = name => catalog.find(entry => entry.name === name);
+  const diff = tool('workspace_diff').inputSchema.properties;
+  assert.equal(diff.maxBytes.minimum, 256);
+  assert.equal(diff.maxBytes.maximum, 32768);
+  assert.match(diff.maxBytes.description, /UTF-8.*bytes.*16384/);
+  assert.match(diff.limit.description, /Legacy alias.*bytes/);
+  assert.match(diff.cursor.description, /opaque.*exactly/);
+  const read = tool('file_read');
+  assert.equal(read.inputSchema.properties.lineCount.default, 100);
+  assert.equal(read.inputSchema.properties.lineCount.maximum, 200);
+  assert.match(read.description, /nextPosition\.line.*nextPosition\.column/);
+  assert.match(tool('workspace_apply').description, /ORIGINAL file SHA-256/);
+  const status = tool('job_status').inputSchema.properties;
+  assert.equal(status.includeCommand.default, false);
+  const logs = tool('job_logs').inputSchema.properties;
+  assert.equal(logs.limit.maximum, 100);
+  assert.equal(logs.limit.default, 50);
+  assert.match(logs.limit.description, /log records/);
+  assert.deepEqual(logs.view.enum, ['head', 'tail']);
+  assert.match(logs.cursor.description, /backward.*independent/);
+  assert.equal(logs.query.maxLength, 200);
+  assert.match(logs.query.description, /retained.*not omitted/);
+  assert.match((await call(client, 'capabilities')).usage.jobRecovery, /job_status.*tail/);
+});
+
+test('invalid MCP arguments receive structured bounded errors without mutation or echoed private inputs', async t => {
+  const f = await fixture(t), client = await f.connect('praxis:code praxis:probe');
+  const sensitive = 'PRIVATE_SOURCE_OR_TOKEN_NOT_FOR_DIAGNOSTICS';
+  const invalid = await client.callTool({ name: 'workspace_create', arguments: {
+    projectId: 'fixture', baseRevision: 'fixture-base', idempotencyKey: 'invalid-create-fixture', label: 'x'.repeat(81), [sensitive]: sensitive,
+  } });
+  assert.equal(invalid.isError, true);
+  assert.equal(invalid.structuredContent.error.code, 'INVALID_ARGUMENT');
+  assert.match(invalid.structuredContent.requestId, /^[a-f0-9-]{36}$/);
+  assert.deepEqual(JSON.parse(invalid.content[0].text), invalid.structuredContent);
+  assert.equal(invalid.structuredContent.error.retry.strategy, 'correct_arguments');
+  assert.equal(invalid.structuredContent.error.issues[0].field, 'label');
+  assert.equal(invalid.structuredContent.error.issues[0].maximum, 80);
+  assert.doesNotMatch(JSON.stringify(invalid), new RegExp(sensitive));
+  assert.deepEqual((await call(client, 'workspaces_list')).workspaces, []);
+  assert.deepEqual((await call(client, 'operations_list')).operations, []);
+  const observations = await call(client, 'probe_observations', { limit: 100 });
+  const receipt = observations.observations.find(row => row.requestId === invalid.structuredContent.requestId);
+  assert.equal(receipt.errorCode, 'INVALID_ARGUMENT');
+  assert.match(receipt.httpRequestId, /^[a-f0-9-]{36}$/);
+
+  const badRead = await client.callTool({ name: 'file_read', arguments: { projectId: 'fixture', path: 'answer.js', lineCount: 230 } });
+  assert.equal(badRead.structuredContent.error.issues[0].maximum, 200);
+  assert.equal((await call(client, 'file_read', { projectId: 'fixture', path: 'answer.js' })).lines[0].text, 'export const answer = 41;');
+  // Permission checks run before validation, including in the gateway handler.
+  const probeOnly = await f.connect('praxis:probe');
+  const denied = await probeOnly.callTool({ name: 'workspace_create', arguments: { [sensitive]: sensitive } });
+  assert.equal(denied.structuredContent.error.code, 'AUTHORIZATION_REQUIRED');
+  assert.equal(denied.structuredContent.error.issues, undefined);
+  assert.doesNotMatch(JSON.stringify(denied), new RegExp(sensitive));
+
+  // Bypassing MCP does not bypass independent backend schema validation.
+  const direct = await fetch(`${f.backendUrl}/call`, { method: 'POST', headers: { authorization: `Bearer ${await f.token()}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ action: 'workspace_create', args: { projectId: 'fixture', baseRevision: 'fixture-base', idempotencyKey: 'invalid-direct-fixture', [sensitive]: sensitive } }) });
+  const body = await direct.json();
+  assert.equal(direct.status, 400);
+  assert.equal(body.error.code, 'INVALID_ARGUMENT');
+  assert.equal(body.requestId, direct.headers.get('x-praxis-request-id'));
+  assert.doesNotMatch(JSON.stringify(body), new RegExp(sensitive));
+  assert.deepEqual((await call(client, 'workspaces_list')).workspaces, []);
+});
+
+test('authenticated backend failures correlate with safe diagnostics and preserve read recovery guidance', async t => {
+  const f = await fixture(t), client = await f.connect();
+  const privateDetails = 'PRIVATE_TOKEN source-text C:\\private\\credentials.json';
+  const emitted = [];
+  t.mock.method(console, 'error', text => emitted.push(JSON.parse(text)));
+  const original = f.backend.workspaces.projectsList;
+  f.backend.workspaces.projectsList = () => { throw new TypeError(privateDetails); };
+  const failed = await client.callTool({ name: 'projects_list', arguments: {} });
+  assert.equal(failed.isError, true);
+  assert.equal(failed.structuredContent.error.code, 'INTERNAL_ERROR');
+  assert.equal(failed.structuredContent.error.retry.strategy, 'retry_read');
+  const backendRecord = emitted.find(row => row.event === 'coding_request_failed');
+  assert.equal(backendRecord.requestId, failed.structuredContent.requestId);
+  assert.equal(backendRecord.action, 'projects_list');
+  assert.equal(backendRecord.errorType, 'TypeError');
+  assert.match(backendRecord.stackFingerprint, /^[a-f0-9]{24}$/);
+  assert.doesNotMatch(JSON.stringify([failed, emitted]), /PRIVATE_TOKEN|source-text|credentials\.json/);
+  assert.equal(backendRecord.stack, undefined);
+  assert.equal(backendRecord.message, undefined);
+  f.backend.workspaces.projectsList = original;
+  assert.equal((await call(client, 'projects_list')).projects[0].projectId, 'fixture');
+});
+
+test('diagnostic audit failures do not hide a completed mutation or corrupt its durable receipt', async t => {
+  const f = await fixture(t), client = await f.connect();
+  const emitted = [];
+  t.mock.method(console, 'error', text => emitted.push(JSON.parse(text)));
+  t.mock.method(f.gateway.audit, 'record', () => { throw new Error('PRIVATE_AUDIT_DATABASE_PATH'); });
+  const request = { projectId: 'fixture', baseRevision: 'fixture-base', idempotencyKey: 'audit-failure-create', label: 'Audit failure fixture' };
+  const created = await call(client, 'workspace_create', request);
+  assert.equal(created.status, 'completed');
+  assert.equal((await call(client, 'workspace_create', request)).operationId, created.operationId);
+  assert.equal((await call(client, 'operation_read', { operationId: created.operationId })).status, 'completed');
+  assert.equal((await call(client, 'workspaces_list')).workspaces.length, 1);
+  assert.ok(emitted.some(row => row.event === 'mcp_audit_failed' && row.requestId === created.requestId));
+  assert.doesNotMatch(JSON.stringify(emitted), /PRIVATE_AUDIT_DATABASE_PATH/);
+});
+
+test('diff byte budgets retain legacy calls and return actionable structured range or alias errors', async t => {
+  const f = await fixture(t), client = await f.connect();
+  const created = await call(client, 'workspace_create', { projectId: 'fixture', baseRevision: 'fixture-base', idempotencyKey: 'diff-budget-fixture' });
+  const legacy = await call(client, 'workspace_diff', { workspaceId: created.workspaceId, limit: 256 });
+  const preferred = await call(client, 'workspace_diff', { workspaceId: created.workspaceId, maxBytes: 256 });
+  assert.equal(legacy.diff, preferred.diff);
+  assert.equal(legacy.revision, preferred.revision);
+  const rejected = await client.callTool({ name: 'workspace_diff', arguments: { workspaceId: created.workspaceId, limit: 100 } });
+  assert.equal(rejected.structuredContent.error.code, 'INVALID_ARGUMENT');
+  assert.equal(rejected.structuredContent.error.issues[0].minimum, 256);
+  const conflict = await client.callTool({ name: 'workspace_diff', arguments: { workspaceId: created.workspaceId, maxBytes: 4096, limit: 8192 } });
+  assert.equal(conflict.structuredContent.error.code, 'INVALID_ARGUMENT');
+  assert.match(conflict.structuredContent.error.issues[0].message, /maxBytes and limit must match/);
+  assert.equal((await call(client, 'workspace_diff', { workspaceId: created.workspaceId })).revision, legacy.revision);
+});
+
+test('malformed authenticated HTTP requests expose a correlation ID without echoing request text', async t => {
+  const f = await fixture(t);
+  const emitted = [];
+  t.mock.method(console, 'error', text => emitted.push(JSON.parse(text)));
+  const response = await fetch(`${f.baseUrl}/mcp`, { method: 'POST', headers: { authorization: `Bearer ${await f.token()}`, 'content-type': 'application/json' }, body: '{"PRIVATE_REQUEST_CONTENT":' });
+  const body = await response.json();
+  assert.equal(response.status, 400);
+  assert.equal(body.error, 'invalid_json');
+  assert.match(body.requestId, /^[a-f0-9-]{36}$/);
+  assert.equal(body.requestId, response.headers.get('x-praxis-request-id'));
+  assert.ok(emitted.some(row => row.event === 'mcp_http_failed' && row.requestId === body.requestId));
+  assert.doesNotMatch(JSON.stringify([body, emitted]), /PRIVATE_REQUEST_CONTENT/);
+});
+
+test('explicit stale job and unmatched patch rejections direct callers to refresh state', async t => {
+  const f = await fixture(t), client = await f.connect();
+  const created = await call(client, 'workspace_create', { projectId: 'fixture', baseRevision: 'fixture-base', idempotencyKey: 'recovery-guidance-fixture' });
+  const file = await call(client, 'file_read', { workspaceId: created.workspaceId, path: 'answer.js' });
+  const stale = await client.callTool({ name: 'job_start', arguments: { workspaceId: created.workspaceId, expectedRevision: 'outdated-revision', idempotencyKey: 'rejected-stale-job', argv: ['fixture-check'] } });
+  assert.equal(stale.structuredContent.error.code, 'STALE_REVISION');
+  assert.equal(stale.structuredContent.error.retry.strategy, 'refresh_state');
+  assert.deepEqual((await call(client, 'jobs_list', { workspaceId: created.workspaceId })).jobs, []);
+  const patch = await client.callTool({ name: 'workspace_apply', arguments: { workspaceId: created.workspaceId, expectedRevision: file.revision, idempotencyKey: 'rejected-unmatched-patch',
+    changes: [{ action: 'patch', path: 'answer.js', expectedSha256: file.sha256, oldText: 'This text is absent', newText: 'updated text' }] } });
+  assert.equal(patch.structuredContent.error.code, 'PATCH_CONFLICT');
+  assert.equal(patch.structuredContent.error.retry.strategy, 'refresh_state');
+  assert.equal((await call(client, 'file_read', { workspaceId: created.workspaceId, path: 'answer.js' })).sha256, file.sha256);
 });

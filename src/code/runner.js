@@ -153,7 +153,7 @@ export class PodmanRunner {
     }
   }
 
-  async logs({ name, cursor = 0, fingerprint = null, limitBytes = 262144, final = false }) {
+  async logs({ name, cursor = 0, fingerprint = null, continuation = null, limitBytes = 262144, final = false, preferLatest = false }) {
     const path = this.logPath(name);
     let handle;
     try { handle = await open(path, 'r'); } catch (error) {
@@ -172,23 +172,51 @@ export class PodmanRunner {
       const changedPrefix = previous && (head.length < Number(previous[1]) || createHash('sha256').update(head.subarray(0, Number(previous[1]))).digest('hex') !== previous[2]);
       const recycled = stat.size < cursor || Boolean(changedPrefix);
       const headDigest = recycled ? candidateFingerprint : fingerprint ?? candidateFingerprint;
-      const begin = recycled ? 0 : cursor;
+      const resume = recycled ? 0 : cursor;
+      const begin = preferLatest ? Math.max(resume, stat.size - limitBytes) : resume;
+      const skippedBytes = begin - resume;
       const buffer = Buffer.alloc(Math.min(limitBytes, Math.max(0, stat.size - begin)));
       await handle.read(buffer, 0, buffer.length, begin);
+      // A latest-page seek may begin in a CRI record. Prefer the next complete record; if the
+      // whole page is one long line, expose its suffix as an explicitly partial fragment.
+      let start = 0;
+      if (skippedBytes) {
+        const boundary = buffer.indexOf(10);
+        if (boundary >= 0 && boundary + 1 < buffer.length) start = boundary + 1;
+        else while (start < buffer.length && (buffer[start] & 0xc0) === 0x80) start++;
+      }
       let complete = buffer.lastIndexOf(10) + 1;
       const incompleteFinal = final && begin + buffer.length >= stat.size && complete < buffer.length;
       if (incompleteFinal) complete = buffer.length;
       // A malicious very long line must not stall the collector indefinitely.
-      if (!complete && buffer.length === limitBytes) complete = buffer.length;
-      const data = buffer.subarray(0, complete).toString('utf8');
-      const records = data.split('\n').filter(Boolean).map(line => {
-        const match = /^(\S+) (stdout|stderr) ([FP]) (.*)$/.exec(line);
-        return match ? { timestamp: match[1], stream: match[2], partial: match[3] === 'P', text: match[4] + (match[3] === 'F' ? '\n' : '') }
-          : { timestamp: new Date().toISOString(), stream: 'stdout', partial: true, text: line };
+      if (!complete && buffer.length === limitBytes) {
+        complete = buffer.length;
+        // Leave any split UTF-8 code point for the next poll rather than replacing its bytes.
+        let lead = complete - 1;
+        while (lead > Math.max(start, complete - 4) && (buffer[lead] & 0xc0) === 0x80) lead--;
+        const first = buffer[lead];
+        const length = first >= 0xc2 && first <= 0xdf ? 2 : first >= 0xe0 && first <= 0xef ? 3 : first >= 0xf0 && first <= 0xf4 ? 4 : 1;
+        if (lead + length > complete) complete = lead;
+      }
+      const data = buffer.subarray(start, complete).toString('utf8');
+      const lines = data.split('\n');
+      let pending = recycled || skippedBytes ? null : continuation;
+      const records = lines.flatMap((line, index) => {
+        const terminated = index < lines.length - 1;
+        if (!line && (!pending || !terminated)) return [];
+        const match = pending ? null : /^(\S+) (stdout|stderr) ([FP]) (.*)$/.exec(line);
+        const metadata = pending ?? (match ? { timestamp: match[1], stream: match[2], flag: match[3] }
+          : { timestamp: new Date().toISOString(), stream: 'stdout', flag: 'F' });
+        const value = { timestamp: metadata.timestamp, stream: metadata.stream, partial: !match || metadata.flag === 'P' || !terminated,
+          text: (match ? match[4] : line) + (metadata.flag === 'F' && terminated ? '\n' : '') };
+        pending = terminated ? null : metadata;
+        return [value];
       });
       return {
         records, cursor: begin + complete, fingerprint: headDigest ?? fingerprint,
-        truncated: recycled || incompleteFinal || stat.size >= MAX_LOG_BYTES - 8192,
+        continuation: pending,
+        truncated: recycled || skippedBytes > 0 || stat.size >= MAX_LOG_BYTES - 8192,
+        skippedBytes: skippedBytes + start, recycled,
         hasMore: begin + complete < stat.size, retention: 'bounded-container-log',
       };
     } finally { await handle.close(); }

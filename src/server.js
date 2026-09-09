@@ -11,6 +11,7 @@ import { JobStore } from './jobs.js';
 import { AuditStore } from './audit.js';
 import { createProbeServer, VERSION } from './mcp.js';
 import { createCodingClient } from './code/client.js';
+import { diagnosticRecord, requestContext } from './diagnostics.js';
 
 export async function createApp(config) {
   const base = new URL(config.baseUrl);
@@ -31,7 +32,7 @@ export async function createApp(config) {
   app.set('trust proxy', 'loopback');
   app.use(hostHeaderValidation([base.hostname, ...(config.allowLoopback ? ['localhost', '127.0.0.1'] : [])]));
   app.use((_req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
-  app.get(`${prefix}/healthz`, (_req, res) => res.json({ ok: true, name: 'Praxis', version: coding ? '0.2.0' : VERSION, release, bootId }));
+  app.get(`${prefix}/healthz`, (_req, res) => res.json({ ok: true, name: 'Praxis', version: coding ? '0.3.0' : VERSION, release, bootId }));
   app.get(`${prefix}/`, (_req, res) => res.type('text').send(coding ? 'Praxis: authenticated source, isolated coding, and durable jobs. Connect using the /mcp endpoint.' : 'Praxis: authenticated diagnostic tools. Connect using the /mcp endpoint.'));
   app.get(`/.well-known/oauth-protected-resource${prefix}/mcp`, (_req, res) => res.json({
     resource: resourceUrl, authorization_servers: [issuer], scopes_supported: ['praxis:probe', ...(coding ? ['praxis:code'] : []), 'offline_access'], resource_name: 'Praxis',
@@ -46,20 +47,29 @@ export async function createApp(config) {
   });
   app.use(`${prefix}/oauth`, auth.router);
   const handler = createMcpHandler(ctx => createProbeServer({ jobs, audit, resourceUrl, bootId, release, authInfo: ctx.authInfo, era: ctx.era, coding }), {
-    legacy: 'stateless', onerror: () => console.error(JSON.stringify({ event: 'mcp_protocol_error' }))
+    legacy: 'stateless', onerror: error => console.error(JSON.stringify(diagnosticRecord('mcp_protocol_error', error)))
+  });
+  app.use(`${prefix}/mcp`, (_req, res, next) => {
+    const requestId = randomUUID();
+    res.set('X-Praxis-Request-Id', requestId);
+    requestContext.run({ requestId, httpRequestId: requestId }, next);
   });
   app.use(`${prefix}/mcp`, originValidation([base.hostname, 'chatgpt.com', 'chat.openai.com', 'claude.ai', ...(config.allowLoopback ? ['localhost', '127.0.0.1'] : [])]));
   app.use(`${prefix}/mcp`, requireBearerAuth({ verifier: { verifyAccessToken: auth.verifyAccessToken }, requiredScopes: coding ? [] : ['praxis:probe'], resourceMetadataUrl: resourceMetadata }));
   app.use(`${prefix}/mcp`, express.json({ limit: coding ? '512kb' : '64kb' }));
   app.all(`${prefix}/mcp`, async (req, res, next) => {
-    const requestId = randomUUID();
+    const context = requestContext.getStore();
+    const requestId = context.requestId;
     const started = performance.now();
     let logged = false;
     const record = (aborted) => {
       if (logged) return;
       logged = true;
-      audit.record(req.auth.extra.subject, { requestId, kind: 'http', method: req.method, status: res.statusCode, aborted,
-        protocol: String(req.get('mcp-protocol-version') || 'unspecified').slice(0, 40), durationMs: Math.round(performance.now() - started) });
+      try {
+        const protocol = req.get('mcp-protocol-version');
+        audit.record(req.auth.extra.subject, { requestId, kind: 'http', method: req.method, status: res.statusCode, aborted,
+          protocol: /^\d{4}-\d{2}-\d{2}$/.test(protocol || '') ? protocol : 'unspecified', durationMs: Math.round(performance.now() - started) });
+      } catch (error) { console.error(JSON.stringify(diagnosticRecord('mcp_http_audit_failed', error, context))); }
     };
     res.once('finish', () => record(false));
     res.once('close', () => record(!res.writableFinished));
@@ -67,9 +77,11 @@ export async function createApp(config) {
   });
   app.use((_req, res) => res.status(404).json({ error: 'not_found' }));
   app.use((error, _req, res, _next) => {
+    const requestId = requestContext.getStore()?.requestId;
+    console.error(JSON.stringify(diagnosticRecord('mcp_http_failed', error)));
     if (res.headersSent) return res.end();
     res.status(error.type === 'entity.too.large' ? 413 : error instanceof SyntaxError ? 400 : 500)
-      .json({ error: error.type === 'entity.too.large' ? 'request_too_large' : error instanceof SyntaxError ? 'invalid_json' : 'internal_error' });
+      .json({ error: error.type === 'entity.too.large' ? 'request_too_large' : error instanceof SyntaxError ? 'invalid_json' : 'internal_error', ...(requestId ? { requestId } : {}) });
   });
   return { app, jobs, audit, auth, resourceUrl, close: async () => { await handler.close(); auth.close?.(); jobs.close(); audit.close(); } };
 }

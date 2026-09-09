@@ -1,45 +1,63 @@
 import { randomUUID, createHash } from 'node:crypto';
 import { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
-import { codeTools } from './code/schema.js';
+import { codeTools, parseArguments } from './code/schema.js';
+import { diagnosticRecord, errorRecovery, requestContext } from './diagnostics.js';
 
 export const VERSION = '0.1.0';
 const SCOPE = 'praxis:probe';
 const jobId = z.string().uuid();
-const cursor = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).default(0);
-const pageLimit = z.number().int().min(1).max(100).default(20);
+const cursor = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).default(0).describe('Omit/0 begins. Copy the returned nextCursor exactly; do not calculate it from page length.');
+const pageLimit = z.number().int().min(1).max(100).default(20).describe('Maximum records per page: 1–100; default 20. Omit for the default.');
 
 export function createProbeServer({ jobs, audit, resourceUrl, bootId, release, authInfo, era, coding }) {
   const owner = authInfo?.extra?.subject;
   if (owner !== 'jensen') throw new Error('Authenticated owner required');
-  const server = new McpServer({ name: 'Praxis', version: coding ? '0.2.0' : VERSION }, {
+  const server = new McpServer({ name: 'Praxis', version: coding ? '0.3.0' : VERSION }, {
     instructions: coding
-      ? 'Praxis supplies coding tools; you supply reasoning. Start with capabilities and projects_list. Inspect a project, create one workspace at its exact base revision, read/search, edit with content hashes, run validation using job_start, and review workspace_diff. General commands are sandboxed with network disabled. Use existing workspace/job/operation IDs to recover work in a fresh conversation. NEVER recreate an ambiguously completed operation; repeat its original idempotency key and inputs or inspect receipts. Probe tools are separate bounded diagnostics. No production, GitHub publication, or self-update tools are available in this milestone.'
+      ? 'Praxis supplies coding tools; you supply reasoning. Start with capabilities and projects_list. Inspect a project, create one workspace at its exact base revision, read/search, edit with content hashes, run validation using job_start, and review workspace_diff. Use exact-text patches for large files; same-file patches run sequentially against one original hash. Omit optional page sizes initially and copy returned cursors exactly. Start job recovery with compact job_status; use job_logs tail/query/stream for selected evidence. General commands are sandboxed with network disabled. Use existing workspace/job/operation IDs to recover work in a fresh conversation. NEVER recreate an ambiguously completed operation; repeat its original idempotency key and inputs or inspect receipts. Probe tools are separate bounded diagnostics. No production, GitHub publication, or self-update tools are available in this milestone.'
       : 'This is an isolated diagnostic fixture. Call probe_capabilities first. Start only a bounded heartbeat job using a unique idempotencyKey, save its job ID, and inspect it through probe_job_status/logs. In a fresh conversation, probe_jobs_list recovers existing jobs. These tools provide no source access, arbitrary commands, production access, or model execution. Never recreate a job merely because a response was lost; repeat the same idempotency key or list existing jobs. Results describe only this fixture.'
   });
   const register = (name, title, description, inputSchema, handler, readOnly = true, destructive = false, scope = SCOPE) => {
+    // Advertise the exact Zod schema, but perform its validation inside the
+    // authenticated handler so rejected arguments receive the same structured
+    // error, correlation ID, and audit receipt as other tool failures. The
+    // coding backend independently validates the same schema again.
+    const advertisedSchema = { '~standard': { ...inputSchema['~standard'], validate: value => ({ value }) } };
     server.registerTool(name, {
-      title, description, inputSchema,
+      title, description, inputSchema: advertisedSchema,
       annotations: { readOnlyHint: readOnly, destructiveHint: destructive, idempotentHint: true, openWorldHint: false },
       _meta: { securitySchemes: [{ type: 'oauth2', scopes: [scope] }] }
     }, async (args) => {
       const requestId = randomUUID();
+      const context = { ...requestContext.getStore(), requestId, action: name };
       const started = performance.now();
-      let result;
+      let result, text;
       try {
         if (!authInfo.scopes?.includes(scope)) throw Object.assign(new Error(`Reconnect and grant ${scope} to use this tool.`), { code: 'AUTHORIZATION_REQUIRED' });
-        const data = await handler(args);
+        const validated = parseArguments(inputSchema, args);
+        const data = await requestContext.run(context, () => handler(validated));
         result = { ok: true, requestId, observedAt: new Date().toISOString(), ...data };
+        text = JSON.stringify(result);
       } catch (error) {
         const code = /^[A-Z_]+$/.test(error.code ?? '') ? error.code : 'INTERNAL_ERROR';
+        if (code === 'INTERNAL_ERROR' || code === 'BACKEND_UNAVAILABLE') console.error(JSON.stringify(diagnosticRecord('mcp_tool_failed', error, context)));
         result = { ok: false, requestId, observedAt: new Date().toISOString(), error: {
           code, message: code === 'INTERNAL_ERROR' ? 'Praxis could not complete this operation.' : error.message,
-          recovery: code === 'FIXTURE_ERROR' ? 'Continue by calling probe_capabilities; this intentional error will not succeed on retry.' : code === 'IDEMPOTENCY_CONFLICT' ? 'Use the original inputs with that key, or a new key for a new operation.' : 'Inspect existing jobs and the supplied identifiers before retrying; do not recreate ambiguous work.'
+          ...errorRecovery(code, readOnly),
+          ...(Array.isArray(error.issues) ? { issues: error.issues.slice(0, 5) } : {}),
         } };
+        text = JSON.stringify(result);
       }
-      const text = JSON.stringify(result);
-      audit.record(owner, { requestId, kind: 'tool', tool: name, era, durationMs: Math.round((performance.now() - started) * 1000) / 1000,
-        resultJsonBytes: Buffer.byteLength(text), ok: result.ok, errorCode: result.error?.code ?? null });
+      try {
+        audit.record(owner, { requestId, ...(context.httpRequestId ? { httpRequestId: context.httpRequestId } : {}), kind: 'tool', tool: name, era,
+          durationMs: Math.round((performance.now() - started) * 1000) / 1000,
+          resultJsonBytes: Buffer.byteLength(text), ok: result.ok, errorCode: result.error?.code ?? null });
+      } catch (error) {
+        // Diagnostic telemetry failure must not turn a completed source mutation
+        // into an apparent failed request. Its durable receipt is independent.
+        console.error(JSON.stringify(diagnosticRecord('mcp_audit_failed', error, context)));
+      }
       return { content: [{ type: 'text', text }], structuredContent: result, ...(result.ok ? {} : { isError: true }),
         ...(result.error?.code === 'AUTHORIZATION_REQUIRED' ? { _meta: { 'mcp/www_authenticate': [`Bearer scope="${scope}", error="insufficient_scope"`] } } : {}) };
     });

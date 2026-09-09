@@ -1,6 +1,6 @@
 {
   "name": "praxis-probe",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "description": "Source access, isolated coding workspaces, and durable MCP jobs for conversational models.",
