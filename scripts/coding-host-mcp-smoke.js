@@ -85,7 +85,7 @@ try {
   gatewayHttp = createServer((req, res) => gateway ? gateway.app(req, res) : res.writeHead(503).end());
   backendHttp = createServer((req, res) => backend ? backend.app(req, res) : res.writeHead(503).end());
   const gatewayPort = await listen(gatewayHttp), backendPort = await listen(backendHttp);
-  const baseUrl = `http://127.0.0.1:${gatewayPort}/praxis-probe`;
+  const baseUrl = `http://127.0.0.1:${gatewayPort}/praxis`;
   const backendUrl = `http://127.0.0.1:${backendPort}`, issuer = `${baseUrl}/oauth`, resourceUrl = `${baseUrl}/mcp`;
   const gatewayConfig = {
     baseUrl, allowLoopback: true, dataDirectory: join(directory, 'gateway'), release: receipt.release,

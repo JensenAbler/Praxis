@@ -5,7 +5,7 @@ release="${1:?Supply the exact release directory name}"
 [[ "$release" =~ ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ ]] || exit 2
 test "$(id -u)" -eq 0
 exec 9>/run/lock/praxis-probe-deploy.lock
-flock -n 9 || { printf 'Another Praxis Probe deployment is running.\n' >&2; exit 2; }
+flock -n 9 || { printf 'Another Praxis deployment is running.\n' >&2; exit 2; }
 if systemctl is-active --quiet praxis-code.service || test -e /etc/systemd/system/praxis-probe.service.d/coding.conf; then
   printf 'Coding has been activated. Use a reviewed coding-service update procedure; this probe bootstrap does not coordinate coding jobs.\n' >&2
   exit 2
@@ -162,7 +162,7 @@ systemctl daemon-reload
 systemctl start praxis-probe-worker.service praxis-probe.service
 healthy=0
 for attempt in $(seq 1 20); do
-  if health="$(curl -fsS --max-time 2 -H 'Host: mcp.jensenabler.com' http://127.0.0.1:8790/praxis-probe/healthz)" &&
+  if health="$(curl -fsS --max-time 2 -H 'Host: mcp.jensenabler.com' http://127.0.0.1:8790/praxis/healthz)" &&
     python3 -c 'import json,sys; result=json.load(sys.stdin); sys.exit(0 if result.get("ok") is True and result.get("release")==sys.argv[1] else 1)' "$release" <<<"$health" &&
     systemctl is-active --quiet praxis-probe-worker.service; then
     healthy=1

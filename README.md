@@ -4,9 +4,9 @@ Praxis gives a conversational model source access, isolated editing, command exe
 
 The first coding workflow is deployed: registered source snapshots, disposable workspaces, content-hash edit preconditions, contextual diffs, sandboxed commands, artifacts, and persisted operation receipts. Runtime `coding-8e25c6cf9000` passed 59 Linux tests and the authenticated MCP fixture with real containers. The coding run from an actual iPhone and its fresh-conversation recovery remain pending. See [the milestone and boundaries](docs/coding-milestone.md), [acceptance evidence](docs/acceptance.md), and [workspace contracts](docs/workspace-contract.md). GitHub operations through Praxis, production deployment, browser use, and independent self-update are later milestones.
 
-Endpoint: **https://mcp.jensenabler.com/praxis-probe/mcp**
+Endpoint: **https://mcp.jensenabler.com/praxis/mcp**
 
-The endpoint and OAuth issuer stay stable. Coding tools require an explicit `praxis:code` grant; an existing `praxis:probe` token retains its original diagnostic permissions. Jobs live on the VPS independently of ChatGPT scratch files and the MCP web process.
+The public endpoint and OAuth issuer use the `/praxis` prefix. Connections created against the earlier `/praxis-probe` endpoint need to be replaced. Coding tools require an explicit `praxis:code` grant; diagnostic permissions remain `praxis:probe`. Jobs live on the VPS independently of ChatGPT scratch files and the MCP web process.
 
 ## Connect and test
 

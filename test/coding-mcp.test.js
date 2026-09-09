@@ -50,7 +50,7 @@ async function fixture(t) {
   const http = createServer((req, res) => gateway.app(req, res));
   const backendHttp = createServer((req, res) => backend.app(req, res));
   for (const server of [http, backendHttp]) await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
-  const baseUrl = `http://127.0.0.1:${http.address().port}/praxis-probe`;
+  const baseUrl = `http://127.0.0.1:${http.address().port}/praxis`;
   const backendUrl = `http://127.0.0.1:${backendHttp.address().port}`;
   const resourceUrl = `${baseUrl}/mcp`, issuer = `${baseUrl}/oauth`;
   const gatewayConfig = { baseUrl, allowLoopback: true, dataDirectory: join(directory, 'gateway'), release: 'coding-fixture', coding: { url: backendUrl },
@@ -62,7 +62,7 @@ async function fixture(t) {
   const clients = [];
   async function token(scope = 'praxis:code', overrides = {}) {
     return new SignJWT({ scope, client_id: 'fixture-client', ...overrides }).setProtectedHeader({ alg: 'RS256', kid: privateJwk.kid, typ: 'at+jwt' })
-      .setIssuer(issuer).setAudience(resourceUrl).setSubject('jensen').setIssuedAt().setExpirationTime('5m').sign(privateKey);
+      .setIssuer(overrides.iss ?? issuer).setAudience(overrides.aud ?? resourceUrl).setSubject('jensen').setIssuedAt().setExpirationTime('5m').sign(privateKey);
   }
   async function connect(scope = 'praxis:code') {
     const client = new Client({ name: 'coding-fixture', version: '1.0.0' }); clients.push(client);
@@ -111,8 +111,41 @@ test('gateway and coding adapter independently enforce explicit coding permissio
   assert.equal((await client.callTool({ name: 'probe_capabilities', arguments: {} })).isError, true);
   const injected = await fetch(`${f.backendUrl}/call`, { method: 'POST', headers: { authorization: `Bearer ${await f.token()}`, 'content-type': 'application/json' }, body: JSON.stringify({ action: 'projects_list', args: { owner: 'someone-else' } }) });
   assert.equal(injected.status, 400);
-  const discovery = await (await fetch(`${new URL(f.baseUrl).origin}/.well-known/oauth-protected-resource/praxis-probe/mcp`)).json();
+  const discovery = await (await fetch(`${new URL(f.baseUrl).origin}/.well-known/oauth-protected-resource/praxis/mcp`)).json();
   assert.ok(discovery.scopes_supported.includes('praxis:code'));
+});
+
+test('canonical Praxis discovery and authenticated coding use one issuer and resource', async t => {
+  const f = await fixture(t), origin = new URL(f.baseUrl).origin;
+  const resource = `${f.baseUrl}/mcp`, issuer = `${f.baseUrl}/oauth`;
+  const health = await (await fetch(`${f.baseUrl}/healthz`)).json();
+  assert.equal(health.name, 'Praxis');
+  for (const path of ['/.well-known/oauth-authorization-server/praxis/oauth', '/.well-known/openid-configuration/praxis/oauth', '/praxis/oauth/.well-known/openid-configuration']) {
+    const metadata = await (await fetch(`${origin}${path}`)).json();
+    assert.equal(metadata.issuer, issuer);
+    assert.equal(metadata.authorization_endpoint, `${issuer}/auth`);
+    assert.equal(metadata.token_endpoint, `${issuer}/token`);
+    assert.ok(metadata.scopes_supported.includes('praxis:code'));
+    assert.ok(metadata.scopes_supported.includes('praxis:probe'));
+  }
+  const metadata = await (await fetch(`${origin}/.well-known/oauth-protected-resource/praxis/mcp`)).json();
+  assert.equal(metadata.resource_name, 'Praxis');
+  assert.equal(metadata.resource, resource);
+  assert.deepEqual(metadata.authorization_servers, [issuer]);
+  assert.deepEqual(metadata.scopes_supported, ['praxis:probe', 'praxis:code', 'offline_access']);
+  // A separately configured legacy gateway can remain during migration, but this
+  // canonical application must never route old paths or accept old token audiences.
+  for (const path of ['/praxis-probe/mcp', '/praxis-probe/healthz', '/praxis-probe/oauth/.well-known/openid-configuration', '/.well-known/oauth-protected-resource/praxis-probe/mcp', '/.well-known/oauth-authorization-server/praxis-probe/oauth']) {
+    assert.equal((await fetch(`${origin}${path}`)).status, 404, path);
+  }
+  for (const overrides of [{ aud: `${origin}/praxis-probe/mcp` }, { iss: `${origin}/praxis-probe/oauth` }]) {
+    const rejected = await fetch(resource, { headers: { authorization: `Bearer ${await f.token('praxis:code', overrides)}` } });
+    assert.equal(rejected.status, 401);
+  }
+  const client = await f.connect('praxis:code praxis:probe');
+  assert.equal(client.getServerVersion().name, 'Praxis');
+  assert.equal((await call(client, 'projects_list')).projects[0].projectId, 'fixture');
+  assert.equal((await call(client, 'probe_capabilities')).resourceUrl, resource);
 });
 
 test('authenticated coding tools edit, run, survive gateway restart, and recover diff/artifacts in a fresh client', async t => {

@@ -20,7 +20,7 @@ if not re.fullmatch(r'sha256:[a-f0-9]{64}', args.image) or not re.fullmatch(r'[a
 target = Path('/etc/praxis-code/config.json')
 if target.exists() or target.is_symlink():
     raise SystemExit('Configuration already exists; review an update rather than overwriting bootstrap state.')
-base = 'https://mcp.jensenabler.com/praxis-probe'
+base = 'https://mcp.jensenabler.com/praxis'
 with urllib.request.urlopen(base + '/oauth/jwks', timeout=15) as response:
     public_jwks = json.load(response)
 if not public_jwks.get('keys') or any(key.get('kty') != 'RSA' or any(part in key for part in ('d', 'p', 'q', 'k')) for key in public_jwks['keys']):

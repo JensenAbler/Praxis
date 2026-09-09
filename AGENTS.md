@@ -11,3 +11,4 @@ The current authorized milestone is the first complete coding workflow: inspect/
 - Run `npm test` and exercise authenticated MCP calls before deploying.
 - Record actual evidence and distinguish native-client, API-client, fixture, and production results.
 - The owner now requests a public Praxis GitHub repository. Commit and push reviewable increments as work proceeds. This supersedes the original specification's private-repository default; keep credentials, private runtime data, and other repositories' source out of publication.
+- The owner requests the canonical public endpoint `https://mcp.jensenabler.com/praxis/mcp` and `/praxis/oauth` issuer. This supersedes the earlier stable `/praxis-probe` URL assumption. Preserve stored jobs, workspaces, credentials, and unrelated services during migration.

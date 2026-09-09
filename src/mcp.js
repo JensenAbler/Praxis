@@ -12,7 +12,7 @@ const pageLimit = z.number().int().min(1).max(100).default(20);
 export function createProbeServer({ jobs, audit, resourceUrl, bootId, release, authInfo, era, coding }) {
   const owner = authInfo?.extra?.subject;
   if (owner !== 'jensen') throw new Error('Authenticated owner required');
-  const server = new McpServer({ name: coding ? 'Praxis' : 'Praxis Probe', version: coding ? '0.2.0' : VERSION }, {
+  const server = new McpServer({ name: 'Praxis', version: coding ? '0.2.0' : VERSION }, {
     instructions: coding
       ? 'Praxis supplies coding tools; you supply reasoning. Start with capabilities and projects_list. Inspect a project, create one workspace at its exact base revision, read/search, edit with content hashes, run validation using job_start, and review workspace_diff. General commands are sandboxed with network disabled. Use existing workspace/job/operation IDs to recover work in a fresh conversation. NEVER recreate an ambiguously completed operation; repeat its original idempotency key and inputs or inspect receipts. Probe tools are separate bounded diagnostics. No production, GitHub publication, or self-update tools are available in this milestone.'
       : 'This is an isolated diagnostic fixture. Call probe_capabilities first. Start only a bounded heartbeat job using a unique idempotencyKey, save its job ID, and inspect it through probe_job_status/logs. In a fresh conversation, probe_jobs_list recovers existing jobs. These tools provide no source access, arbitrary commands, production access, or model execution. Never recreate a job merely because a response was lost; repeat the same idempotency key or list existing jobs. Results describe only this fixture.'
@@ -44,7 +44,7 @@ export function createProbeServer({ jobs, audit, resourceUrl, bootId, release, a
         ...(result.error?.code === 'AUTHORIZATION_REQUIRED' ? { _meta: { 'mcp/www_authenticate': [`Bearer scope="${scope}", error="insufficient_scope"`] } } : {}) };
     });
   };
-  register('probe_capabilities', 'Inspect Praxis Probe', 'Read the exact probe version, limits, scope, and available experiments. Start here.', z.object({}), () => ({
+  register('probe_capabilities', 'Inspect Praxis diagnostics', 'Read the exact probe version, limits, scope, and available experiments. Start here.', z.object({}), () => ({
     version: VERSION, schemaVersion: 1, release, bootId, resourceUrl,
     scope: 'Isolated heartbeat fixtures and synthetic response measurements only.',
     limits: { maxDurationSeconds: 180, maxActiveJobs: 1, logPageRecords: 100, maxSyntheticPayloadBytes: 65536 },

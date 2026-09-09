@@ -22,7 +22,7 @@ async function fixture(t) {
   const http = createServer((request, response) => service.app(request, response));
   await new Promise((resolve) => http.listen(0, '127.0.0.1', resolve));
   const origin = `http://127.0.0.1:${http.address().port}`;
-  const baseUrl = `${origin}/praxis-probe`;
+  const baseUrl = `${origin}/praxis`;
   service = await createApp({
     baseUrl, dataDirectory: directory, allowLoopback: true, release: 'mcp-integration-test',
     auth: { passwordHash, jwks: { keys: [jwk] }, cookieKeys: ['mcp-fixture-cookie-signing-key-at-least-32-characters'] },

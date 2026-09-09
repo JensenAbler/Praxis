@@ -48,15 +48,17 @@ chmod 0644 "$dropin/coding.conf"
 systemctl daemon-reload
 systemctl restart praxis-probe.service
 for attempt in $(seq 1 20); do
-  if curl -fsS -H 'Host: mcp.jensenabler.com' http://127.0.0.1:8790/praxis-probe/healthz > "$backup/gateway-health.json"; then break; fi
+  if curl -fsS -H 'Host: mcp.jensenabler.com' http://127.0.0.1:8790/praxis/healthz > "$backup/gateway-health.json"; then break; fi
   sleep 1
 done
-curl -fsS -H 'Host: mcp.jensenabler.com' http://127.0.0.1:8790/.well-known/oauth-protected-resource/praxis-probe/mcp > "$backup/metadata.json"
+curl -fsS -H 'Host: mcp.jensenabler.com' http://127.0.0.1:8790/.well-known/oauth-protected-resource/praxis/mcp > "$backup/metadata.json"
 node - "$backup/gateway-health.json" "$backup/metadata.json" "$release" <<'JS'
 const fs = require('node:fs');
 const health = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
 const metadata = JSON.parse(fs.readFileSync(process.argv[3], 'utf8'));
-if (!health.ok || health.name !== 'Praxis' || health.release !== process.argv[4] || !metadata.scopes_supported.includes('praxis:code')) process.exit(1);
+if (!health.ok || health.name !== 'Praxis' || health.release !== process.argv[4] || !metadata.scopes_supported.includes('praxis:code') ||
+    metadata.resource !== 'https://mcp.jensenabler.com/praxis/mcp' ||
+    metadata.authorization_servers?.[0] !== 'https://mcp.jensenabler.com/praxis/oauth') process.exit(1);
 JS
 systemctl enable praxis-code.service
 committed=1

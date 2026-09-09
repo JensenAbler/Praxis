@@ -4,7 +4,7 @@ This is a client acceptance test, separate from the automated Linux and MCP fixt
 
 ## Before starting
 
-The coding backend must be activated and the existing ChatGPT connection's actions refreshed. The connection is named **Praxis** and uses the unchanged endpoint `https://mcp.jensenabler.com/praxis-probe/mcp`. Coding requires an explicit `praxis:code` OAuth grant. An old probe grant is insufficient. If the client offers only `probe_*` actions, stop and refresh the connection rather than attempting the coding task with diagnostic tools.
+The connection is named **Praxis** and uses `https://mcp.jensenabler.com/praxis/mcp`. Use the connection at this URL; the earlier `/praxis-probe` connection has been superseded. Coding requires an explicit `praxis:code` OAuth grant. An old probe grant is insufficient. If the client offers only `probe_*` actions, stop and refresh the connection rather than attempting the coding task with diagnostic tools.
 
 Start a new iPhone ChatGPT conversation with Praxis available. Paste this first prompt:
 

@@ -1,12 +1,18 @@
 # Actual iPhone remote MCP test
 
-Connect **Praxis Probe** first. Use the same account as the iPhone. Record the model/mode and app version if available from the interface; the model must not invent these. This fixture uses the VPS, not ChatGPT's temporary execution environment.
+Connect **Praxis** first. Use the same account as the iPhone. Record the model/mode and app version if available from the interface; the model must not invent these. This fixture uses the VPS, not ChatGPT's temporary execution environment.
 
 ## Complete the connection
 
-**Praxis Probe is connected through OAuth in ChatGPT**, and the refreshed settings list all nine tools. The first iPhone run and reported fresh-conversation recovery have passed; [recorded evidence](evidence/iphone-probe-report.md) includes server corroboration and remaining friction. These prompts are retained for future reruns. If reauthorization is needed later, use the private probe password and allow access; the bootstrap password file is `C:\Users\Jensen\.codex\praxis-probe-private\login.txt`.
+Use the app name **Praxis**, server URL `https://mcp.jensenabler.com/praxis/mcp`, and **OAuth**. The canonical issuer is `https://mcp.jensenabler.com/praxis/oauth`; discovery advertises `praxis:probe`, `praxis:code`, and `offline_access`. Keep `offline_access` as the base scope and optional OIDC/email lookup disabled. Complete the native owner sign-in and consent flow, then refresh the available actions if needed. The nine `probe_*` tools remain diagnostic fixtures alongside the coding tools.
 
-For reference, the observed web setup was:
+An existing connection to `/praxis-probe/mcp` uses the old OAuth issuer and resource. Renaming its display label alone does not migrate it to `/praxis/mcp`. Native connection to the canonical endpoint has not yet been recorded here. If owner sign-in is required, use the existing private Praxis password; the bootstrap password file remains `C:\Users\Jensen\.codex\praxis-probe-private\login.txt`. Do not paste it into a conversation.
+
+## Historical first setup — legacy endpoint
+
+The first iPhone run and reported fresh-conversation recovery passed using **Praxis Probe** at the old endpoint; [recorded evidence](evidence/iphone-probe-report.md) includes server corroboration and remaining friction. The setup below records what happened then. The prompts that follow use the current **Praxis** connection for future reruns.
+
+The observed legacy web setup was:
 
 1. Enable **Settings → Security and login → Developer mode**, then open [ChatGPT Plugins](https://chatgpt.com/plugins) and select **Create app**. During this setup, the owner toggled an already-enabled switch off/on and the Codex in-app page was reloaded before Create app appeared; the cause of the earlier stale state is unknown.
 2. Enter **Praxis Probe**, server URL `https://mcp.jensenabler.com/praxis-probe/mcp`, and **OAuth**.
@@ -17,7 +23,7 @@ For reference, the observed web setup was:
 ## Prompt 1 — tool behavior and disconnect
 
 ```text
-We are testing the connected Praxis Probe tools from this actual iPhone ChatGPT session. Use those tools directly. Do not simulate them with Python, shell commands, browsing, or another agent. If the connection/tools are unavailable, stop and report exactly that.
+We are testing the connected Praxis diagnostic tools from this actual iPhone ChatGPT session. Use those tools directly. Do not simulate them with Python, shell commands, browsing, or another agent. If the connection/tools are unavailable, stop and report exactly that.
 
 1. Call probe_capabilities and report the release and limits.
 2. Call probe_response with bytes=4096, marker="iphone-probe-v1-end", delayMs=0. Report whether you received the end marker and payloadBytes. Do not copy the payload into your answer or claim you independently verified its hash without doing so.
@@ -31,7 +37,7 @@ I will leave this conversation and return in a NEW conversation after at least t
 ## Prompt 2 — paste in a fresh conversation after two minutes
 
 ```text
-Use the connected Praxis Probe tools to recover the existing job labeled "iPhone recovery probe v1". Call probe_jobs_list to discover it; do not start or recreate any job. If more than one matches, show their IDs and timestamps before choosing rather than guessing.
+Use the connected Praxis diagnostic tools to recover the existing job labeled "iPhone recovery probe v1". Call probe_jobs_list to discover it; do not start or recreate any job. If more than one matches, show their IDs and timestamps before choosing rather than guessing.
 
 Read its status and all its logs, using pagination with limit=5 and each returned cursor. Report the job ID, terminal status, start/completion times, explicit COMPLETED record, heartbeat count, and any missing/duplicate record sequences. State which observations came from tools. If access or tools are missing, report that without simulating results.
 

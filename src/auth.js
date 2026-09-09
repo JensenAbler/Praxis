@@ -165,9 +165,9 @@ export async function createAuth({ issuer, resourceUrl, passwordHash, jwks, cook
     const rights = requestedScopes.includes('praxis:code')
       ? 'This connection can inspect registered source, edit disposable workspaces, and run sandboxed coding commands owned by Jensen. Commands have no network or production credentials. It can retrieve stored results and reconnect later.'
       : 'This connection can start and inspect harmless test jobs owned by Jensen and reconnect later.';
-    res.type('html').send(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Praxis Probe</title>
+    res.type('html').send(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Praxis</title>
       <style>body{font:18px system-ui;max-width:32rem;margin:3rem auto;padding:1.5rem;line-height:1.5}input,button{font:inherit;padding:.7rem;box-sizing:border-box;width:100%;margin:.5rem 0}small{display:block;overflow-wrap:anywhere}.error{color:#a20}</style>
-      <h1>${login ? 'Sign in to Praxis Probe' : 'Connect Praxis Probe'}</h1>
+      <h1>${login ? 'Sign in to Praxis' : 'Connect Praxis'}</h1>
       <p>${rights}</p><small>Return to: ${escapeHtml(host)}</small>
       ${error ? `<p class="error">${escapeHtml(error)}</p>` : ''}
       <form method="post" action="${escapeHtml(issuer)}/interaction/${escapeHtml(detail.uid)}">
@@ -195,7 +195,7 @@ export async function createAuth({ issuer, resourceUrl, passwordHash, jwks, cook
         if (limited(`login:${req.ip}`, 10, 900) || limited('login:global', 60, 900)) return res.status(429).send('Too many attempts. Try again later.');
         const password = typeof req.body.password === 'string' ? req.body.password : '';
         const actual = await scrypt(password, salt, 64, { N: 16384, r: 8, p: 1 });
-        if (!timingSafeEqual(actual, expected)) return renderInteraction(res.status(401), detail, 'Incorrect probe password.');
+        if (!timingSafeEqual(actual, expected)) return renderInteraction(res.status(401), detail, 'Incorrect Praxis password.');
         return provider.interactionFinished(req, res, { login: { accountId: OWNER } }, { mergeWithLastSubmission: false });
       }
       if (detail.prompt.name !== 'consent' || detail.session?.accountId !== OWNER) return res.status(403).send('Owner sign-in required');

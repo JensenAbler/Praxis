@@ -24,17 +24,18 @@ async function fixture(t, { integrated = false, codingEnabled = false } = {}) {
   else app.use('/oauth', (req, res, next) => auth.router(req, res, next));
   const server = await new Promise((resolve) => { const listener = app.listen(0, '127.0.0.1', () => resolve(listener)); });
   const origin = `http://127.0.0.1:${server.address().port}`;
-  const issuer = `${origin}/oauth`;
-  const resource = `${origin}/mcp`;
+  const prefix = integrated ? '/praxis' : '';
+  const issuer = `${origin}${prefix}/oauth`;
+  const resource = `${origin}${prefix}/mcp`;
   const options = { issuer, resourceUrl: resource, passwordHash, jwks: { keys: [jwk] }, cookieKeys: ['fixture-cookie-signing-key-that-is-very-long'], dataDirectory: directory, allowLoopback: true, codingEnabled };
   if (integrated) {
-    service = await createApp({ baseUrl: origin, dataDirectory: directory, allowLoopback: true, auth: options });
+    service = await createApp({ baseUrl: `${origin}${prefix}`, dataDirectory: directory, allowLoopback: true, auth: options });
     auth = service.auth;
   } else auth = await createAuth(options);
   t.after(async () => { await new Promise((resolve) => server.close(resolve)); if (service) await service.close(); else auth.close(); await rm(directory, { recursive: true, force: true }); });
   const request = (path, init) => fetch(new URL(path, origin), { redirect: 'manual', ...init });
   async function register(extra = {}) {
-    const response = await request('/oauth/reg', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ client_name: 'Probe test client', redirect_uris: ['https://client.example/callback'], grant_types: ['authorization_code', 'refresh_token'], response_types: ['code'], token_endpoint_auth_method: 'none', ...extra }) });
+    const response = await request(`${prefix}/oauth/reg`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ client_name: 'Probe test client', redirect_uris: ['https://client.example/callback'], grant_types: ['authorization_code', 'refresh_token'], response_types: ['code'], token_endpoint_auth_method: 'none', ...extra }) });
     const body = await response.json();
     assert.equal(response.status, 201, JSON.stringify(body));
     return body;
@@ -68,6 +69,8 @@ async function fixture(t, { integrated = false, codingEnabled = false } = {}) {
         // The browser's native form submission must retain its real Origin header.
         assert.equal(response.headers.get('referrer-policy'), 'strict-origin');
         const html = await response.text();
+        assert.match(html, /<title>Praxis<\/title>/);
+        assert.match(html, /<h1>(Sign in to|Connect) Praxis<\/h1>/);
         if (scope.includes('praxis:code')) assert.match(html, /sandboxed coding commands/);
         const action = html.match(/<form method="post" action="([^"]+)"/)?.[1];
         const csrf = html.match(/name="csrf" value="([^"]+)"/)?.[1];
@@ -82,7 +85,7 @@ async function fixture(t, { integrated = false, codingEnabled = false } = {}) {
   }
   async function exchange(client, grant, extra = {}) {
     const body = { grant_type: 'authorization_code', client_id: client.client_id, code: grant.code, code_verifier: grant.verifier, redirect_uri: client.redirect_uris[0], resource, ...extra };
-    return request('/oauth/token', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(body) });
+    return request(`${prefix}/oauth/token`, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(body) });
   }
   return { origin, issuer, resource, jwk, request, register, flow, exchange, get auth() { return auth; }, async restart() { auth.close(); auth = await createAuth(options); } };
 }
@@ -176,12 +179,19 @@ test('registration rejects unsafe callback and remote metadata inputs', async (t
   }
 });
 
-test('complete app publishes discovery aliases and serves MCP only after real OAuth', async (t) => {
+test('Praxis endpoint publishes discovery aliases and serves MCP only after real OAuth', async (t) => {
   const f = await fixture(t, { integrated: true });
-  const metadata = await (await f.request('/.well-known/oauth-authorization-server/oauth')).json();
+  const metadata = await (await f.request('/.well-known/oauth-authorization-server/praxis/oauth')).json();
   assert.equal(metadata.issuer, f.issuer);
-  assert.equal((await f.request('/mcp')).status, 401);
-  const rejected = await f.request('/mcp', { headers: { authorization: 'Bearer invalid-token' } });
+  assert.equal((await (await f.request('/.well-known/openid-configuration/praxis/oauth')).json()).issuer, f.issuer);
+  const resourceMetadata = await (await f.request('/.well-known/oauth-protected-resource/praxis/mcp')).json();
+  assert.equal(resourceMetadata.resource, f.resource);
+  assert.equal(resourceMetadata.resource_name, 'Praxis');
+  assert.deepEqual(resourceMetadata.authorization_servers, [f.issuer]);
+  const unauthenticated = await f.request('/praxis/mcp');
+  assert.equal(unauthenticated.status, 401);
+  assert.ok(unauthenticated.headers.get('www-authenticate').includes(`${f.origin}/.well-known/oauth-protected-resource/praxis/mcp`));
+  const rejected = await f.request('/praxis/mcp', { headers: { authorization: 'Bearer invalid-token' } });
   assert.equal(rejected.status, 401);
   assert.match(rejected.headers.get('www-authenticate'), /invalid_token/);
   const registration = await f.register();
@@ -193,8 +203,12 @@ test('complete app publishes discovery aliases and serves MCP only after real OA
   const transport = new StreamableHTTPClientTransport(new URL(f.resource), { requestInit: { headers: { Authorization: `Bearer ${token.access_token}` } } });
   try {
     await client.connect(transport);
+    assert.equal(client.getServerVersion().name, 'Praxis');
     const listed = await client.listTools();
     assert.ok(listed.tools.some((tool) => tool.name === 'probe_capabilities'));
+    const capabilities = await client.callTool({ name: 'probe_capabilities', arguments: {} });
+    assert.equal(capabilities.structuredContent.ok, true);
+    assert.equal(capabilities.structuredContent.resourceUrl, f.resource);
   } finally { await client.close(); }
   assert.equal(metadata.authorization_endpoint, `${f.issuer}/auth`);
 });

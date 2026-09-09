@@ -1,5 +1,5 @@
 [Unit]
-Description=Praxis Probe authenticated MCP fixture
+Description=Praxis authenticated MCP gateway
 After=network.target
 
 [Service]
@@ -9,7 +9,7 @@ Group=praxis-probe
 WorkingDirectory=/srv/praxis-probe/current
 Environment=NODE_ENV=production
 Environment=PORT=8790
-Environment=PRAXIS_BASE_URL=https://mcp.jensenabler.com/praxis-probe
+Environment=PRAXIS_BASE_URL=https://mcp.jensenabler.com/praxis
 Environment=PRAXIS_DATA_DIR=/var/lib/praxis-probe
 EnvironmentFile=/etc/praxis-probe/release.env
 LoadCredential=password-hash:/etc/praxis-probe/credentials/password-hash

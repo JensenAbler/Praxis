@@ -31,10 +31,10 @@ export async function createApp(config) {
   app.set('trust proxy', 'loopback');
   app.use(hostHeaderValidation([base.hostname, ...(config.allowLoopback ? ['localhost', '127.0.0.1'] : [])]));
   app.use((_req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
-  app.get(`${prefix}/healthz`, (_req, res) => res.json({ ok: true, name: coding ? 'Praxis' : 'Praxis Probe', version: coding ? '0.2.0' : VERSION, release, bootId }));
-  app.get(`${prefix}/`, (_req, res) => res.type('text').send(coding ? 'Praxis: authenticated source, isolated coding, and durable jobs. Connect using the /mcp endpoint.' : 'Praxis Probe: an authenticated diagnostic MCP fixture. Connect using the /mcp endpoint.'));
+  app.get(`${prefix}/healthz`, (_req, res) => res.json({ ok: true, name: 'Praxis', version: coding ? '0.2.0' : VERSION, release, bootId }));
+  app.get(`${prefix}/`, (_req, res) => res.type('text').send(coding ? 'Praxis: authenticated source, isolated coding, and durable jobs. Connect using the /mcp endpoint.' : 'Praxis: authenticated diagnostic tools. Connect using the /mcp endpoint.'));
   app.get(`/.well-known/oauth-protected-resource${prefix}/mcp`, (_req, res) => res.json({
-    resource: resourceUrl, authorization_servers: [issuer], scopes_supported: ['praxis:probe', ...(coding ? ['praxis:code'] : []), 'offline_access'], resource_name: coding ? 'Praxis' : 'Praxis Probe',
+    resource: resourceUrl, authorization_servers: [issuer], scopes_supported: ['praxis:probe', ...(coding ? ['praxis:code'] : []), 'offline_access'], resource_name: 'Praxis',
     bearer_methods_supported: ['header']
   }));
   // Path-qualified discovery preserves the existing Apocrypha root metadata.
@@ -79,7 +79,7 @@ export function configFromEnvironment() {
   if (!credentialDirectory) throw new Error('Protected credential directory is required');
   const read = name => readFileSync(join(credentialDirectory, name), 'utf8').trim();
   return {
-    baseUrl: process.env.PRAXIS_BASE_URL || 'https://mcp.jensenabler.com/praxis-probe',
+    baseUrl: process.env.PRAXIS_BASE_URL || 'https://mcp.jensenabler.com/praxis',
     dataDirectory: process.env.PRAXIS_DATA_DIR || '/var/lib/praxis-probe',
     release: process.env.PRAXIS_RELEASE || VERSION,
     ...(process.env.PRAXIS_CODING_URL ? { coding: { url: process.env.PRAXIS_CODING_URL } } : {}),

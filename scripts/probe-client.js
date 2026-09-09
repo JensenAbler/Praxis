@@ -3,10 +3,10 @@ import { randomUUID, createHash } from 'node:crypto';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { authorize } from './oauth-client.js';
 
-const baseUrl = process.env.PRAXIS_BASE_URL;
+const baseUrl = process.env.PRAXIS_BASE_URL || 'https://mcp.jensenabler.com/praxis';
 const passwordFile = process.env.PRAXIS_PASSWORD_FILE;
 const stateFile = process.env.PRAXIS_CLIENT_STATE;
-if (!baseUrl || !passwordFile || !stateFile) throw new Error('Set PRAXIS_BASE_URL, PRAXIS_PASSWORD_FILE, and private PRAXIS_CLIENT_STATE path');
+if (!passwordFile || !stateFile) throw new Error('Set PRAXIS_PASSWORD_FILE and private PRAXIS_CLIENT_STATE path; PRAXIS_BASE_URL optionally overrides the Praxis endpoint');
 const command = process.argv[2] || 'smoke';
 const session = await authorize({ baseUrl, passwordFile, stateFile });
 const client = new Client({ name: 'Praxis deployment verification', version: '0.1.0' });
@@ -20,7 +20,7 @@ try {
   const capabilities = await call('probe_capabilities');
   if (command === 'smoke') {
     const tools = (await client.listTools()).tools.map(tool => tool.name);
-    assert.equal(tools.length, 9);
+    assert.equal(tools.filter(name => name.startsWith('probe_')).length, 9);
     const result = await call('probe_response', { bytes: 4096, marker: 'verified-end', delayMs: 25 });
     assert.equal(result.payloadBytes, 4096);
     assert.equal(result.sha256, createHash('sha256').update(result.payload).digest('hex'));

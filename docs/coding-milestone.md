@@ -8,7 +8,7 @@ The owner has requested public development of Praxis. The public repository cont
 
 ## Implementation boundaries
 
-- Keep the existing HTTPS endpoint and OAuth issuer. Add an explicit `praxis:code` grant; existing `praxis:probe` tokens do not acquire coding rights automatically.
+- Use the owner's requested `/praxis/mcp` endpoint and `/praxis/oauth` issuer. Coding requires an explicit `praxis:code` grant; diagnostic `praxis:probe` tokens do not acquire coding rights automatically. The former public prefix requires a replacement client connection.
 - A separate coding service validates the original access token with public signing keys. It has no OAuth signing keys or owner password.
 - Registered project snapshots are immutable source exports at exact commits. Git metadata and runtime secrets are excluded from editable workspaces. Protected baseline manifests determine the review diff.
 - Development commands run in rootless Podman under a dedicated OS identity. Only the selected workspace is bound writable; temporary filesystems are bounded. The image digest and container options are fixed by the service. Network is disabled, image root is read-only, capabilities are dropped, and commands have no production credentials or host socket.

@@ -8,13 +8,13 @@ At `2026-09-09T16:01:07Z`, public health reported Praxis 0.2.0 on this release, 
 
 The runtime release and registered project source revisions are separate: the registered Praxis source remains `53cf0cdab55c0262f3cf8fa9246db5f3681cbe1a`. The fixed dependency image remains `sha256:a807793c27f53bf93480fc3dcfe73b2ab1b6bdf8b3aa1aca820118fd43767170`.
 
-The endpoint is `https://mcp.jensenabler.com/praxis-probe/mcp`; the issuer remains `https://mcp.jensenabler.com/praxis-probe/oauth`. Historical paths and service names are retained for continuity. The ChatGPT connection is now named **Praxis**. Its existing probe authorization does not confer coding rights.
+The endpoint is `https://mcp.jensenabler.com/praxis/mcp`; the issuer is `https://mcp.jensenabler.com/praxis/oauth`. The owner requested this public-prefix migration after initial coding activation. Internal service names and storage directories retain their historical names so existing jobs, workspaces, and credentials stay in place. The ChatGPT connection is named **Praxis** and must use the new URL. Its diagnostic authorization alone does not confer coding rights.
 
 ## Services and protected storage
 
 | Component | Boundary and location |
 | --- | --- |
-| HTTPS gateway | Existing nginx routes forward `/praxis-probe/` and path-qualified OAuth metadata to loopback port 8790. Apocrypha and VPS Observer routes remain intact. |
+| HTTPS gateway | nginx routes forward `/praxis/` and its path-qualified OAuth metadata to loopback port 8790. The old public prefix returns a migration response. Apocrypha and VPS Observer routes remain intact. |
 | OAuth/MCP application | `praxis-probe.service`, user `praxis-probe` (UID 995), 256 MiB memory and 25% CPU. Root-owned immutable releases live under `/srv/praxis-probe/releases/`, selected by `/srv/praxis-probe/current`. |
 | Bounded diagnostic worker | `praxis-probe-worker.service`, same diagnostic UID, 96 MiB memory and 15% CPU, no network. It runs only the fixed heartbeat fixture. |
 | Coding backend/supervisor | `praxis-code.service`, separate user `praxis-code` (UID 993, GID 983), loopback port 8792. It independently validates original bearer tokens and has no OAuth private keys or owner password. |
@@ -72,12 +72,14 @@ Bootstrap is owner administration, not an agent-controlled updater. Review an ex
 
 For first coding activation only, `deploy/enable-code.sh <installed-release>` validates the installed release and protected configuration, starts the backend, verifies health, adds the gateway's loopback coding URL, restarts the gateway, and verifies coding metadata. The endpoint and issuer do not change. Failure restores gateway configuration but leaves the backend available for inspection so an already accepted command is not killed by a rollback assumption. Backups are under `/root/praxis-probe-backups/`.
 
+The owner-requested public name migration has a separate one-time procedure, `deploy/migrate-endpoint.sh <tested-release>`. Prepare and test a new immutable release first. The migration preserves credentials and durable data, coordinates both services, validates the new OAuth identity through HTTPS with public ingress temporarily gated, and publishes `/praxis/mcp` after verification. The former endpoint returns an explicit 410 with reconnection guidance. A matching new native client connection is required. Before publication, failures restore protected configuration; after publication, automatic rollback is withheld because a caller could have started a job. Internal service names and data paths remain unchanged.
+
 Read-only operator checks:
 
 ```sh
 systemctl status praxis-probe.service praxis-probe-worker.service praxis-code.service --no-pager
 readlink /srv/praxis-probe/current
-curl -fsS https://mcp.jensenabler.com/praxis-probe/healthz
+curl -fsS https://mcp.jensenabler.com/praxis/healthz
 curl -fsS http://127.0.0.1:8792/healthz
 nginx -t
 ```

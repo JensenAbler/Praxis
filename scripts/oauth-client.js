@@ -3,7 +3,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 
 // Verification client only. Tokens stay in a private, ignored local file.
-export async function authorize({ baseUrl, passwordFile, stateFile }) {
+export async function authorize({ baseUrl = 'https://mcp.jensenabler.com/praxis', passwordFile, stateFile }) {
   const base = new URL(baseUrl);
   const resource = `${base.href.replace(/\/$/, '')}/mcp`;
   const issuer = `${base.href.replace(/\/$/, '')}/oauth`;
@@ -28,7 +28,7 @@ export async function authorize({ baseUrl, passwordFile, stateFile }) {
     await tokenRequest({ grant_type: 'refresh_token', client_id: state.client.client_id, refresh_token: state.refreshToken, resource });
     return { token: state.accessToken, resource, state, save };
   }
-  const callback = 'https://client.example/praxis-probe-callback';
+  const callback = 'https://client.example/praxis-callback';
   const registration = await fetch(metadata.registration_endpoint, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ client_name: 'Praxis deployment verification', redirect_uris: [callback], grant_types: ['authorization_code', 'refresh_token'], response_types: ['code'], token_endpoint_auth_method: 'none' }) });
   if (registration.status !== 201) throw new Error(`Client registration failed: HTTP ${registration.status}`);
   state.client = await registration.json();
