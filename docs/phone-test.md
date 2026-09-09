@@ -6,7 +6,7 @@ Connect **Praxis** first. Use the same account as the iPhone. Record the model/m
 
 Use the app name **Praxis**, server URL `https://mcp.jensenabler.com/praxis/mcp`, and **OAuth**. The canonical issuer is `https://mcp.jensenabler.com/praxis/oauth`; discovery advertises `praxis:probe`, `praxis:code`, and `offline_access`. Keep `offline_access` as the base scope and optional OIDC/email lookup disabled. Complete the native owner sign-in and consent flow, then refresh the available actions if needed. The nine `probe_*` tools remain diagnostic fixtures alongside the coding tools.
 
-An existing connection to `/praxis-probe/mcp` uses the old OAuth issuer and resource. Renaming its display label alone does not migrate it to `/praxis/mcp`. Native connection to the canonical endpoint has not yet been recorded here. If owner sign-in is required, use the existing private Praxis password; the bootstrap password file remains `C:\Users\Jensen\.codex\praxis-probe-private\login.txt`. Do not paste it into a conversation.
+The new **Praxis** connection has completed native OAuth at the canonical endpoint and exposed 30 actions after Refresh: 21 coding and nine diagnostic tools. [Connection evidence](evidence/chatgpt-praxis-connection.json) records that result separately from the still-pending iPhone coding run. A connection to `/praxis-probe/mcp` uses the old OAuth issuer and resource; renaming its display label alone does not migrate it. If owner sign-in is required later, use the existing private Praxis password; the bootstrap password file remains `C:\Users\Jensen\.codex\praxis-probe-private\login.txt`. Do not paste it into a conversation.
 
 ## Historical first setup — legacy endpoint
 

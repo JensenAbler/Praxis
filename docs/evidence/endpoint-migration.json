@@ -1,0 +1,83 @@
+{
+  "evidenceKind": "owner-bootstrap-endpoint-migration",
+  "sourceRevision": "a41abbbbb51ee8f68d8968f5ef3971495b1bf0b6",
+  "release": "coding-a41abbbbb51e",
+  "archiveSha256": "b2e3614beb8ca83ecad7089ee399e1980f0a3a98970cc65d6f03315b8e8e603c",
+  "backupDirectory": "/root/praxis-probe-backups/endpoint-migration-h8gJA3N3",
+  "canonicalEndpoint": "https://mcp.jensenabler.com/praxis/mcp",
+  "canonicalIssuer": "https://mcp.jensenabler.com/praxis/oauth",
+  "validation": {
+    "linuxSuite": { "command": "npm test", "identity": "praxis-probe-build", "tests": 60, "passed": 60, "failed": 0, "skipped": 0, "beforePublication": true },
+    "stagingHealth": { "initial502Responses": 3, "subsequentlyPassedBeforePublication": true, "scope": "HTTPS staging health while public ingress was gated." },
+    "externalPublicHealth": { "status": 200, "source": "Deployment agent's external check after publication." }
+  },
+  "authenticatedFixture": {
+    "evidenceKind": "authenticated-MCP-client-temporary-authority",
+    "journalUnit": "praxis-code-endpoint-fixture-a41abbb.service",
+    "fixtureId": "3d6be1f4-bed4-4549-94d1-7b521788a677",
+    "startedAt": "2026-09-09T16:39:58.520Z",
+    "finishedAt": "2026-09-09T16:40:06.116Z",
+    "elapsedMilliseconds": 7596,
+    "status": "completed",
+    "authentication": "Ephemeral fixture issuer and signing keys; no live OAuth authority, owner password, or ChatGPT sign-in.",
+    "executor": "Real PodmanRunner using the protected fixed image and dedicated container storage.",
+    "image": "sha256:a807793c27f53bf93480fc3dcfe73b2ab1b6bdf8b3aa1aca820118fd43767170",
+    "gatewayRestartMode": "Gateway application instance and HTTP listener recreated in the same fixture process; coding backend remains alive.",
+    "passedGroups": ["permission_boundaries", "source_discovery_and_create", "all_edit_actions_and_conflicts", "real_command_and_gateway_restart", "fresh_client_recovers_completed_job", "persisted_logs_artifact_diff_and_mutation_receipts"],
+    "workspaceId": "fc5b86e2-ffeb-47c3-8819-c88cc34c3a5d",
+    "jobId": "6bf0b6a1-b5e8-4343-83d6-d186b9b41484",
+    "createOperationId": "e88844cc-92e5-4090-88cd-48d9485bfcb9",
+    "applyOperationId": "51df7172-c2a2-41a3-8265-f72c354be1f7",
+    "jobExitCode": 0,
+    "logPages": 3,
+    "logRecords": 6,
+    "artifactPages": 4,
+    "diffPages": 4,
+    "artifact": { "bytes": 64, "sha256": "44f1a2c4a5955545a5cd3e1aeadcf884e1bb5dbcea5074a6f72a38fd761c7a94", "independentlyVerified": true },
+    "fixtureStateRetained": true
+  },
+  "statePreservation": {
+    "beforeObservedAt": "2026-09-09T16:35:10Z",
+    "afterObservedAt": "2026-09-09T16:47:45.339275+00:00",
+    "method": "Read-only SQLite queries and aggregate hashes; raw private rows are not published.",
+    "probeJobsBeforeAndAfter": 2,
+    "probeRecordsBeforeAndAfter": 38,
+    "probeJobRowsSha256BeforeAndAfter": "c40c1228d52c5cca576baa06f6a380a242dd6fe439672f492794bdd4fed0b5dd",
+    "probeHashMethod": "SHA-256 of Python repr(fetchall(SELECT * FROM jobs ORDER BY rowid)).",
+    "liveCodingCountsBeforeAndAfter": { "code_jobs": 0, "workspaces": 0, "operations": 0 },
+    "probeWorkerPidBeforeAndAfter": 3451010,
+    "preservedListenerPids": { "apocrypha8787": 2217438, "observer8788": 2973852, "openclaw18789And18791": 871 },
+    "repositories": {
+      "podcast-discord": { "headBeforeAndAfter": "feef620f1958b24e2a0de50f28361a9d9e2db4ef", "afterWorkingTreeClean": true },
+      "podcast-production": { "headBeforeAndAfter": "2b5c4273d3f7b249f8626a8575ba79fe0f66c339", "afterWorkingTreeClean": true }
+    },
+    "scope": "The deployment was idle for coding work. Empty coding tables do not demonstrate migration of an active coding job. Probe row hash verifies job rows, while record preservation was checked by count. Listener PIDs and repository checks do not prove every unrelated process setting was unchanged."
+  },
+  "afterState": {
+    "observedAt": "2026-09-09T16:47:45.339275+00:00",
+    "activeReleasePath": "/srv/praxis-probe/releases/coding-a41abbbbb51e",
+    "gateway": { "active": true, "pid": 3474587, "name": "Praxis", "version": "0.2.0", "bootId": "20ee53fa-eaad-404a-952d-6ae15f1dc37b" },
+    "backend": { "active": true, "pid": 3474586, "bootId": "7ad8335f-4eff-4a9f-8150-94a1247cab9a", "configuredIssuer": "https://mcp.jensenabler.com/praxis/oauth", "configuredResource": "https://mcp.jensenabler.com/praxis/mcp" },
+    "httpCheckOrigin": "Read-only HTTPS requests from the VPS, plus loopback backend health.",
+    "newHealthStatus": 200,
+    "backendHealthStatus": 200,
+    "protectedResourceMetadataStatus": 200,
+    "metadataScopes": ["praxis:probe", "praxis:code", "offline_access"],
+    "oauthDiscoveryStatus": 200,
+    "oauthCodeChallengeMethods": ["S256"],
+    "unauthenticatedMcpStatus": 401,
+    "unauthenticatedChallengeResourceMetadata": "https://mcp.jensenabler.com/.well-known/oauth-protected-resource/praxis/mcp",
+    "legacyMcpStatus": 410,
+    "legacyProtectedResourceMetadataStatus": 410,
+    "legacyResponse": { "error": "endpoint_moved", "endpoint": "https://mcp.jensenabler.com/praxis/mcp", "message": "Reconnect Praxis using the new endpoint." }
+  },
+  "nativeConnection": {
+    "status": "connected_with_coding_scope",
+    "evidence": "chatgpt-praxis-connection.json",
+    "appId": "asdk_app_6aa18e1760dc81919cb05f7e2c199665",
+    "actions": 30,
+    "codingActions": 21,
+    "diagnosticActions": 9,
+    "scope": "Canonical native settings, discovery, and OAuth authorization passed; actual native coding-tool execution and the iPhone task remain pending."
+  }
+}

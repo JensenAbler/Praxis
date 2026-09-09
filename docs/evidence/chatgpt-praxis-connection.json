@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "evidenceKind": "native-ChatGPT-web-canonical-connection-and-owner-OAuth-metadata",
+  "observedDate": "2026-09-09",
+  "status": "connected_with_coding_scope",
+  "name": "Praxis",
+  "appId": "asdk_app_6aa18e1760dc81919cb05f7e2c199665",
+  "versionId": "asdk_app_v_6aa18e1760ec8191b7bb5236dfaa8b99",
+  "endpoint": "https://mcp.jensenabler.com/praxis/mcp",
+  "issuer": "https://mcp.jensenabler.com/praxis/oauth",
+  "release": "coding-a41abbbbb51e",
+  "nativeObservations": {
+    "newCanonicalConnectionCreated": true,
+    "settingsHeading": "Praxis",
+    "connectionName": "Praxis",
+    "connectedOn": "Sep 9",
+    "authorizationUsed": "OAuth",
+    "actionsRefreshToast": "Actions refreshed.",
+    "actionCountMethod": "Read-only DOM count of Copy input schema buttons after Refresh, cross-checked against the source tool registry.",
+    "actions": 30,
+    "codingActions": 21,
+    "diagnosticActions": 9,
+    "existingOwnerSessionUsed": true,
+    "passwordEntryRequired": false,
+    "reconnectNeededLabelsAfterCompletion": 0,
+    "finalPageTitle": "ChatGPT - Praxis",
+    "tryInChatAvailable": true
+  },
+  "legacyConnection": {
+    "appId": "asdk_app_6aa0d8a46ad08191b05827a9824cd295",
+    "uninstalledThroughNativeUi": true,
+    "absentFromFinalInstalledList": true,
+    "definitionRetainedUnderCreatedByMe": true,
+    "retainedDefinitionName": "Praxis Legacy",
+    "definitionDeleted": false,
+    "finalInstalledPraxisConnection": "asdk_app_6aa18e1760dc81919cb05f7e2c199665"
+  },
+  "serverCorroboration": {
+    "observedAt": "2026-09-09T16:52:47.513611+00:00",
+    "method": "Read-only active OAuth record counts filtered to the canonical resource and praxis:code scope; no credential or token values printed.",
+    "activeGrantRecords": 1,
+    "activeRefreshTokenRecords": 3,
+    "credentialOrTokenValuesPublished": false
+  },
+  "countCorrection": {
+    "earlierReceipt": "chatgpt-coding-connection.json",
+    "earlierReportedCodingActions": 22,
+    "earlierReportedTotalActions": 31,
+    "correctCodingActions": 21,
+    "correctTotalActions": 30,
+    "explanation": "The earlier 22-coding/31-total statement was a reporting error. The historical receipt is retained; this explicit correction records the directly counted UI and source registry. No tool removal is implied."
+  },
+  "friction": [
+    "The first Create form did not finish on two attempts. Creation succeeded after reloading the browser and temporarily renaming the old connection Praxis Legacy. The observations do not establish which change, if any, caused the recovery.",
+    "The first native consent submission returned an expired-session error. A fresh Connect followed by Sign in with Praxis completed using the existing owner session without password entry."
+  ],
+  "limitsOfEvidence": [
+    "Native settings, action discovery, and coding authorization were observed; no canonical native coding-tool call is established by this receipt.",
+    "An actual iPhone coding task and fresh-conversation coding recovery remain pending.",
+    "The legacy connection was uninstalled, but its app definition remains reinstallable under Created by me."
+  ]
+}
