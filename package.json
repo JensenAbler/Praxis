@@ -1,9 +1,9 @@
 {
   "name": "praxis-probe",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
-  "description": "An isolated, authenticated MCP fixture for measuring real ChatGPT and Claude client behavior.",
+  "description": "Source access, isolated coding workspaces, and durable MCP jobs for conversational models.",
   "engines": {
     "node": ">=22.22.0"
   },
@@ -11,7 +11,8 @@
     "start": "node src/server.js",
     "worker": "node src/worker.js",
     "test": "node --test",
-    "test:mcp": "node scripts/probe-client.js"
+    "test:mcp": "node scripts/probe-client.js",
+    "coding": "node src/code/server.js"
   },
   "dependencies": {
     "@modelcontextprotocol/express": "2.0.0",

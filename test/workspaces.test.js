@@ -52,6 +52,18 @@ test('source discovery, bounded reads/search, edits and receipts survive a new m
   assert.equal(reopened.read({ owner, workspaceId, path: 'README.md' }).lines[0].text, 'Hello Praxis');
 });
 
+test('project discovery stays compact while project inspection preserves the full task', t => {
+  const { workspaces, owner } = fixture(t);
+  const instructions = 'Original task with important acceptance details.\n'.repeat(100);
+  workspaces.projects.get('demo').instructions = instructions;
+  const listed = workspaces.projectsList({ owner });
+  assert.equal(listed.projects[0].instructionsAvailable, true);
+  assert.equal(Object.hasOwn(listed.projects[0], 'instructions'), false);
+  assert.ok(!JSON.stringify(listed).includes(instructions.slice(0, 40)));
+  assert.match(listed.nextStep, /project_inspect/);
+  assert.equal(workspaces.projectInspect({ owner, projectId: 'demo' }).instructions, instructions);
+});
+
 test('owner, revision, hash and batch preconditions reject before any effects', t => {
   const { workspaces, owner, workspaceId } = fixture(t);
   const initial = workspaces.inspect({ owner, workspaceId });
@@ -91,6 +103,35 @@ test('active jobs exclude source reads, edits, removal; internal completion refr
   assert.throws(() => workspaces.apply({ owner, workspaceId, expectedRevision: initial.revision, idempotencyKey: 'blocked-edit', changes: [{ action: 'write', path: 'x', expectedSha256: null, content: 'x' }] }), { code: 'WORKSPACE_BUSY' });
   assert.throws(() => workspaces.remove({ owner, workspaceId, expectedRevision: initial.revision }), { code: 'WORKSPACE_BUSY' });
   assert.equal(workspaces.refreshAfterJob({ owner, workspaceId }).revision, initial.revision);
+});
+
+test('workspace recovery during active commands reports the stored revision without scanning changing files', t => {
+  const { workspaces, store, owner, workspaceId, workspacePath, reopen } = fixture(t);
+  const initial = workspaces.inspect({ owner, workspaceId });
+  assert.equal(initial.revisionVerified, true);
+  store.db.prepare('INSERT INTO code_jobs VALUES (?,?,?,?)').run('active-recovery-job', owner, workspaceId, 'queued');
+  // A file exceeding the scan limit proves active inspection does not traverse command output.
+  writeFileSync(join(workspacePath, 'unfinished-output.txt'), Buffer.alloc(2 * 1024 * 1024 + 1, 65));
+  const recovered = reopen();
+  for (const status of ['queued', 'starting', 'running', 'canceling']) {
+    store.db.prepare('UPDATE code_jobs SET status = ? WHERE id = ?').run(status, 'active-recovery-job');
+    const inspected = recovered.inspect({ owner, workspaceId });
+    assert.equal(inspected.revision, initial.revision);
+    assert.equal(inspected.revisionVerified, false);
+    assert.equal(inspected.dirty, null);
+    assert.equal(inspected.inspectionStatus, 'job_in_progress');
+    assert.deepEqual(inspected.activeJobIds, ['active-recovery-job']);
+    assert.deepEqual(inspected.activeJobs, [{ id: 'active-recovery-job', status }]);
+    assert.throws(() => recovered.read({ owner, workspaceId, path: 'README.md' }), { code: 'WORKSPACE_BUSY' });
+    assert.throws(() => recovered.diff({ owner, workspaceId }), { code: 'WORKSPACE_BUSY' });
+  }
+  writeFileSync(join(workspacePath, 'unfinished-output.txt'), 'Finished output\n');
+  store.db.prepare("UPDATE code_jobs SET status = 'completed' WHERE id = ?").run('active-recovery-job');
+  const finished = recovered.inspect({ owner, workspaceId });
+  assert.equal(finished.revisionVerified, true);
+  assert.equal(finished.dirty, true);
+  assert.notEqual(finished.revision, initial.revision);
+  assert.deepEqual(finished.activeJobIds, []);
 });
 
 test('diff pagination accounts for renames, additions, deletions, binary content and executable modes', t => {

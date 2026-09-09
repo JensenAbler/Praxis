@@ -201,7 +201,12 @@ export class WorkspaceManager {
     }
   }
 
-  projectsList({ owner }) { ownerCheck(owner); return { projects: [...this.projects.values()].map(project => this._publicProject(project)) }; }
+  projectsList({ owner }) {
+    ownerCheck(owner);
+    return { projects: [...this.projects.values()].map(project => ({ projectId: project.id, name: project.name,
+      repository: project.repository, revision: project.revision, instructionsAvailable: Boolean(project.instructions) })),
+      nextStep: 'Use project_inspect with a projectId to read its instructions, validation commands, and source limits.' };
+  }
   projectInspect({ owner, projectId }) {
     ownerCheck(owner); const project = this._project(projectId), state = manifest(project.snapshotPath);
     return { ...this._publicProject(project), sourceDigest: state.revision, fileCount: Object.keys(state.entries).length, bytes: state.bytes };
@@ -232,15 +237,21 @@ export class WorkspaceManager {
   }
   inspect({ owner, workspaceId }) {
     return this.store.transaction(() => {
-      const row = this._row(owner, workspaceId); this._ready(row); this._idle(row);
+      const row = this._row(owner, workspaceId); this._ready(row);
+      const project = this.projects.get(row.project_id);
+      const publicJob = job => ({ id: job.id, status: job.status });
+      const jobs = this.db.prepare('SELECT id, status FROM code_jobs WHERE workspace_id = ? AND owner = ? ORDER BY rowid DESC LIMIT 20').all(workspaceId, owner).map(publicJob);
+      const activeJobs = this.db.prepare(`SELECT id, status FROM code_jobs WHERE workspace_id = ? AND owner = ? AND status IN ${ACTIVE} ORDER BY rowid DESC LIMIT 100`).all(workspaceId, owner).map(publicJob);
+      const information = { ...publicWorkspace(row), validationCommands: project?.validationCommands || [], instructions: project?.instructions || '',
+        jobs, activeJobIds: activeJobs.map(job => job.id), activeJobs,
+        exclusions: [...IGNORED, '.git', '.env*', 'credential/key files'], limits: LIMITS };
+      if (activeJobs.length) return { ...information, inspectionStatus: 'job_in_progress', revisionVerified: false, dirty: null,
+        message: 'The command may be changing files. This is the last stored revision; source inspection resumes after the job ends.' };
       const state = this._refresh(row), baseline = parseEntries(row.baseline_json);
       const issues = Object.entries(state.entries).filter(([, entry]) => entry.kind === 'unsafe').map(([path, entry]) => ({ path, issue: entry.issue }));
-      const project = this.projects.get(row.project_id);
-      return { ...publicWorkspace(row), dirty: !same(state.entries, baseline), fileCount: Object.keys(state.entries).length, bytes: state.bytes,
-        issues: issues.slice(0, 100), issuesTruncated: issues.length > 100,
-        validationCommands: project?.validationCommands || [], instructions: project?.instructions || '',
-        jobs: this.db.prepare('SELECT id, status FROM code_jobs WHERE workspace_id = ? AND owner = ? ORDER BY rowid DESC LIMIT 20').all(workspaceId, owner),
-        exclusions: [...IGNORED, '.git', '.env*', 'credential/key files'], limits: LIMITS };
+      return { ...information, ...publicWorkspace(row), inspectionStatus: 'ready', revisionVerified: true,
+        dirty: !same(state.entries, baseline), fileCount: Object.keys(state.entries).length, bytes: state.bytes,
+        issues: issues.slice(0, 100), issuesTruncated: issues.length > 100 };
     });
   }
   filesList({ path = '', cursor = 0, limit = 100, ...source }) {
