@@ -4,7 +4,7 @@
 
 The seed is a clean parent-commit replay, not an exact reconstruction of historical dirty files or the original machine. Its reference commit is an outcome example. The grader checks behavior, not the reference diff or exact prompt wording.
 
-The historical package lock omits peers in an optional WASM dependency branch. Default `npm ci` rejects it under both the initial Linux image's npm and a Windows npm 11.6.2 dry run. The Windows dry run succeeds with `--legacy-peer-deps`, preserving the original lock hash. Dependency-image preparation uses that explicit compatibility flag for this replay project only; it does not repair or edit the candidate's lockfile. Linux installation and actual validation must be recorded separately. This preparation reproduces a usable offline dependency bundle, not the exact historical machine or its unrecorded local lock changes.
+The historical package lock omits peers in an optional WASM dependency branch. Default `npm ci` rejects it under both the initial Linux image's npm and a Windows npm 11.6.2 dry run. The Windows dry run succeeds with `--legacy-peer-deps`, preserving the original lock hash. Dependency-image preparation uses that explicit compatibility flag for this replay project only; it does not repair or edit the candidate's lockfile. Linux installation subsequently succeeded, and the unchanged historical snapshot completed 75 tests with a final summary and exit 0 in the actual offline sandbox; [project validation evidence](evidence/project-validation.json) records the exact image, manifests, source, and runtime versions. This preparation reproduces a usable offline dependency bundle, not the exact historical machine or its unrecorded local lock changes.
 
 ## Run the trusted checker
 

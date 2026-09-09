@@ -1,0 +1,258 @@
+{
+  "evidenceKind": "actual-rootless-container-clean-project-validation",
+  "runId": "c4b1fa7f-9cbb-4c7e-bf33-46d6ce85a226",
+  "startedAt": "2026-09-09T15:39:29.145Z",
+  "release": "coding-53cf0cdab55c",
+  "image": "sha256:a807793c27f53bf93480fc3dcfe73b2ab1b6bdf8b3aa1aca820118fd43767170",
+  "hostUid": 993,
+  "projects": [
+    {
+      "projectId": "discord",
+      "sourceRevision": "feef620f1958b24e2a0de50f28361a9d9e2db4ef",
+      "workspaceId": "adefa4ce-28ba-4b34-b0cf-4bd47cca9510",
+      "commands": [
+        {
+          "commandIndex": 0,
+          "jobId": "f00a01e8-ed64-4d26-9f47-cf3954ee47ae",
+          "status": "failed",
+          "exitCode": 1,
+          "terminationReason": "exit",
+          "startedAt": "2026-09-09T08:39:33.555703318-07:00",
+          "finishedAt": "2026-09-09T08:39:54.943545261-07:00",
+          "outputBytes": 86220,
+          "logSha256": "05c141e55657f14e59465cfd2b2e7b5894be7a8176e0ff20c02159c9c39da280",
+          "logRecords": 859,
+          "logPages": 9,
+          "truncated": false,
+          "executionError": null,
+          "custom": [
+            {
+              "passed": 93,
+              "failed": 2
+            }
+          ],
+          "tap": {},
+          "python": null,
+          "childClosure": {
+            "code": 1,
+            "signal": null
+          },
+          "suiteCompleted": false,
+          "suitePassed": false,
+          "acceptedAsPassing": false
+        }
+      ],
+      "sourceManifests": {
+        "package.json": "0c87cf0f0dec281e083f7be378417215e9a8a81bbc8a730d21c6bf8f6ce2b2c6",
+        "package-lock.json": "f5b2dc5f51ee5d90ef2075b5df0b9275ca284d95d33650af991fe4049aa88be2"
+      },
+      "dependencyManifestsMatchSource": true,
+      "passed": false
+    },
+    {
+      "projectId": "production",
+      "sourceRevision": "2b5c4273d3f7b249f8626a8575ba79fe0f66c339",
+      "workspaceId": "3f053552-afaa-47d0-9e25-a0e59ac17de1",
+      "commands": [
+        {
+          "commandIndex": 0,
+          "jobId": "cf6ce84a-32b9-475d-9425-b080d109c216",
+          "status": "completed",
+          "exitCode": 0,
+          "terminationReason": "exit",
+          "startedAt": "2026-09-09T08:39:56.018466318-07:00",
+          "finishedAt": "2026-09-09T08:40:17.5395167-07:00",
+          "outputBytes": 41711,
+          "logSha256": "b8e244c51e1590f69539b5bfc8818ecbdf85cc8891a6365caf8063bc99df339b",
+          "logRecords": 502,
+          "logPages": 6,
+          "truncated": false,
+          "executionError": null,
+          "custom": [],
+          "tap": {},
+          "python": {
+            "tests": 35,
+            "durationSeconds": 21.011,
+            "result": "OK"
+          },
+          "childClosure": {
+            "code": 0,
+            "signal": null
+          },
+          "suiteCompleted": true,
+          "suitePassed": true,
+          "acceptedAsPassing": true
+        }
+      ],
+      "sourceManifests": {},
+      "dependencyManifestsMatchSource": null,
+      "passed": true
+    },
+    {
+      "projectId": "praxis",
+      "sourceRevision": "53cf0cdab55c0262f3cf8fa9246db5f3681cbe1a",
+      "workspaceId": "283d1b65-19b2-44aa-8dd1-0ac319cead07",
+      "commands": [
+        {
+          "commandIndex": 0,
+          "jobId": "99068a38-916b-407c-a2b4-a667f09b85dd",
+          "status": "completed",
+          "exitCode": 0,
+          "terminationReason": "exit",
+          "startedAt": "2026-09-09T08:40:19.868571631-07:00",
+          "finishedAt": "2026-09-09T08:40:35.003500296-07:00",
+          "outputBytes": 13859,
+          "logSha256": "29e9664ea70feb0f300f0e7c8e100d2e509e224501f533f950f14336154e02bd",
+          "logRecords": 361,
+          "logPages": 4,
+          "truncated": false,
+          "executionError": null,
+          "custom": [],
+          "tap": {
+            "tests": 55,
+            "pass": 55,
+            "fail": 0,
+            "cancelled": 0,
+            "skipped": 0,
+            "todo": 0
+          },
+          "python": null,
+          "childClosure": {
+            "code": 0,
+            "signal": null
+          },
+          "suiteCompleted": true,
+          "suitePassed": true,
+          "acceptedAsPassing": true
+        }
+      ],
+      "sourceManifests": {
+        "package.json": "2c16206f248c74b5b72c2c985f4adad81b01c71900cbad37cb870815c461b898",
+        "package-lock.json": "0ee72a6e2fbb6e5494200599d88515190febf797b76e6f851ea4dae7e484de7c"
+      },
+      "dependencyManifestsMatchSource": true,
+      "passed": true
+    },
+    {
+      "projectId": "discord-replay-speech-first",
+      "sourceRevision": "06fb2784454e3641960a1e1782a0c92a68a341b7",
+      "workspaceId": "9dd224dd-4589-4e6f-a2e7-f5e86ead2c83",
+      "commands": [
+        {
+          "commandIndex": 0,
+          "jobId": "52401421-b967-455d-90ff-753fd8b86f8e",
+          "status": "completed",
+          "exitCode": 0,
+          "terminationReason": "exit",
+          "startedAt": "2026-09-09T08:40:36.506026758-07:00",
+          "finishedAt": "2026-09-09T08:40:41.771495228-07:00",
+          "outputBytes": 54782,
+          "logSha256": "b448bcf5cb8eadb4f4edde3fba6c318c01d0496e715991cb20b2d8647f1ee89b",
+          "logRecords": 578,
+          "logPages": 6,
+          "truncated": false,
+          "executionError": null,
+          "custom": [
+            {
+              "passed": 75,
+              "failed": 0
+            }
+          ],
+          "tap": {},
+          "python": null,
+          "childClosure": {
+            "code": 0,
+            "signal": null
+          },
+          "suiteCompleted": true,
+          "suitePassed": true,
+          "acceptedAsPassing": true
+        }
+      ],
+      "sourceManifests": {
+        "package.json": "a713ef6e41677f619e82f96f64ba1552bbeea838eb0f08b15ce900fb6d1318cf",
+        "package-lock.json": "9f1a68629a3e3151cadb904cb55b0bda129aa6b24f60a07a9bf6b3f2b12cc371"
+      },
+      "dependencyManifestsMatchSource": true,
+      "passed": true
+    }
+  ],
+  "scope": "Clean immutable registered snapshots, offline prepared dependencies, separate disposable workspaces; no implementation attempt or phone run.",
+  "dependencyPreparation": {
+    "default": "npm ci --ignore-scripts --no-audit --no-fund",
+    "historicalReplay": "npm ci --ignore-scripts --legacy-peer-deps --no-audit --no-fund",
+    "ffmpegStatic": "Read-only symlink to the image system ffmpeg; lifecycle scripts were not run."
+  },
+  "runtime": {
+    "versions": {
+      "node": "v22.23.2",
+      "npm": "10.9.8",
+      "python": "Python 3.11.2",
+      "git": "git version 2.39.5",
+      "ripgrep": "ripgrep 13.0.0",
+      "ffmpeg": "ffmpeg version 5.1.9-0+deb12u1 Copyright (c) 2000-2026 the FFmpeg developers"
+    },
+    "bundles": {
+      "discord": {
+        "package.json": "0c87cf0f0dec281e083f7be378417215e9a8a81bbc8a730d21c6bf8f6ce2b2c6",
+        "package-lock.json": "f5b2dc5f51ee5d90ef2075b5df0b9275ca284d95d33650af991fe4049aa88be2",
+        "nodeModulesExists": true
+      },
+      "discord-replay-speech-first": {
+        "package.json": "a713ef6e41677f619e82f96f64ba1552bbeea838eb0f08b15ce900fb6d1318cf",
+        "package-lock.json": "9f1a68629a3e3151cadb904cb55b0bda129aa6b24f60a07a9bf6b3f2b12cc371",
+        "nodeModulesExists": true
+      },
+      "praxis": {
+        "package.json": "2c16206f248c74b5b72c2c985f4adad81b01c71900cbad37cb870815c461b898",
+        "package-lock.json": "0ee72a6e2fbb6e5494200599d88515190febf797b76e6f851ea4dae7e484de7c",
+        "nodeModulesExists": true
+      }
+    },
+    "job": {
+      "jobId": "8d26f2dc-a78b-4c4a-a6c9-61d00225adbb",
+      "status": "completed",
+      "exitCode": 0,
+      "terminationReason": "exit",
+      "startedAt": "2026-09-09T08:39:30.610550408-07:00",
+      "finishedAt": "2026-09-09T08:39:32.713581773-07:00",
+      "outputBytes": 890,
+      "logSha256": "643a38dfd6fe39f15fbbd0cda5e436c67dc3ecdbe85d635e1ab65fbf959ae559",
+      "logRecords": 5,
+      "logPages": 1,
+      "truncated": false,
+      "executionError": null
+    }
+  },
+  "completedAt": "2026-09-09T15:40:42.204Z",
+  "status": "completed",
+  "passed": false,
+  "operatorInspection": {
+    "fixtureScriptSha256": "05b4549e46f022c3e614eebb0606406663b7fe4f3e9150e96f0262810c6f4894",
+    "coreSourceRevision": "53cf0cdab55c0262f3cf8fa9246db5f3681cbe1a",
+    "unit": "praxis-code-project-validation.service",
+    "unitSha256": "84e98e80b12e01885000a403559025ea1d5f8c088bcc7d0098ae636c27c78257",
+    "policy": "Clone of the installed coding service policy; executor UID 993, 1536 MiB aggregate memory, no swap, one CPU, 256 tasks, protected host paths, loopback-only outer networking and network-none containers. Only WorkingDirectory, ExecStart, description, Restart=no and a 1200-second fixture lifetime differ.",
+    "execution": "Exactly one provenance job and one validation job per project, sequentially. All five jobs became terminal before releasing the container lane. No interrupted job was rerun.",
+    "unitExitCode": 1,
+    "unitMemoryPeakBytes": 434212864,
+    "unitSwapPeakBytes": 0,
+    "unitCpuUsageNanoseconds": 53653019000,
+    "discordFailureDiagnosis": [
+      {
+        "failure": "A constructor test omits its recording directory override and attempts to create the repository's default external content directory.",
+        "evidence": "Private source inspection plus ENOENT mkdir error in stored job logs. Container root is read-only and only the selected workspace is mounted writable.",
+        "classification": "Test environment setup needs a disposable content directory.",
+        "possibleRemedyNotYetTested": "Set RECORDING_DIR or CLAWCAST_CONTENT_ROOT to a disposable path inside /tmp or /workspace when invoking npm test. No production mount or source edit is needed."
+      },
+      {
+        "failure": "A recording metadata test did not produce its audio metadata after FFmpeg terminated without an exit code.",
+        "evidence": "The stored test log contains an FFmpeg error with a null exit code. The host kernel journal at 2026-09-09T08:39:38-07:00 records ffmpeg PID 3442738 segfaulting in libc during this test. No OOM event was reported in the inspected run interval.",
+        "classification": "Native media runtime crash; not resolved by creating a fixture directory.",
+        "runtime": "System FFmpeg 5.1.9 from the fixed executor image.",
+        "followUp": "Separate synthetic job 79795465-a391-4050-bab6-2e3fb4d116da reproduced SIGSEGV with 0.1-second silent input and dynaudnorm under both default and single-thread settings. Omitting dynaudnorm or extending input to two seconds completed successfully. The enclosing cgroup peaked at 32 tasks against its 256-task limit, without PID-limit or OOM events. See native-media-diagnostic.json. No original job was rerun, and no project or package was changed."
+      }
+    ],
+    "limits": "Current discord is not certified passing, and its subsequent journal suite was not reached. The historical replay completed all 75 of its baseline tests with its own explicit final summary. These are automated clean-snapshot checks, not phone acceptance or a completed historical coding task. Raw logs and private repository source remain outside the public evidence."
+  }
+}

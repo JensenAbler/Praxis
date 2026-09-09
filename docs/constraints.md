@@ -11,4 +11,23 @@
 | Friction despite successful core work | First agent reported result-handling serialization failure and extra INVALID_ARGUMENT metadata alongside intentional FIXTURE_ERROR. Raw errors are unavailable; cause unresolved. Last-seen log cursors intentionally persist on empty pages, requiring an empty-page stop check. See evidence/iphone-probe-report.md. |
 | Native OAuth form behavior differs from scripted HTTP clients | Actual ChatGPT connection reached the owner form, then native POST failed the origin check. The page used no-referrer, which makes browser form submissions send Origin:null. The scripted test supplied Origin explicitly and missed this. Use strict-origin for the form, retain exact-origin/CSRF checks, and verify the real browser flow. |
 
-The eventual replay eval should use historical prompts and starting revisions, keep the expected final implementation hidden from the worker, compare behavior and tests rather than exact diffs, and record tool calls/results/timings/errors alongside code outcomes. It should simulate observed restrictions and failures, with an unrestricted reference run where practical. This probe does not access hidden reasoning traces or implement that eval harness yet.
+## Coding bootstrap observations
+
+These are measured implementation and test observations, not a comparison of model intelligence or hidden reasoning traces.
+
+| Observed friction | Consequence for agent tooling |
+| --- | --- |
+| Rootless Podman did not use the intended storage locations from configuration alone. | Pass and verify explicit runtime storage paths so commands cannot silently consume an uncapped home-directory image store. |
+| The existing Docker runtime was unsuitable for the selected rootless cgroup setup. | Pin the independently installed `crun` runtime; preserve unrelated Docker configuration. Test the actual host policy rather than accepting a constructed command line as isolation evidence. |
+| Cold user-mapping preparation took tens of seconds. | Return durable queued/starting state promptly, separate preparation time from command runtime, and allow observation without encouraging duplicate submissions. |
+| The runtime's independent timeout produced a negative monitor exit sentinel. | Preserve unknown process exit as unknown and label timeout inference explicitly. Do not manufacture an ordinary exit code or success. |
+| A job's public start timestamp changed after the first running response. | Keep published identity/timestamps stable while using observed runtime time for deadline enforcement. Exercise concurrent observation and later recovery. |
+| A library-based MCP fixture passed while permanent service startup skipped its entry point through a release symlink. | Verify the real executable launch path and service lifecycle as well as imported application factories. Activation health checks and rollback caught the missing listener. |
+| The historical lockfile could not be installed with default peer resolution. | Prepare and hash dependencies independently; document the narrow compatibility flag without modifying the replay's source or implying an exact historical environment. |
+| Source inspection can race a running command. | Provide recoverable workspace/job metadata during execution, clearly defer source scans/diffs, and preserve an inspectable last revision if a command creates invalid source paths. |
+| The unchanged historical snapshot completed 75 tests in the actual sandbox. | This establishes a usable starting environment for the phone replay. Current Discord's separate baseline failures remain recorded; passing preparation is not passing the coding task. |
+| A workstation power outage left the VPS and its stored test results intact. | Recover by durable workspace/job/operation identity before deciding to submit more work. This is not evidence of VPS reboot or host-loss recovery. |
+
+See [host evidence](evidence/coding-host-bootstrap.json), [authenticated MCP evidence](evidence/coding-mcp-host.json), [project baselines](evidence/project-validation.json), and [deployment observations](evidence/coding-deployment.json).
+
+The replay evaluation uses historical prompts and starting revisions, keeps the expected final implementation hidden from the worker, and compares behavior and tests rather than exact diffs. Record tool calls/results/timings/errors alongside code outcomes and simulate observed restrictions and failures. A seed catalog, independent checker, prepared source/dependencies, and phone acceptance prompts exist; a broader automated model comparison harness remains future work.
