@@ -31,3 +31,18 @@ These are measured implementation and test observations, not a comparison of mod
 See [host evidence](evidence/coding-host-bootstrap.json), [authenticated MCP evidence](evidence/coding-mcp-host.json), [project baselines](evidence/project-validation.json), and [deployment observations](evidence/coding-deployment.json).
 
 The replay evaluation uses historical prompts and starting revisions, keeps the expected final implementation hidden from the worker, and compares behavior and tests rather than exact diffs. Record tool calls/results/timings/errors alongside code outcomes and simulate observed restrictions and failures. A seed catalog, independent checker, prepared source/dependencies, and phone acceptance prompts exist; a broader automated model comparison harness remains future work.
+
+## First native coding replay
+
+The [phone coding report](evidence/iphone-coding-report.md), [server audit](evidence/iphone-coding-server.json), and [independent container checker](evidence/iphone-coding-independent-check.json) establish a completed implementation and fresh-conversation recovery for one case. They also show why a successful code outcome is insufficient as a tooling-quality measure.
+
+| Observed friction | Next implementation target, not yet deployed |
+| --- | --- |
+| Repeated patches to one file in a batch were rejected; the description omitted this restriction. | Support ordered hunks under one original file hash, and describe the exact precondition semantics. |
+| A small patch to a 351 KB file hit the 131,072-character full-write limit on the reconstructed result. | Bound patch input separately and allow the result up to the existing 2 MiB source-file ceiling, preserving journal and aggregate quotas. |
+| Diff limits 100/5 and log limit 200 were rejected. | Describe units, ranges, defaults, cursors, and stopping rules in each schema field and in capabilities. |
+| Full commands, logs, and duplicated MCP result representations produced bulky responses and reported client truncation. | Compact routine status; expose complete commands and logs through explicit bounded reads and caller-selected response byte budgets. |
+| Recovery required 70 audited handlers, including 31 log reads and 11 diagnostic-observation reads. | Provide a compact recovery overview with durable IDs, statuses, revisions, and links to complete evidence; distinguish ordinary resume from a deliberately exhaustive audit. |
+| Transient recovery `-32603` errors succeeded on retry, while handler audit showed no failures. | Add sanitized protocol/encoding/handler-stage correlation. Do not infer a backend or client cause from HTTP 200 or successful handler receipts alone. |
+
+Owner-reported implementation/recovery times were 576/192 seconds. Measured handler totals were 2.249/0.397 seconds, and the three original jobs totaled 12.857 seconds from queueing to terminal updates. These measurements do not separate model, network, client, authorization, or subagent overhead. They are a baseline for subsequent matched evaluations, not a speed comparison with Codex.

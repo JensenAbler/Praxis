@@ -1,6 +1,8 @@
 # First coding acceptance from an iPhone
 
-This is a client acceptance test, separate from the automated Linux and MCP fixtures. It is pending until the owner runs it and supplies the actual results. The historical task and private source are registered on the server; neither needs to be pasted into a public document.
+This client acceptance test passed for one actual iPhone task and fresh-conversation recovery on `coding-a41abbbbb51e`. [The report](evidence/iphone-coding-report.md) separates owner-supplied native results, [server corroboration](evidence/iphone-coding-server.json), and the [independent checker](evidence/iphone-coding-independent-check.json). Implementation took a reported 9 minutes 36 seconds; recovery took 3 minutes 12 seconds with two subagents. Validation improved from 75 passed/0 failed to 76/0, all 577/7/582 job log records survived, and the independent checker passed five checks.
+
+The workflow succeeded despite two rejected `workspace_apply` attempts; a hash-checked command performed the edits, with no apply receipt. Empty artifact lists establish listing only, not native artifact-content retrieval. Pagination, transient errors, and local result handling remain friction. The prompts below preserve the original test; the existing workspace and jobs must not be recreated to repeat an ambiguously completed operation. The historical task and private source remain registered on the server and outside this public document.
 
 ## Before starting
 

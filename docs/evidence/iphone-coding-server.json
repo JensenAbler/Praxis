@@ -1,0 +1,283 @@
+{
+  "schemaVersion": 1,
+  "evidenceKind": "read-only-live-server-corroboration-of-owner-reported-native-iPhone-coding-and-recovery",
+  "observedAt": "2026-09-09T10:47:03.028777-07:00",
+  "release": "coding-a41abbbbb51e",
+  "method": "Read-only SQLite connections with query_only enabled, existing persisted diff cache, and selected configuration fields. No MCP request, command job, source edit, service restart, or rerun was issued. Credentials, command bodies, private source, and raw logs are excluded.",
+  "workspace": {
+    "id": "4851843f-e8af-43c3-a828-33dbd417bf0f",
+    "project_id": "discord-replay-speech-first",
+    "label": "iPhone coding replay v1",
+    "base_revision": "06fb2784454e3641960a1e1782a0c92a68a341b7",
+    "revision": "825ad886c35ea466e0a801d43c69972fe29f3559359129892e79ddc8f57deb1f",
+    "status": "ready",
+    "created_at": "2026-09-09T17:13:12.803Z",
+    "updated_at": "2026-09-09T17:19:02.965Z"
+  },
+  "matchingLabelCount": 1,
+  "jobs": [
+    {
+      "id": "aca0f11a-9936-47ae-9702-df1b016efa69",
+      "status": "completed",
+      "created_at": "2026-09-09T17:14:33.18Z",
+      "updated_at": "2026-09-09T17:14:39.491Z",
+      "started_at": "2026-09-09T17:14:33.637Z",
+      "finished_at": "2026-09-09T10:14:39.28595985-07:00",
+      "exit_code": 0,
+      "signal": null,
+      "termination_reason": "exit",
+      "execution_error": null,
+      "revision_after": "b0d387845a162f6b3d910840c8a8179764f214483e13abffacff664d088c960b",
+      "output_bytes": 54726,
+      "truncated": 0,
+      "artifact_errors": [],
+      "requestMatchesRegisteredValidationCommand": true,
+      "artifactsCount": 0,
+      "executionSeconds": 5.648959,
+      "queuedToTerminalUpdateSeconds": 6.311,
+      "logs": {
+        "count": 577,
+        "firstSequence": 1,
+        "lastSequence": 577,
+        "contiguous": true,
+        "duplicateSequenceCount": 0,
+        "partialRecords": 0,
+        "streams": {
+          "system": 4,
+          "stdout": 562,
+          "stderr": 11
+        },
+        "safeMarkers": [
+          {
+            "sequence": 575,
+            "passed": 75,
+            "failed": 0
+          },
+          {
+            "sequence": 577,
+            "text": "COMPLETED exit=0 reason=exit monitorExit=0"
+          }
+        ]
+      }
+    },
+    {
+      "id": "8309f589-0277-4215-bf3a-df06e0ae38d4",
+      "status": "completed",
+      "created_at": "2026-09-09T17:19:01.627Z",
+      "updated_at": "2026-09-09T17:19:02.968Z",
+      "started_at": "2026-09-09T17:19:02.221Z",
+      "finished_at": "2026-09-09T10:19:02.360816758-07:00",
+      "exit_code": 0,
+      "signal": null,
+      "termination_reason": "exit",
+      "execution_error": null,
+      "revision_after": "825ad886c35ea466e0a801d43c69972fe29f3559359129892e79ddc8f57deb1f",
+      "output_bytes": 453,
+      "truncated": 0,
+      "artifact_errors": [],
+      "requestMatchesRegisteredValidationCommand": false,
+      "artifactsCount": 0,
+      "executionSeconds": 0.139816,
+      "queuedToTerminalUpdateSeconds": 1.341,
+      "logs": {
+        "count": 7,
+        "firstSequence": 1,
+        "lastSequence": 7,
+        "contiguous": true,
+        "duplicateSequenceCount": 0,
+        "partialRecords": 0,
+        "streams": {
+          "system": 4,
+          "stdout": 3
+        },
+        "safeMarkers": [
+          {
+            "sequence": 6,
+            "text": "SOURCE_EDITS_COMPLETED: 2 files"
+          },
+          {
+            "sequence": 7,
+            "text": "COMPLETED exit=0 reason=exit monitorExit=0"
+          }
+        ]
+      }
+    },
+    {
+      "id": "6359cc6a-4586-47b3-9539-0fc31e25e219",
+      "status": "completed",
+      "created_at": "2026-09-09T17:19:25.822Z",
+      "updated_at": "2026-09-09T17:19:31.027Z",
+      "started_at": "2026-09-09T17:19:26.189Z",
+      "finished_at": "2026-09-09T10:19:30.531311983-07:00",
+      "exit_code": 0,
+      "signal": null,
+      "termination_reason": "exit",
+      "execution_error": null,
+      "revision_after": "825ad886c35ea466e0a801d43c69972fe29f3559359129892e79ddc8f57deb1f",
+      "output_bytes": 55251,
+      "truncated": 0,
+      "artifact_errors": [],
+      "requestMatchesRegisteredValidationCommand": true,
+      "artifactsCount": 0,
+      "executionSeconds": 4.342311,
+      "queuedToTerminalUpdateSeconds": 5.205,
+      "logs": {
+        "count": 582,
+        "firstSequence": 1,
+        "lastSequence": 582,
+        "contiguous": true,
+        "duplicateSequenceCount": 0,
+        "partialRecords": 0,
+        "streams": {
+          "system": 4,
+          "stdout": 567,
+          "stderr": 11
+        },
+        "safeMarkers": [
+          {
+            "sequence": 580,
+            "passed": 76,
+            "failed": 0
+          },
+          {
+            "sequence": 582,
+            "text": "COMPLETED exit=0 reason=exit monitorExit=0"
+          }
+        ]
+      }
+    }
+  ],
+  "operations": [
+    {
+      "id": "e3890f5e-a07e-4b3f-b38c-a1ceb9977f97",
+      "kind": "create",
+      "status": "completed",
+      "created_at": "2026-09-09T17:13:12.804Z",
+      "updated_at": "2026-09-09T17:13:13.678Z"
+    }
+  ],
+  "existingDiffCache": {
+    "workspaceId": "4851843f-e8af-43c3-a828-33dbd417bf0f",
+    "revision": "825ad886c35ea466e0a801d43c69972fe29f3559359129892e79ddc8f57deb1f",
+    "bytes": 11715,
+    "characters": 11715,
+    "fallbacks": 0,
+    "actualBytes": 11715,
+    "sha256": "d23b8cdc34270d5958af3781fe9d60f13edbc26b70955a348d4b5ee1f2ebc96d",
+    "changedPaths": [
+      "podcast-generator.js",
+      "test.js"
+    ],
+    "metadataMatchesWorkspace": true
+  },
+  "auditWindows": {
+    "implementation": {
+      "firstObservationAt": "2026-09-09T17:12:50.774Z",
+      "lastObservationAt": "2026-09-09T17:21:41.317Z",
+      "firstToolAt": "2026-09-09T17:12:50.774Z",
+      "lastToolAt": "2026-09-09T17:21:41.313Z",
+      "firstToLastToolSeconds": 530.539,
+      "toolHandlerCount": 78,
+      "tools": {
+        "capabilities": 2,
+        "workspaces_list": 1,
+        "projects_list": 1,
+        "project_inspect": 1,
+        "workspace_create": 1,
+        "code_search": 11,
+        "files_list": 1,
+        "file_read": 23,
+        "workspace_inspect": 3,
+        "job_start": 3,
+        "job_logs": 13,
+        "job_status": 4,
+        "workspace_apply": 2,
+        "jobs_list": 3,
+        "operations_list": 3,
+        "workspace_diff": 6
+      },
+      "failedToolHandlers": [
+        {
+          "sequence": 130,
+          "recordedAt": "2026-09-09T17:17:25.854Z",
+          "kind": "tool",
+          "tool": "workspace_apply",
+          "durationMs": 17.572,
+          "resultJsonBytes": 310,
+          "ok": false,
+          "errorCode": "VALIDATION_ERROR"
+        },
+        {
+          "sequence": 138,
+          "recordedAt": "2026-09-09T17:18:00.202Z",
+          "kind": "tool",
+          "tool": "workspace_apply",
+          "durationMs": 16.484,
+          "resultJsonBytes": 314,
+          "ok": false,
+          "errorCode": "VALIDATION_ERROR"
+        }
+      ],
+      "toolHandlerDurationMs": {
+        "sum": 2249.125,
+        "median": 11.829,
+        "max": 896.357
+      },
+      "largestResultJsonBytes": 26279,
+      "httpCount": 81,
+      "httpStatusCounts": {
+        "200": 81
+      },
+      "abortedHttpCount": 0,
+      "mutationToolHandlerCount": 6
+    },
+    "recovery": {
+      "firstObservationAt": "2026-09-09T17:25:57.019Z",
+      "lastObservationAt": "2026-09-09T17:28:58.529Z",
+      "firstToolAt": "2026-09-09T17:25:57.019Z",
+      "lastToolAt": "2026-09-09T17:28:58.527Z",
+      "firstToLastToolSeconds": 181.508,
+      "toolHandlerCount": 70,
+      "tools": {
+        "capabilities": 2,
+        "workspaces_list": 2,
+        "operations_list": 2,
+        "jobs_list": 2,
+        "workspace_inspect": 2,
+        "job_status": 6,
+        "job_logs": 31,
+        "artifact_list": 6,
+        "operation_read": 2,
+        "workspace_diff": 4,
+        "probe_observations": 11
+      },
+      "failedToolHandlers": [],
+      "toolHandlerDurationMs": {
+        "sum": 396.766,
+        "median": 4.506,
+        "max": 42.565
+      },
+      "largestResultJsonBytes": 22886,
+      "httpCount": 74,
+      "httpStatusCounts": {
+        "200": 74
+      },
+      "abortedHttpCount": 0,
+      "mutationToolHandlerCount": 0
+    }
+  },
+  "ownerReportedTiming": {
+    "implementationSeconds": 576,
+    "recoverySeconds": 192,
+    "recoverySubagents": 2,
+    "source": "Owner-reported native app durations; distinct from observed server time spans and handler durations."
+  },
+  "limitsOfEvidence": [
+    "Temporal audit grouping is inferred from the two separated request bursts and owner reports. Telemetry does not record conversation IDs, subagent IDs, arguments, or result bodies, and cannot prove which client saw a response.",
+    "MCP input-schema failures can occur before the audited tool handler. HTTP 200 does not exclude JSON-RPC errors. The reported recovery -32603 errors, rejected pagination arguments, and local serialization/display truncation therefore cannot be attributed conclusively from these records.",
+    "Server audit shows zero failed recovery tool handlers and no mutation tool handlers during the recovery burst. Persisted job and operation rows show no later job or mutation receipt for this workspace as of observation. These facts corroborate recovery without rerunning the work, but do not prove the absence of every possible external write.",
+    "Validation pass counts are persisted worker test output, not an independent behavioral assessment or live Anthropic verification. Network was disabled in the configured coding environment.",
+    "Existing persisted diff cache was read directly and matched the workspace revision. This corroborates the result bytes but does not independently recreate the phone pagination sequence.",
+    "A single successful native coding task and recovery do not establish universal client limits, phone lock behavior, model reasoning continuity, or production deployment capability."
+  ]
+}

@@ -1,0 +1,94 @@
+{
+  "evidenceKind": "independent-read-only-container-checker",
+  "unit": "praxis-phone-eval-c4472279-9296-4d67-8ce2-831d81ab5047.service",
+  "runId": "c4472279-9296-4d67-8ce2-831d81ab5047",
+  "containerName": "praxis-phone-eval-c4472279-9296-4d67-8ce2-831d81ab5047",
+  "workspaceId": "4851843f-e8af-43c3-a828-33dbd417bf0f",
+  "baseRevision": "06fb2784454e3641960a1e1782a0c92a68a341b7",
+  "workspaceRevision": "825ad886c35ea466e0a801d43c69972fe29f3559359129892e79ddc8f57deb1f",
+  "checkerRelease": "coding-a41abbbbb51e",
+  "image": "sha256:a807793c27f53bf93480fc3dcfe73b2ab1b6bdf8b3aa1aca820118fd43767170",
+  "candidateMount": "read-only",
+  "checkerMount": "read-only",
+  "network": "none",
+  "timeoutSeconds": 30,
+  "candidateHashesBefore": {
+    "podcast-generator.js": "3ac243c54a811d7f08c78a7a255b66627fd3a548f38615da14a8f5a72a506ea2",
+    "anthropic-messages.js": "7cd7354c491b8beda0957ba8947057d5b7a540a855e266b7b6b78e41675ec2e5",
+    "test.js": "012c9f9ec76857a480d917946e62b3e502cdc68ec94cf18b19523677004f747c"
+  },
+  "observedAt": "2026-09-09T17:47:02.934211+00:00",
+  "systemd": {
+    "ExecMainStatus": "0",
+    "CPUQuotaPerSecUSec": "1s",
+    "MemoryMax": "1610612736",
+    "MemorySwapMax": "0",
+    "TasksMax": "256",
+    "User": "praxis-code",
+    "ActiveState": "inactive",
+    "SubState": "dead"
+  },
+  "result": {
+    "caseId": "speech-first",
+    "checker": "speech-first-v1",
+    "complete": true,
+    "passed": true,
+    "checks": [
+      {
+        "id": "schema_field_order",
+        "passed": true
+      },
+      {
+        "id": "prompt_order_coherence",
+        "passed": true,
+        "recognizedSpeechFirstShape": true,
+        "semanticReviewRequired": true
+      },
+      {
+        "id": "reader_orders_and_silence",
+        "passed": true
+      },
+      {
+        "id": "mock_stream_decision_liveness",
+        "passed": true
+      },
+      {
+        "id": "mock_json_object_fallback",
+        "passed": true,
+        "recognizedSpeechFirstShape": true,
+        "semanticReviewRequired": true
+      }
+    ],
+    "candidateModuleSha256": {
+      "podcast-generator.js": "3ac243c54a811d7f08c78a7a255b66627fd3a548f38615da14a8f5a72a506ea2",
+      "anthropic-messages.js": "7cd7354c491b8beda0957ba8947057d5b7a540a855e266b7b6b78e41675ec2e5"
+    },
+    "promptSha256": "8c398791df54075a65853dea8a07892138ade7b4de5b57bb9c437ebd8bbd18d2",
+    "evidenceType": "offline-mocked-module-evaluation",
+    "liveServicesExercised": false,
+    "semanticReviewRequired": true,
+    "isolation": "Caller must enforce an unprivileged OS sandbox; VM restrictions are not a security boundary."
+  },
+  "checkerSha256": "4ffbe37210a464603adc95b0f0f2a3dd255c1cae4253dc59752156c937e550de",
+  "catalogSha256": "0c909ebfda3b4a3216ce2bb1f6e491c5dcbadd8e93d2a80b2706ca335ad1e8cd",
+  "candidateHashesAfter": {
+    "podcast-generator.js": "3ac243c54a811d7f08c78a7a255b66627fd3a548f38615da14a8f5a72a506ea2",
+    "anthropic-messages.js": "7cd7354c491b8beda0957ba8947057d5b7a540a855e266b7b6b78e41675ec2e5",
+    "test.js": "012c9f9ec76857a480d917946e62b3e502cdc68ec94cf18b19523677004f747c"
+  },
+  "workspaceRevisionUnchanged": true,
+  "originalWorkspaceJobCountAfter": 3,
+  "semanticReview": {
+    "changedFiles": [
+      "podcast-generator.js",
+      "test.js"
+    ],
+    "outcome": "No actionable issue found in the reviewed diff. Schema order and prompt guidance change; existing parser behavior is preserved. Added tests cover both field orders, delayed decisions, silence, and JSON fallback prompting."
+  },
+  "limits": [
+    "Independent owner-run offline evaluation, separate from the native phone execution and recovery sessions.",
+    "Uses the pre-existing checker outside the candidate workspace and does not invoke the candidate test.js as its authority.",
+    "Both candidate and checker were mounted read-only in a real rootless container. No original job was restarted or recreated.",
+    "Passing the five mechanical/mocked checks plus diff review does not verify live Anthropic emission order, Discord/TTS behavior, production deployment, or latency."
+  ]
+}
