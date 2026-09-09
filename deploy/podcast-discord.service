@@ -1,0 +1,30 @@
+[Unit]
+Description=Podcast Discord bot
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=/opt/podcast-discord/.env
+
+[Service]
+Type=simple
+# Preserve the existing process identity and its access to podcast-production,
+# content, provider credentials, and publication configuration during adoption.
+User=root
+Group=root
+WorkingDirectory=/opt/podcast-discord
+Environment=HOME=/root
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin
+# bot.js reads .env itself; systemd's EnvironmentFile parser has different rules.
+ExecStart=/usr/bin/node bot.js
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+KillSignal=SIGTERM
+KillMode=control-group
+# There is currently no application signal handler that drains active sessions.
+# Refuse to turn a stuck normal stop into an automatic hard kill.
+SendSIGKILL=no
+StandardOutput=append:/tmp/alpha-clawd-bot-stdout.log
+StandardError=inherit
+
+[Install]
+WantedBy=multi-user.target

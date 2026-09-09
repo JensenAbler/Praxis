@@ -1,0 +1,53 @@
+[Unit]
+Description=Praxis repository publication and fixed deployment broker
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=/etc/praxis-git/config.json
+
+[Service]
+Type=simple
+User=praxis-git
+Group=praxis-git
+SupplementaryGroups=praxis-source
+WorkingDirectory=/srv/praxis-probe/current
+Environment=NODE_ENV=production
+Environment=PRAXIS_GIT_CONFIG=/etc/praxis-git/config.json
+Environment=HOME=/var/lib/praxis-git/home
+ExecStart=/usr/bin/flock --nonblock /var/lib/praxis-git/broker.lock /usr/bin/node /srv/praxis-probe/current/src/git/server.js
+Restart=on-failure
+RestartSec=3
+# The broker must finish or durably mark an operation before shutdown. The
+# helper's journal survives a forced stop; recovery never repeats ambiguity.
+TimeoutStopSec=240
+KillMode=control-group
+RuntimeDirectory=praxis-git
+RuntimeDirectoryMode=0700
+UMask=0027
+MemoryMax=1G
+MemorySwapMax=0
+CPUQuota=100%
+TasksMax=128
+OOMPolicy=kill
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+RestrictRealtime=yes
+LockPersonality=yes
+PrivateTmp=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=/var/lib/praxis-git /srv/praxis-git-exchange/exports /run/praxis-git
+# These two root-owned paths are writable only by the narrow sudo helper.
+# The broker UID has no Unix write/traverse permission to production secrets.
+ReadWritePaths=/opt/podcast-discord /var/lib/praxis-deploy
+ReadOnlyPaths=/srv/praxis-git-exchange/outbox
+InaccessiblePaths=-/etc/praxis-probe -/var/lib/praxis-probe -/etc/praxis-code -/var/lib/praxis-code -/srv/praxis-code -/srv/apocrypha -/opt/podcast-production
+# Only praxis-deploy-discord with zero argv is allowed in this UID's sudo rule.
+# Unlike the coding sandbox, this broker needs outbound GitHub SSH access.
+NoNewPrivileges=no
+
+[Install]
+WantedBy=multi-user.target
