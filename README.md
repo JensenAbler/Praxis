@@ -4,7 +4,9 @@ Praxis gives a conversational model source access, isolated editing, command exe
 
 Praxis **0.3.0**, runtime `coding-98c4f1d79036`, is deployed with large-file patching, sequential patches, compact job status, durable recent output, and clearer tool contracts. It passed [99 Linux tests](docs/evidence/tool-quality-v03-linux.json) and [authenticated MCP checks with real containers](docs/evidence/tool-quality-v03-mcp.json). [The update](docs/evidence/tool-quality-v03-deployment.json) preserved all existing evaluation workspaces and jobs. See [what changed](docs/tool-quality-v03.md).
 
-The preceding runtime completed the [first iPhone coding workflow](docs/evidence/iphone-coding-report.md) and [six varied replay implementations and recoveries](docs/evidence/replay-batch-v1-results.md). All six saved candidates passed independent behavioral checks. A native phone comparison of the new tool version is still pending. See [the milestone and boundaries](docs/coding-milestone.md), [acceptance evidence](docs/acceptance.md), and [workspace contracts](docs/workspace-contract.md). GitHub operations through Praxis, production deployment, browser use, and independent self-update are later milestones.
+The preceding runtime completed the [first iPhone coding workflow](docs/evidence/iphone-coding-report.md) and [six varied replay implementations and recoveries](docs/evidence/replay-batch-v1-results.md). All six saved candidates passed independent behavioral checks. A native phone comparison of the new tool version is still pending. See [the milestone and boundaries](docs/coding-milestone.md), [acceptance evidence](docs/acceptance.md), and [workspace contracts](docs/workspace-contract.md).
+
+The next authorized milestone is [independent publication and deployment](docs/publication-milestone.md): synchronize podcast-discord, commit and push to `main`, then fast-forward its fixed VPS deployment. Version 0.4.0 implements this workflow and is under qualification. Browser operation, unrelated production administration, and independent Praxis self-update remain later milestones.
 
 Endpoint: **https://mcp.jensenabler.com/praxis/mcp**
 

@@ -69,13 +69,41 @@ export class WorkspaceManager {
         result_json TEXT, last_error TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
         UNIQUE(owner, idempotency_key));
       CREATE INDEX IF NOT EXISTS operations_owner ON operations(owner, row_id DESC);`);
+    this.db.exec(`CREATE TABLE IF NOT EXISTS project_snapshot_overrides (
+      project_id TEXT PRIMARY KEY, revision TEXT NOT NULL, snapshot_path TEXT NOT NULL,
+      operation_id TEXT NOT NULL, updated_at TEXT NOT NULL);`);
     this.recover();
   }
 
   _project(projectId) {
     const project = this.projects.get(projectId);
     requireValue(project, 'Project not found.', 'NOT_FOUND');
-    return project;
+    const override = this.db.prepare('SELECT * FROM project_snapshot_overrides WHERE project_id = ?').get(projectId);
+    return override ? { ...project, revision: override.revision, snapshotPath: override.snapshot_path } : project;
+  }
+  /** Trusted Git adapter entry point. Existing workspaces retain their original snapshot and base. */
+  registerSnapshot({ projectId, revision, snapshotPath, operationId }) {
+    this._project(projectId);
+    requireValue(/^[0-9a-f]{40}$/.test(revision), 'A full Git commit is required for a synchronized project.');
+    requireValue(typeof operationId === 'string' && operationId.length > 0, 'A synchronization receipt is required.');
+    const root = resolve(snapshotPath), state = manifest(root);
+    requireValue(Object.values(state.entries).every(entry => entry.kind === 'file'), 'Source snapshot contains unsafe entries.', 'UNSAFE_PATH');
+    this.db.prepare(`INSERT INTO project_snapshot_overrides (project_id,revision,snapshot_path,operation_id,updated_at)
+      VALUES (?,?,?,?,?) ON CONFLICT(project_id) DO UPDATE SET revision=excluded.revision,
+      snapshot_path=excluded.snapshot_path,operation_id=excluded.operation_id,updated_at=excluded.updated_at`)
+      .run(projectId, revision, root, operationId, now());
+    return { projectId, revision, sourceDigest: state.revision };
+  }
+  /** Synchronous capture holds the same reservation used by source edits and job admission. */
+  withSnapshot({ owner, workspaceId, expectedRevision }, action) {
+    return this.store.transaction(() => {
+      const row = this._row(owner, workspaceId); this._ready(row); this._idle(row);
+      const state = this._refresh(row);
+      requireValue(state.revision === expectedRevision, 'expectedRevision must match the current workspace revision.', 'REVISION_CONFLICT');
+      requireValue(Object.values(state.entries).every(entry => entry.kind === 'file'), 'Workspace contains unsafe entries.', 'UNSAFE_PATH');
+      return action({ workspaceId: row.id, projectId: row.project_id, baseCommit: row.base_revision,
+        root: row.path, snapshotPath: row.snapshot_path, baseline: parseEntries(row.baseline_json), state });
+    });
   }
   _publicProject(project) {
     return { projectId: project.id, name: project.name, repository: project.repository, revision: project.revision,
@@ -203,7 +231,7 @@ export class WorkspaceManager {
 
   projectsList({ owner }) {
     ownerCheck(owner);
-    return { projects: [...this.projects.values()].map(project => ({ projectId: project.id, name: project.name,
+    return { projects: [...this.projects.keys()].map(id => this._project(id)).map(project => ({ projectId: project.id, name: project.name,
       repository: project.repository, revision: project.revision, instructionsAvailable: Boolean(project.instructions) })),
       nextStep: 'Use project_inspect with a projectId to read its instructions, validation commands, and source limits.' };
   }

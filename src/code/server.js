@@ -8,6 +8,8 @@ import { WorkspaceManager, WorkspaceError, LIMITS as WORKSPACE_LIMITS } from './
 import { CodeJobs, CodeJobError, CODE_JOB_LIMITS } from './jobs.js';
 import { PodmanRunner, RunnerError } from './runner.js';
 import { codeTools, parseCodeCall } from './schema.js';
+import { CodeGit } from './git.js';
+import { createGitClient } from './git-client.js';
 import { correlationId, diagnosticRecord, errorRecovery, requestContext } from '../diagnostics.js';
 
 export async function createCodingService(config) {
@@ -17,6 +19,7 @@ export async function createCodingService(config) {
   const jobs = new CodeJobs({ store, dataDirectory: config.dataDirectory, runner });
   const workspaces = new WorkspaceManager({ store, dataDirectory: config.dataDirectory, workspaceDirectory: config.workspaceDirectory, projects: config.projects });
   jobs.workspaces = workspaces;
+  const git = config.git ? new CodeGit({ store, workspaces, ...config.git, broker: config.git.broker || createGitClient(config.git) }) : null;
   await jobs.recover();
   const verify = createTokenVerifier({ issuer: config.issuer, resourceUrl: config.resourceUrl, jwks: config.publicJwks,
     allowedScopes: ['praxis:probe', 'praxis:code'], requiredScope: 'praxis:code' });
@@ -40,8 +43,9 @@ export async function createCodingService(config) {
       const { tool, args } = parseCodeCall(req.body.action, req.body.args);
       requestContext.getStore().action = req.body.action;
       const owner = req.principal.extra.subject;
+      requestContext.getStore().token = req.principal.token;
       const data = req.body.action === 'capabilities' ? {
-        name: 'Praxis', apiVersion: '0.3.0', schemaVersion: 3, release: config.release, bootId,
+        name: 'Praxis', apiVersion: '0.4.0', schemaVersion: 4, release: config.release, bootId,
         scope: 'Registered immutable source snapshots and isolated coding workspaces. ChatGPT or Claude supplies reasoning.',
         workflow: ['projects_list', 'project_inspect', 'workspace_create', 'file_read/code_search', 'workspace_apply', 'job_start', 'job_status/job_logs', 'workspace_diff'],
         recovery: 'Use workspaces_list, jobs_list, and operations_list in a fresh conversation. Keep the same idempotency key and inputs after uncertain responses. A terminal or ambiguous command is never automatically rerun.',
@@ -54,15 +58,22 @@ export async function createCodingService(config) {
         execution: { network: 'none', runtime: config.runtimeDescription || 'Fixed container image', imageDigest: config.runnerConfig?.image,
           maxTimeoutSeconds: 900, maxActiveJobs: 1, cpuCores: 1, aggregateMemoryMiB: 1536, maxProcesses: 256,
           storage: 'Workspaces and container storage share an 8 GiB dedicated filesystem; writable root is disabled.' },
-        authorization: { requiredScope: 'praxis:code', identity: 'jensen', productionAccess: false },
+        authorization: { requiredScope: 'praxis:code', identity: 'jensen', productionAccess: !!git },
+        publication: git ? { defaultBranch: 'main', projects: config.git.projectIds || ['discord'],
+          workflow: ['project_sync', 'git_operation_status', 'workspace_create', 'edit/check/review', 'git_commit', 'git_operation_status', 'git_push', 'git_operation_status', 'deployment_status', 'deployment_fast_forward', 'git_operation_status'],
+          recovery: 'Each write returns a durable operationId. Poll git_operation_status until terminal. Commit captures the exact idle workspace revision; push publishes that commit with an expected remote-head precondition. Remote conflicts require source reconciliation. Recover uncertain operations; do not recreate them.',
+          deployment: 'Only the registered podcast-discord checkout and managed service. Fast-forward to the published main tip with expectedHead from deployment_status. Dependency changes are not supported yet. Health verifies process activation, not Discord or live-provider behavior.' } : { enabled: false },
         limits: { jobs: CODE_JOB_LIMITS, workspaces: WORKSPACE_LIMITS, requestBytes: 524288, fileReadLines: 200,
           argumentCharacters: 8192, commandArgumentBytes: 32768, environmentValueCharacters: 1000,
           environmentKeys: ['CI', 'NODE_ENV', 'TZ', 'LANG', 'LC_ALL', 'FORCE_COLOR', 'NO_COLOR', 'PYTHONHASHSEED', 'PYTHONDONTWRITEBYTECODE'] },
         disabled: [
           { operation: 'network access and dependency downloads', reason: 'Network-denial baseline is the first deployed execution policy. Runtime dependencies must already be available.' },
-          { operation: 'GitHub publication, deployment, maintenance, self-update, and browser operation', reason: 'Later milestones; these tools are not exposed.' }
+          { operation: 'Other repositories, general production administration, self-update, and browser operation', reason: 'Outside this release. Publication and fixed podcast deployment require configured trusted services.' }
         ]
-      } : await (tool.target === 'jobs' ? jobs : workspaces)[tool.method]({ ...args, owner });
+      } : await (() => {
+        if (tool.target === 'git' && !git) throw new WorkspaceError('PUBLICATION_DISABLED', 'Publishing is not configured on this service.');
+        return (tool.target === 'git' ? git : tool.target === 'jobs' ? jobs : workspaces)[tool.method]({ ...args, owner });
+      })();
       res.json({ ok: true, requestId: requestContext.getStore().requestId, data });
     } catch (error) {
       const safe = error instanceof WorkspaceError || error instanceof CodeJobError || error instanceof RunnerError ||
@@ -87,7 +98,7 @@ export async function createCodingService(config) {
     pending = Promise.resolve().then(() => jobs.tick()).catch(error => console.error(JSON.stringify(diagnosticRecord('coding_tick_failed', error)))).finally(() => { pending = undefined; });
   }, config.pollIntervalMs || 500);
   timer.unref();
-  return { app, jobs, workspaces, store, async close() { stopped = true; clearInterval(timer); await pending; store.close(); } };
+  return { app, jobs, workspaces, git, store, async close() { stopped = true; clearInterval(timer); await pending; store.close(); } };
 }
 
 function isEntrypoint() {

@@ -1,6 +1,6 @@
 {
   "name": "praxis-probe",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
   "description": "Source access, isolated coding workspaces, and durable MCP jobs for conversational models.",
@@ -12,7 +12,8 @@
     "worker": "node src/worker.js",
     "test": "node --test",
     "test:mcp": "node scripts/probe-client.js",
-    "coding": "node src/code/server.js"
+    "coding": "node src/code/server.js",
+    "git-service": "node src/git/server.js"
   },
   "dependencies": {
     "@modelcontextprotocol/express": "2.0.0",

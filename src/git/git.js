@@ -55,9 +55,8 @@ function identity(value) {
 function remote(value, allowLocalRemotes) {
   requireValue(typeof value === 'string', 'A configured repository remote is required.', 'INVALID_CONFIGURATION');
   if (allowLocalRemotes && isAbsolute(value)) return resolve(value);
-  requireValue(/^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\.git)?$/.test(value)
-    || /^git@github\.com:[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\.git)?$/.test(value)
-    || /^ssh:\/\/git@github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\.git)?$/.test(value),
+  const match = /^(?:https:\/\/github\.com\/|git@github\.com:|ssh:\/\/git@github\.com\/)([A-Za-z0-9][A-Za-z0-9-]*)\/([A-Za-z0-9_.-]+)$/.exec(value);
+  requireValue(match && !['.', '..', '.git'].includes(match[2]),
   'Only a fixed GitHub HTTPS or SSH remote is allowed.', 'INVALID_CONFIGURATION');
   return value;
 }
@@ -128,7 +127,7 @@ export class TrustedGit {
           // Never return Git stderr: helpers and transport errors may contain credentials or private paths.
           reject(new GitTransportError('GIT_COMMAND_FAILED', 'The configured Git operation failed.',
             { exitCode: Number.isInteger(exitCode) ? exitCode : null, timedOut: Boolean(error?.killed) }));
-        } else resolvePromise({ stdout, stderr, exitCode });
+        } else resolvePromise({ stdout, exitCode });
       });
       child.stdin.on('error', () => {});
       child.stdin.end(input);

@@ -118,7 +118,7 @@ test('only configured branches and remotes are available; transport errors do no
   const f = fixture(t);
   assert.throws(() => new TrustedGit({ ...f.options, allowLocalRemotes: false }), { code: 'INVALID_CONFIGURATION' });
   for (const remoteUrl of ['https://secret-token@github.com/owner/repo.git', 'https://github.com.evil/owner/repo.git',
-    'ssh://git@github.com/owner/repo.git?exec=bad', 'ext::sh -c whatever']) {
+    'ssh://git@github.com/owner/repo.git?exec=bad', 'https://github.com/../repo.git', 'https://github.com/owner/..', 'ext::sh -c whatever']) {
     assert.throws(() => new TrustedGit({ ...f.options, repositories: [{ ...f.options.repositories[0], remoteUrl }] }), { code: 'INVALID_CONFIGURATION' });
   }
   assert.throws(() => new TrustedGit({ ...f.options, transportEnv: { GIT_CONFIG_COUNT: '1' } }), { code: 'INVALID_CONFIGURATION' });

@@ -163,7 +163,7 @@ export async function createAuth({ issuer, resourceUrl, passwordHash, jwks, cook
     const host = new URL(detail.params.redirect_uri).hostname;
     const requestedScopes = String(detail.params.scope || '').split(' ');
     const rights = requestedScopes.includes('praxis:code')
-      ? 'This connection can inspect registered source, edit disposable workspaces, and run sandboxed coding commands owned by Jensen. Commands have no network or production credentials. It can retrieve stored results and reconnect later.'
+      ? 'This connection can inspect registered source, edit disposable workspaces, and run sandboxed coding commands owned by Jensen. Commands have no network or production credentials. Where enabled by the owner, separate trusted tools can commit and push the registered podcast-discord repository to main and fast-forward and restart its fixed VPS deployment. It can retrieve stored results and reconnect later.'
       : 'This connection can start and inspect harmless test jobs owned by Jensen and reconnect later.';
     res.type('html').send(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Praxis</title>
       <style>body{font:18px system-ui;max-width:32rem;margin:3rem auto;padding:1.5rem;line-height:1.5}input,button{font:inherit;padding:.7rem;box-sizing:border-box;width:100%;margin:.5rem 0}small{display:block;overflow-wrap:anywhere}.error{color:#a20}</style>
