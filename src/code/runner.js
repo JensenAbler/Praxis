@@ -45,7 +45,7 @@ export function containerName(jobId) {
 
 /** The containing systemd unit supplies aggregate CPU/memory/PID limits. */
 export class PodmanRunner {
-  constructor({ image, workspaceRoot, logDirectory, binary = '/usr/bin/podman', env, invoke = command }) {
+  constructor({ image, workspaceRoot, logDirectory, storageRoot = '/srv/praxis-code/storage/containers', runRoot = '/run/praxis-code/storage', binary = '/usr/bin/podman', env, invoke = command }) {
     if (typeof image !== 'string' || !/^(?:[a-z0-9./:_-]+@)?sha256:[0-9a-f]{64}$/.test(image)) {
       throw new RunnerError('RUNNER_CONFIG', 'The executor image must be an immutable SHA-256 digest.');
     }
@@ -54,12 +54,13 @@ export class PodmanRunner {
     this.workspaceRoot = resolve(workspaceRoot);
     this.logDirectory = resolve(logDirectory);
     this.binary = binary;
+    this.globalArgs = ['--root', resolve(storageRoot), '--runroot', resolve(runRoot), '--cgroup-manager=cgroupfs'];
     // No process.env spread: OAuth, SSH, proxy, and registry credentials cannot flow in accidentally.
     this.env = { PATH: '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin', LANG: 'C.UTF-8', ...env };
     this.invoke = invoke;
   }
 
-  async call(args, timeoutMs) { return this.invoke(this.binary, args, this.env, timeoutMs); }
+  async call(args, timeoutMs) { return this.invoke(this.binary, [...this.globalArgs, ...args], this.env, timeoutMs); }
 
   logPath(name) {
     if (!NAME.test(name)) throw new RunnerError('RUNNER_INPUT', 'Invalid internal container name.');
@@ -78,6 +79,11 @@ export class PodmanRunner {
       throw new RunnerError('WORKSPACE_PATH', 'Execution requires a regular workspace directory.');
     }
     await mkdir(this.logDirectory, { recursive: true, mode: 0o700 });
+    // Seed a private prefix before execution. If output recycles before the first poll, its loss is detectable.
+    const seed = Buffer.from(`${new Date().toISOString()} stdout F PRAXIS_LOG_START ${name}\n`);
+    const seededLog = await open(this.logPath(name), 'wx', 0o600);
+    try { await seededLog.writeFile(seed); await seededLog.sync(); } finally { await seededLog.close(); }
+    const logFingerprint = `${seed.length}:${createHash('sha256').update(seed).digest('hex')}`;
     const args = [
       '--events-backend=none', 'create', '--name', name, '--pull=never',
       '--network=none', '--cgroups=disabled', '--read-only', '--read-only-tmpfs=false',
@@ -102,7 +108,7 @@ export class PodmanRunner {
     if (result.code !== 0) throw new RunnerError('CONTAINER_CREATE_FAILED', 'Container preparation failed. The persisted job will be reconciled before another execution is allowed.');
     const id = result.stdout.trim();
     if (!/^[0-9a-f]{64}$/.test(id)) throw new RunnerError('RUNNER_RESPONSE', 'Container creation returned an invalid identifier.');
-    return { id, name };
+    return { id, name, logCursor: seed.length, logFingerprint };
   }
 
   async start({ name }) {
@@ -124,7 +130,7 @@ export class PodmanRunner {
     if (!value?.Id || !value?.State) throw new RunnerError('RUNNER_RESPONSE', 'The container runtime returned incomplete state.');
     const state = value.State;
     return {
-      exists: true, id: value.Id, status: state.Status, running: Boolean(state.Running),
+      exists: true, id: value.Id, pid: state.Pid ?? null, status: state.Status, running: Boolean(state.Running),
       exitCode: state.Running || ['configured', 'created'].includes(state.Status) ? null : state.ExitCode,
       signal: null, oomKilled: Boolean(state.OOMKilled),
       startedAt: state.StartedAt && !state.StartedAt.startsWith('0001-') ? state.StartedAt : null,
@@ -152,11 +158,14 @@ export class PodmanRunner {
       const stat = await handle.stat();
       const head = Buffer.alloc(Math.min(stat.size, 256));
       await handle.read(head, 0, head.length, 0);
-      // The complete first record is stable while conmon appends. A changed prefix detects log recycling.
+      // Persist the prefix length as well as its digest: appending a partial first record is not recycling.
       const firstEnd = head.indexOf(10);
-      const headDigest = firstEnd >= 0 ? createHash('sha256').update(head.subarray(0, firstEnd + 1)).digest('hex')
-        : head.length === 256 ? createHash('sha256').update(head).digest('hex') : null;
-      const recycled = stat.size < cursor || Boolean(fingerprint && headDigest && fingerprint !== headDigest);
+      const prefixLength = firstEnd >= 0 ? firstEnd + 1 : head.length;
+      const candidateFingerprint = prefixLength ? `${prefixLength}:${createHash('sha256').update(head.subarray(0, prefixLength)).digest('hex')}` : null;
+      const previous = fingerprint && /^(\d+):([a-f0-9]{64})$/.exec(fingerprint);
+      const changedPrefix = previous && (head.length < Number(previous[1]) || createHash('sha256').update(head.subarray(0, Number(previous[1]))).digest('hex') !== previous[2]);
+      const recycled = stat.size < cursor || Boolean(changedPrefix);
+      const headDigest = recycled ? candidateFingerprint : fingerprint ?? candidateFingerprint;
       const begin = recycled ? 0 : cursor;
       const buffer = Buffer.alloc(Math.min(limitBytes, Math.max(0, stat.size - begin)));
       await handle.read(buffer, 0, buffer.length, begin);

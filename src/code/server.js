@@ -5,9 +5,9 @@ import { pathToFileURL } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { createTokenVerifier } from '../token-verifier.js';
 import { CodeStore } from './store.js';
-import { WorkspaceManager, LIMITS as WORKSPACE_LIMITS } from './workspaces.js';
-import { CodeJobs, CODE_JOB_LIMITS } from './jobs.js';
-import { PodmanRunner } from './runner.js';
+import { WorkspaceManager, WorkspaceError, LIMITS as WORKSPACE_LIMITS } from './workspaces.js';
+import { CodeJobs, CodeJobError, CODE_JOB_LIMITS } from './jobs.js';
+import { PodmanRunner, RunnerError } from './runner.js';
 import { parseCodeCall } from './schema.js';
 
 export async function createCodingService(config) {
@@ -53,9 +53,11 @@ export async function createCodingService(config) {
       } : await (tool.target === 'jobs' ? jobs : workspaces)[tool.method]({ ...args, owner });
       res.json({ ok: true, data });
     } catch (error) {
-      const code = /^[A-Z_]+$/.test(error.code || '') ? error.code : 'INTERNAL_ERROR';
+      const safe = error instanceof WorkspaceError || error instanceof CodeJobError || error instanceof RunnerError ||
+        ['INVALID_ARGUMENT', 'UNKNOWN_ACTION'].includes(error.code);
+      const code = safe ? error.code : error.code === 'ENOENT' ? 'NOT_FOUND' : error.code === 'ENOSPC' ? 'STORAGE_FULL' : 'INTERNAL_ERROR';
       res.status(code === 'INTERNAL_ERROR' ? 500 : 400).json({ ok: false, error: { code,
-        message: code === 'INTERNAL_ERROR' ? 'The coding service could not finish this operation. Inspect persisted receipts before retrying.' : error.message } });
+        message: safe ? error.message : code === 'NOT_FOUND' ? 'The requested source path no longer exists.' : code === 'STORAGE_FULL' ? 'Coding storage is full. Recover receipts and remove an eligible disposable workspace.' : 'The coding service could not finish this operation. Inspect persisted receipts before retrying.' } });
     }
   });
   app.use((_req, res) => res.status(404).json({ error: 'not_found' }));

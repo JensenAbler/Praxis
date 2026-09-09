@@ -105,6 +105,9 @@ test('gateway and coding adapter independently enforce explicit coding permissio
   }
   const client = await f.connect();
   assert.equal((await call(client, 'projects_list')).projects[0].projectId, 'fixture');
+  const missing = await client.callTool({ name: 'file_read', arguments: { projectId: 'fixture', path: 'absent.txt' } });
+  assert.equal(missing.structuredContent.error.code, 'NOT_FOUND');
+  assert.doesNotMatch(JSON.stringify(missing), /praxis-code-mcp-|ENOENT|open '/);
   assert.equal((await client.callTool({ name: 'probe_capabilities', arguments: {} })).isError, true);
   const injected = await fetch(`${f.backendUrl}/call`, { method: 'POST', headers: { authorization: `Bearer ${await f.token()}`, 'content-type': 'application/json' }, body: JSON.stringify({ action: 'projects_list', args: { owner: 'someone-else' } }) });
   assert.equal(injected.status, 400);

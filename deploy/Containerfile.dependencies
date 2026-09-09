@@ -1,0 +1,16 @@
+# The bootstrap operator supplies only reviewed package.json/package-lock.json pairs
+# in manifests/<registered-project-id>/. No private source, npmrc, or credentials.
+# Resolve NODE_BASE to the already-inspected local executor image and build --pull=never.
+ARG NODE_BASE=localhost/praxis-executor:bootstrap
+FROM ${NODE_BASE}
+COPY manifests/ /opt/praxis/deps/
+RUN set -eu; for project in /opt/praxis/deps/*; do \
+      cd "$project"; npm ci --ignore-scripts --no-audit --no-fund; \
+      if [ -d node_modules/ffmpeg-static ] && [ ! -e node_modules/ffmpeg-static/ffmpeg ]; then \
+        ln -s /usr/bin/ffmpeg node_modules/ffmpeg-static/ffmpeg; \
+      fi; \
+    done; \
+    rm -rf /root/.npm; chmod -R a-w /opt/praxis/deps
+WORKDIR /workspace
+ENTRYPOINT []
+CMD ["node", "--version"]
