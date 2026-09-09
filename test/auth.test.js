@@ -10,7 +10,7 @@ import { createAuth } from '../src/auth.js';
 import { createApp } from '../src/server.js';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 
-async function fixture(t, { integrated = false } = {}) {
+async function fixture(t, { integrated = false, codingEnabled = false } = {}) {
   const directory = await mkdtemp(join(tmpdir(), 'praxis-auth-test-'));
   const { privateKey } = await generateKeyPair('RS256', { extractable: true });
   const jwk = { ...await exportJWK(privateKey), kid: 'test-key', use: 'sig', alg: 'RS256' };
@@ -26,7 +26,7 @@ async function fixture(t, { integrated = false } = {}) {
   const origin = `http://127.0.0.1:${server.address().port}`;
   const issuer = `${origin}/oauth`;
   const resource = `${origin}/mcp`;
-  const options = { issuer, resourceUrl: resource, passwordHash, jwks: { keys: [jwk] }, cookieKeys: ['fixture-cookie-signing-key-that-is-very-long'], dataDirectory: directory, allowLoopback: true };
+  const options = { issuer, resourceUrl: resource, passwordHash, jwks: { keys: [jwk] }, cookieKeys: ['fixture-cookie-signing-key-that-is-very-long'], dataDirectory: directory, allowLoopback: true, codingEnabled };
   if (integrated) {
     service = await createApp({ baseUrl: origin, dataDirectory: directory, allowLoopback: true, auth: options });
     auth = service.auth;
@@ -68,6 +68,7 @@ async function fixture(t, { integrated = false } = {}) {
         // The browser's native form submission must retain its real Origin header.
         assert.equal(response.headers.get('referrer-policy'), 'strict-origin');
         const html = await response.text();
+        if (scope.includes('praxis:code')) assert.match(html, /sandboxed coding commands/);
         const action = html.match(/<form method="post" action="([^"]+)"/)?.[1];
         const csrf = html.match(/name="csrf" value="([^"]+)"/)?.[1];
         assert.ok(action && csrf, html);
@@ -112,6 +113,22 @@ test('OAuth discovery, owner login, PKCE, JWT verification and persistent rotati
   const replay = await f.request('/oauth/token', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ grant_type: 'refresh_token', client_id: client.client_id, refresh_token: token.refresh_token, resource: f.resource }) });
   assert.equal(replay.status, 400);
   assert.equal((await replay.json()).error, 'invalid_grant');
+});
+
+test('coding consent is explicit and refreshing an old probe grant does not add coding rights', async (t) => {
+  const f = await fixture(t, { codingEnabled: true });
+  const client = await f.register();
+  const oldGrant = await f.flow(client, { scope: 'praxis:probe offline_access' });
+  const oldToken = await (await f.exchange(client, oldGrant)).json();
+  assert.deepEqual((await f.auth.verifyAccessToken(oldToken.access_token)).scopes, ['praxis:probe']);
+  const refresh = await f.request('/oauth/token', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ grant_type: 'refresh_token', client_id: client.client_id, refresh_token: oldToken.refresh_token, resource: f.resource }) });
+  assert.equal(refresh.status, 200);
+  assert.deepEqual((await f.auth.verifyAccessToken((await refresh.json()).access_token)).scopes, ['praxis:probe']);
+  const codingGrant = await f.flow(client, { scope: 'praxis:code offline_access' });
+  const response = await f.exchange(client, codingGrant);
+  assert.equal(response.status, 200);
+  assert.deepEqual((await f.auth.verifyAccessToken((await response.json()).access_token)).scopes, ['praxis:code']);
 });
 
 test('owner password, CSRF and form origin are enforced', async (t) => {

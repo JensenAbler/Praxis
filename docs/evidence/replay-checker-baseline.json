@@ -1,0 +1,102 @@
+{
+  "schemaVersion": 1,
+  "observedAt": "2026-09-09T04:53:09.244Z",
+  "evidenceType": "reviewed-historical-source-local-module-check",
+  "isolationExercised": false,
+  "notes": [
+    "Known historical modules were read from local Git and extracted only into the existing private credential/evaluation directory.",
+    "The local run used mocked HTTP and an empty module environment. It did not exercise an OS-isolated container, live provider, Discord, TTS, deployment, or candidate-agent workflow.",
+    "The private original prompt is not included; the public catalog records its canonical text hash."
+  ],
+  "base": {
+    "commit": "06fb2784454e3641960a1e1782a0c92a68a341b7",
+    "exitCode": 1,
+    "result": {
+      "caseId": "speech-first",
+      "checker": "speech-first-v1",
+      "complete": true,
+      "passed": false,
+      "checks": [
+        {
+          "id": "schema_field_order",
+          "passed": false,
+          "reason": "Schema properties must put speech before shouldRespond and retain both handoff fields"
+        },
+        {
+          "id": "prompt_order_coherence",
+          "passed": true,
+          "recognizedSpeechFirstShape": false,
+          "semanticReviewRequired": true
+        },
+        {
+          "id": "reader_orders_and_silence",
+          "passed": true
+        },
+        {
+          "id": "mock_stream_decision_liveness",
+          "passed": true
+        },
+        {
+          "id": "mock_json_object_fallback",
+          "passed": true,
+          "recognizedSpeechFirstShape": false,
+          "semanticReviewRequired": true
+        }
+      ],
+      "candidateModuleSha256": {
+        "podcast-generator.js": "e6d1299c874a3b91b3b467b8ac144d4057189cb4ef809004fbedc349b0a4634d",
+        "anthropic-messages.js": "7cd7354c491b8beda0957ba8947057d5b7a540a855e266b7b6b78e41675ec2e5"
+      },
+      "promptSha256": "8c398791df54075a65853dea8a07892138ade7b4de5b57bb9c437ebd8bbd18d2",
+      "evidenceType": "offline-mocked-module-evaluation",
+      "liveServicesExercised": false,
+      "semanticReviewRequired": true,
+      "isolation": "Caller must enforce an unprivileged OS sandbox; VM restrictions are not a security boundary."
+    }
+  },
+  "reference": {
+    "commit": "1381a6ecbdf4a82f2b0ca9d15cb3d3b432f36851",
+    "exitCode": 0,
+    "result": {
+      "caseId": "speech-first",
+      "checker": "speech-first-v1",
+      "complete": true,
+      "passed": true,
+      "checks": [
+        {
+          "id": "schema_field_order",
+          "passed": true
+        },
+        {
+          "id": "prompt_order_coherence",
+          "passed": true,
+          "recognizedSpeechFirstShape": true,
+          "semanticReviewRequired": true
+        },
+        {
+          "id": "reader_orders_and_silence",
+          "passed": true
+        },
+        {
+          "id": "mock_stream_decision_liveness",
+          "passed": true
+        },
+        {
+          "id": "mock_json_object_fallback",
+          "passed": true,
+          "recognizedSpeechFirstShape": true,
+          "semanticReviewRequired": true
+        }
+      ],
+      "candidateModuleSha256": {
+        "podcast-generator.js": "3c39de606d42442e522fe9c65b3265c63b56440bfa3d66a3b14b5e94a3427fe5",
+        "anthropic-messages.js": "7cd7354c491b8beda0957ba8947057d5b7a540a855e266b7b6b78e41675ec2e5"
+      },
+      "promptSha256": "8c398791df54075a65853dea8a07892138ade7b4de5b57bb9c437ebd8bbd18d2",
+      "evidenceType": "offline-mocked-module-evaluation",
+      "liveServicesExercised": false,
+      "semanticReviewRequired": true,
+      "isolation": "Caller must enforce an unprivileged OS sandbox; VM restrictions are not a security boundary."
+    }
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "cases": [
+    {
+      "id": "speech-first",
+      "title": "Stream a structured response before its later decision field",
+      "repository": "JensenAbler/podcast-discord",
+      "baseCommit": "06fb2784454e3641960a1e1782a0c92a68a341b7",
+      "referenceCommit": "1381a6ecbdf4a82f2b0ca9d15cb3d3b432f36851",
+      "promptSha256": "8c398791df54075a65853dea8a07892138ade7b4de5b57bb9c437ebd8bbd18d2",
+      "promptEncoding": "UTF-8, LF, final newline",
+      "promptIncluded": false,
+      "checker": "speech-first-v1",
+      "entrypoint": "podcast-generator.js",
+      "allowedModules": ["podcast-generator.js", "anthropic-messages.js"],
+      "provenance": "Clean parent-commit replay. Historical unrelated dirty Markdown files and server lockfile changes are not reconstructed. The reference is an outcome example, not the only acceptable implementation.",
+      "constraints": ["No live model, Discord, TTS, deployment, or production calls", "No credentials or external network", "Keep reference source and original private prompt outside the public repository and candidate task context until the authorized prompt handoff"]
+    }
+  ]
+}

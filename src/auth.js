@@ -5,8 +5,7 @@ import { promisify } from 'node:util';
 import { DatabaseSync } from 'node:sqlite';
 import express from 'express';
 import { Provider, errors } from 'oidc-provider';
-import { createLocalJWKSet, jwtVerify } from 'jose';
-import { OAuthError, OAuthErrorCode } from '@modelcontextprotocol/server';
+import { createTokenVerifier } from './token-verifier.js';
 
 const scrypt = promisify(scryptCallback);
 const OWNER = 'jensen';
@@ -61,8 +60,8 @@ function adapterClass(db) {
   };
 }
 
-/** Independent OAuth issuer for the bounded, single-owner probe. Mount router at the issuer pathname. */
-export async function createAuth({ issuer, resourceUrl, passwordHash, jwks, cookieKeys, dataDirectory, allowLoopback = false }) {
+/** Independent single-owner OAuth issuer. Mount router at the issuer pathname. */
+export async function createAuth({ issuer, resourceUrl, passwordHash, jwks, cookieKeys, dataDirectory, allowLoopback = false, codingEnabled = false }) {
   const issuerUrl = new URL(issuer);
   const resource = new URL(resourceUrl).href;
   const isLoopback = (url) => ['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname);
@@ -78,14 +77,15 @@ export async function createAuth({ issuer, resourceUrl, passwordHash, jwks, cook
   const { salt, expected } = readPasswordHash(passwordHash);
   const db = createDatabase(dataDirectory);
   const publicJwks = { keys: jwks.keys.map(({ d, p, q, dp, dq, qi, oth, ...key }) => key) };
-  const keySet = createLocalJWKSet(publicJwks);
+  const allowedScopes = [SCOPE, ...(codingEnabled ? ['praxis:code'] : [])];
+  const verifyAccessToken = createTokenVerifier({ issuer, resourceUrl: resource, jwks: publicJwks, allowedScopes });
   const provider = new Provider(issuer, {
     adapter: adapterClass(db), jwks,
     clients: [],
     clientAuthMethods: ['none', 'client_secret_basic', 'client_secret_post'],
     clientDefaults: { token_endpoint_auth_method: 'none', grant_types: ['authorization_code', 'refresh_token'], response_types: ['code'] },
     responseTypes: ['code'],
-    scopes: ['openid', 'offline_access', SCOPE],
+    scopes: ['openid', 'offline_access', ...allowedScopes],
     claims: { openid: ['sub'] },
     pkce: { required: () => true },
     cookies: {
@@ -103,7 +103,7 @@ export async function createAuth({ issuer, resourceUrl, passwordHash, jwks, cook
         defaultResource: () => resource,
         getResourceServerInfo: (_ctx, indicator) => {
           if (indicator !== resource) throw new errors.InvalidTarget('Unknown resource');
-          return { scope: SCOPE, audience: resource, accessTokenTTL: 600, accessTokenFormat: 'jwt', jwt: { sign: { alg: 'RS256' } } };
+          return { scope: allowedScopes.join(' '), audience: resource, accessTokenTTL: 600, accessTokenFormat: 'jwt', jwt: { sign: { alg: 'RS256' } } };
         },
       },
     },
@@ -161,14 +161,18 @@ export async function createAuth({ issuer, resourceUrl, passwordHash, jwks, cook
     db.prepare('INSERT OR REPLACE INTO csrf(uid,hash,expires) VALUES(?,?,?)').run(detail.uid, digest(csrf), now() + 300);
     const login = detail.prompt.name === 'login';
     const host = new URL(detail.params.redirect_uri).hostname;
+    const requestedScopes = String(detail.params.scope || '').split(' ');
+    const rights = requestedScopes.includes('praxis:code')
+      ? 'This connection can inspect registered source, edit disposable workspaces, and run sandboxed coding commands owned by Jensen. Commands have no network or production credentials. It can retrieve stored results and reconnect later.'
+      : 'This connection can start and inspect harmless test jobs owned by Jensen and reconnect later.';
     res.type('html').send(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Praxis Probe</title>
       <style>body{font:18px system-ui;max-width:32rem;margin:3rem auto;padding:1.5rem;line-height:1.5}input,button{font:inherit;padding:.7rem;box-sizing:border-box;width:100%;margin:.5rem 0}small{display:block;overflow-wrap:anywhere}.error{color:#a20}</style>
       <h1>${login ? 'Sign in to Praxis Probe' : 'Connect Praxis Probe'}</h1>
-      <p>This connection can start and inspect harmless test jobs owned by Jensen.</p><small>Return to: ${escapeHtml(host)}</small>
+      <p>${rights}</p><small>Return to: ${escapeHtml(host)}</small>
       ${error ? `<p class="error">${escapeHtml(error)}</p>` : ''}
       <form method="post" action="${escapeHtml(issuer)}/interaction/${escapeHtml(detail.uid)}">
       <input type="hidden" name="csrf" value="${csrf}">
-      ${login ? '<label>Probe password<input name="password" type="password" required maxlength="1024" autocomplete="current-password" autofocus></label>' : '<p>Allow this app to access your probe jobs and reconnect later?</p>'}
+      ${login ? '<label>Praxis password<input name="password" type="password" required maxlength="1024" autocomplete="current-password" autofocus></label>' : '<p>Allow the permissions described above?</p>'}
       <button name="action" value="allow">${login ? 'Sign in' : 'Allow connection'}</button><button name="action" value="deny" formnovalidate>Cancel</button></form></html>`);
   }
   router.get('/interaction/:uid', async (req, res, next) => {
@@ -201,7 +205,7 @@ export async function createAuth({ issuer, resourceUrl, passwordHash, jwks, cook
       if (missing.missingOIDCScope) grant.addOIDCScope(missing.missingOIDCScope.join(' '));
       if (missing.missingOIDCClaims) grant.addOIDCClaims(missing.missingOIDCClaims);
       for (const [indicator, scopes] of Object.entries(missing.missingResourceScopes ?? {})) {
-        if (indicator !== resource || scopes.some((scope) => scope !== SCOPE)) return res.status(403).send('Unsupported permissions');
+        if (indicator !== resource || scopes.some((scope) => !allowedScopes.includes(scope))) return res.status(403).send('Unsupported permissions');
         grant.addResourceScope(indicator, scopes.join(' '));
       }
       const grantId = await grant.save();
@@ -220,15 +224,7 @@ export async function createAuth({ issuer, resourceUrl, passwordHash, jwks, cook
   cleanup.unref();
   return {
     provider, router,
-    async verifyAccessToken(token) {
-      try {
-        const { payload } = await jwtVerify(token, keySet, { issuer, audience: resource, subject: OWNER, algorithms: ['RS256'], typ: 'at+jwt', requiredClaims: ['exp', 'iat', 'client_id', 'scope'] });
-        if (payload.aud !== resource || typeof payload.client_id !== 'string' || !payload.client_id || typeof payload.scope !== 'string' || !payload.scope.split(' ').includes(SCOPE)) throw new Error('Invalid probe token');
-        return { token, clientId: payload.client_id, scopes: payload.scope.split(' '), expiresAt: payload.exp, extra: { subject: OWNER } };
-      } catch {
-        throw new OAuthError(OAuthErrorCode.InvalidToken, 'Invalid or expired Praxis Probe access token');
-      }
-    },
+    verifyAccessToken,
     close() { clearInterval(cleanup); db.close(); },
   };
 }
