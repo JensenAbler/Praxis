@@ -1,0 +1,11 @@
+# Build this template only during trusted bootstrap/update, then configure the resulting image digest.
+# Dependency installation during ordinary jobs is disabled until egress policy has been exercised.
+ARG NODE_BASE=node:22-bookworm-slim
+FROM ${NODE_BASE}
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    bash ca-certificates git python3 python3-venv ripgrep make g++ ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+ENV LANG=C.UTF-8 CI=1
+WORKDIR /workspace
+ENTRYPOINT []
+CMD ["node", "--version"]

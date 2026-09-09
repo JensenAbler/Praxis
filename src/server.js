@@ -10,6 +10,7 @@ import { createAuth } from './auth.js';
 import { JobStore } from './jobs.js';
 import { AuditStore } from './audit.js';
 import { createProbeServer, VERSION } from './mcp.js';
+import { createCodingClient } from './code/client.js';
 
 export async function createApp(config) {
   const base = new URL(config.baseUrl);
@@ -22,17 +23,18 @@ export async function createApp(config) {
   mkdirSync(config.dataDirectory, { recursive: true, mode: 0o700 });
   const jobs = new JobStore(config.dataDirectory);
   const audit = new AuditStore(config.dataDirectory);
-  const auth = await createAuth({ issuer, resourceUrl, ...config.auth, dataDirectory: join(config.dataDirectory, 'oauth'), allowLoopback: config.allowLoopback ?? false });
+  const coding = config.coding ? createCodingClient(config.coding) : undefined;
+  const auth = await createAuth({ issuer, resourceUrl, ...config.auth, dataDirectory: join(config.dataDirectory, 'oauth'), allowLoopback: config.allowLoopback ?? false, codingEnabled: !!coding });
   const app = express();
   app.disable('x-powered-by');
   // Only loopback nginx may supply proxy headers in production.
   app.set('trust proxy', 'loopback');
   app.use(hostHeaderValidation([base.hostname, ...(config.allowLoopback ? ['localhost', '127.0.0.1'] : [])]));
   app.use((_req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
-  app.get(`${prefix}/healthz`, (_req, res) => res.json({ ok: true, name: 'Praxis Probe', version: VERSION, release, bootId }));
-  app.get(`${prefix}/`, (_req, res) => res.type('text').send('Praxis Probe: an authenticated diagnostic MCP fixture. Connect using the /mcp endpoint.'));
+  app.get(`${prefix}/healthz`, (_req, res) => res.json({ ok: true, name: coding ? 'Praxis' : 'Praxis Probe', version: coding ? '0.2.0' : VERSION, release, bootId }));
+  app.get(`${prefix}/`, (_req, res) => res.type('text').send(coding ? 'Praxis: authenticated source, isolated coding, and durable jobs. Connect using the /mcp endpoint.' : 'Praxis Probe: an authenticated diagnostic MCP fixture. Connect using the /mcp endpoint.'));
   app.get(`/.well-known/oauth-protected-resource${prefix}/mcp`, (_req, res) => res.json({
-    resource: resourceUrl, authorization_servers: [issuer], scopes_supported: ['praxis:probe', 'offline_access'], resource_name: 'Praxis Probe',
+    resource: resourceUrl, authorization_servers: [issuer], scopes_supported: ['praxis:probe', ...(coding ? ['praxis:code'] : []), 'offline_access'], resource_name: coding ? 'Praxis' : 'Praxis Probe',
     bearer_methods_supported: ['header']
   }));
   // Path-qualified discovery preserves the existing Apocrypha root metadata.
@@ -43,12 +45,12 @@ export async function createApp(config) {
     return auth.provider.callback()(req, res);
   });
   app.use(`${prefix}/oauth`, auth.router);
-  const handler = createMcpHandler(ctx => createProbeServer({ jobs, audit, resourceUrl, bootId, release, authInfo: ctx.authInfo, era: ctx.era }), {
+  const handler = createMcpHandler(ctx => createProbeServer({ jobs, audit, resourceUrl, bootId, release, authInfo: ctx.authInfo, era: ctx.era, coding }), {
     legacy: 'stateless', onerror: () => console.error(JSON.stringify({ event: 'mcp_protocol_error' }))
   });
   app.use(`${prefix}/mcp`, originValidation([base.hostname, 'chatgpt.com', 'chat.openai.com', 'claude.ai', ...(config.allowLoopback ? ['localhost', '127.0.0.1'] : [])]));
-  app.use(`${prefix}/mcp`, requireBearerAuth({ verifier: { verifyAccessToken: auth.verifyAccessToken }, requiredScopes: ['praxis:probe'], resourceMetadataUrl: resourceMetadata }));
-  app.use(`${prefix}/mcp`, express.json({ limit: '64kb' }));
+  app.use(`${prefix}/mcp`, requireBearerAuth({ verifier: { verifyAccessToken: auth.verifyAccessToken }, requiredScopes: coding ? [] : ['praxis:probe'], resourceMetadataUrl: resourceMetadata }));
+  app.use(`${prefix}/mcp`, express.json({ limit: coding ? '512kb' : '64kb' }));
   app.all(`${prefix}/mcp`, async (req, res, next) => {
     const requestId = randomUUID();
     const started = performance.now();
@@ -80,6 +82,7 @@ export function configFromEnvironment() {
     baseUrl: process.env.PRAXIS_BASE_URL || 'https://mcp.jensenabler.com/praxis-probe',
     dataDirectory: process.env.PRAXIS_DATA_DIR || '/var/lib/praxis-probe',
     release: process.env.PRAXIS_RELEASE || VERSION,
+    ...(process.env.PRAXIS_CODING_URL ? { coding: { url: process.env.PRAXIS_CODING_URL } } : {}),
     auth: { passwordHash: read('password-hash'), jwks: JSON.parse(read('jwks.json')), cookieKeys: JSON.parse(read('cookie-keys.json')) }
   };
 }
