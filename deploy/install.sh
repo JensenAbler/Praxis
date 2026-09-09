@@ -6,6 +6,10 @@ release="${1:?Supply the exact release directory name}"
 test "$(id -u)" -eq 0
 exec 9>/run/lock/praxis-probe-deploy.lock
 flock -n 9 || { printf 'Another Praxis Probe deployment is running.\n' >&2; exit 2; }
+if systemctl is-active --quiet praxis-code.service || test -e /etc/systemd/system/praxis-probe.service.d/coding.conf; then
+  printf 'Coding has been activated. Use a reviewed coding-service update procedure; this probe bootstrap does not coordinate coding jobs.\n' >&2
+  exit 2
+fi
 root=/srv/praxis-probe
 candidate="$root/releases/$release"
 builder=praxis-probe-build

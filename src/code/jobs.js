@@ -430,14 +430,16 @@ export class CodeJobs {
       job = this.row(job.owner, job.id);
       const state = await this.runner.inspect({ name: containerName(job.id) });
       if (!state.exists || !state.running) { await this.reconcile(job); return; }
-      // Prefer the monitor’s timestamp over the successful start response timestamp.
-      if (state.startedAt && state.startedAt !== job.started_at) {
-        this.db.prepare('UPDATE code_jobs SET started_at=? WHERE id=?').run(state.startedAt, job.id);
+      // Once published, startedAt is stable across later observations and recovery.
+      if (state.startedAt && !job.started_at) {
+        this.db.prepare('UPDATE code_jobs SET started_at=COALESCE(started_at,?) WHERE id=?').run(state.startedAt, job.id);
         job = this.row(job.owner, job.id);
       }
       await this.collect(job);
       const timeout = JSON.parse(job.request_json).timeoutSeconds;
-      const expired = job.started_at && Date.parse(this.clock()) >= Date.parse(job.started_at) + timeout * 1000;
+      // Enforce the runtime's actual deadline even when its start preceded our acknowledgement.
+      const runtimeStartedAt = state.startedAt ?? job.started_at;
+      const expired = runtimeStartedAt && Date.parse(this.clock()) >= Date.parse(runtimeStartedAt) + timeout * 1000;
       const latest = this.row(job.owner, job.id);
       if (latest.cancel_requested || expired) {
         const reason = latest.cancel_requested ? 'cancelled' : 'timeout';

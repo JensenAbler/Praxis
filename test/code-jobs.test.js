@@ -44,7 +44,7 @@ function fixture(t) {
   const directory = mkdtempSync(join(tmpdir(), 'praxis-code-jobs-'));
   const workspace = join(directory, 'workspaces', 'fixture');
   mkdirSync(workspace, { recursive: true });
-  const db = new DatabaseSync(join(directory, 'jobs.sqlite'));
+  let db = new DatabaseSync(join(directory, 'jobs.sqlite'));
   db.exec('PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;');
   const store = {
     db, transaction(fn) {
@@ -65,7 +65,14 @@ function fixture(t) {
   const options = { store, dataDirectory: directory, runner, workspaces, clock: () => time };
   const jobs = new CodeJobs(options);
   t.after(() => { db.close(); rmSync(directory, { recursive: true, force: true }); });
-  return { directory, workspace, store, runner, jobs, options, setTime(value) { time = value; }, setRevision(value) { revision = value; } };
+  return { directory, workspace, store, runner, jobs, options, setTime(value) { time = value; }, setRevision(value) { revision = value; },
+    reopenStore() {
+      db.close();
+      db = new DatabaseSync(join(directory, 'jobs.sqlite'));
+      db.exec('PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;');
+      store.db = db;
+    },
+  };
 }
 const request = extra => ({ owner: 'jensen', workspaceId: 'fixture', expectedRevision: 'revision-a', idempotencyKey: 'test-key-0001', argv: ['node', '--version'], ...extra });
 
@@ -145,6 +152,65 @@ test('an uncertain start adopts observed execution and does not execute twice', 
   await recovered.tick();
   assert.equal(recovered.get({ owner: 'jensen', jobId: job.id }).status, 'completed');
   assert.equal(f.runner.created, 1); assert.equal(f.runner.started, 1);
+});
+
+test('startedAt observed during pending inspection survives runtime discovery, reopening, and completion', async t => {
+  const f = fixture(t);
+  const acknowledgedAt = '2026-09-09T06:14:29.961Z';
+  const runtimeStartedAt = '2026-09-08T23:14:29.947738575-07:00';
+  f.setTime(acknowledgedAt);
+  let releaseInspection, inspectionEntered;
+  const pendingInspection = new Promise(resolve => { releaseInspection = resolve; });
+  const enteredInspection = new Promise(resolve => { inspectionEntered = resolve; });
+  const inspect = f.runner.inspect.bind(f.runner);
+  f.runner.inspect = async input => {
+    const state = await inspect(input);
+    state.startedAt = runtimeStartedAt;
+    inspectionEntered();
+    await pendingInspection;
+    return state;
+  };
+  const job = f.jobs.start(request());
+  const ticking = f.jobs.tick();
+  await enteredInspection;
+  const duringInspection = f.jobs.get({ owner: 'jensen', jobId: job.id });
+  const repeatedDuringInspection = f.jobs.start(request());
+  releaseInspection();
+  await ticking;
+  assert.equal(duringInspection.status, 'running');
+  assert.equal(duringInspection.startedAt, acknowledgedAt);
+  assert.equal(repeatedDuringInspection.startedAt, acknowledgedAt);
+  assert.equal(f.jobs.get({ owner: 'jensen', jobId: job.id }).startedAt, acknowledgedAt);
+
+  f.reopenStore();
+  const recovered = new CodeJobs(f.options);
+  await recovered.recover();
+  assert.equal(recovered.get({ owner: 'jensen', jobId: job.id }).startedAt, acknowledgedAt);
+  f.runner.complete(containerName(job.id));
+  f.runner.containers.get(containerName(job.id)).finishedAt = '2026-09-09T06:14:34.947Z';
+  await recovered.tick();
+  const completed = recovered.get({ owner: 'jensen', jobId: job.id });
+  assert.equal(completed.status, 'completed');
+  assert.equal(completed.exitCode, 0);
+  assert.equal(completed.startedAt, acknowledgedAt);
+  assert.equal(recovered.start(request()).startedAt, acknowledgedAt);
+  assert.equal(recovered.list({ owner: 'jensen' }).jobs[0].startedAt, acknowledgedAt);
+  assert.equal(f.runner.created, 1);
+  assert.equal(f.runner.started, 1);
+});
+
+test('a stable acknowledgement timestamp does not extend the runtime deadline', async t => {
+  const f = fixture(t);
+  f.setTime('2026-01-01T00:00:02.000Z');
+  const job = f.jobs.start(request({ timeoutSeconds: 3 }));
+  await f.jobs.tick();
+  assert.equal(f.jobs.get({ owner: 'jensen', jobId: job.id }).startedAt, '2026-01-01T00:00:02.000Z');
+  f.setTime('2026-01-01T00:00:03.100Z');
+  await f.jobs.tick();
+  const result = f.jobs.get({ owner: 'jensen', jobId: job.id });
+  assert.equal(result.status, 'timed_out');
+  assert.equal(result.startedAt, '2026-01-01T00:00:02.000Z');
+  assert.equal(f.runner.stopped, 1);
 });
 
 test('unavailable runtime leaves uncertain work locked until state is recoverable', async t => {
