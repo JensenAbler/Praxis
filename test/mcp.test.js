@@ -47,7 +47,7 @@ async function fixture(t) {
     }));
     return client;
   }
-  return { directory, connect, client: await connect(), resourceUrl: service.resourceUrl };
+  return { directory, connect, client: await connect(), resourceUrl: service.resourceUrl, token };
 }
 
 async function call(client, name, args = {}) {
@@ -67,6 +67,27 @@ async function waitForStatus(client, jobId, status) {
     await delay(30);
   }
 }
+
+test('legacy 2025 MCP clients can initialize, discover tools, and call them', async (t) => {
+  const { resourceUrl, token } = await fixture(t);
+  let id = 0;
+  async function request(method, params) {
+    const response = await fetch(resourceUrl, { method: 'POST', headers: {
+      authorization: `Bearer ${token}`, 'content-type': 'application/json',
+      accept: 'application/json, text/event-stream', 'mcp-protocol-version': '2025-11-25'
+    }, body: JSON.stringify({ jsonrpc: '2.0', id: ++id, method, params }) });
+    assert.equal(response.status, 200);
+    const body = await response.text();
+    const result = response.headers.get('content-type').includes('text/event-stream')
+      ? JSON.parse(body.split('\n').find(line => line.startsWith('data:')).slice(5)) : JSON.parse(body);
+    assert.equal(result.error, undefined, JSON.stringify(result));
+    return result.result;
+  }
+  const initialized = await request('initialize', { protocolVersion: '2025-11-25', capabilities: {}, clientInfo: { name: 'legacy-fixture', version: '1.0' } });
+  assert.equal(initialized.protocolVersion, '2025-11-25');
+  assert.equal((await request('tools/list', {})).tools.length, 9);
+  assert.equal((await request('tools/call', { name: 'probe_capabilities', arguments: {} })).structuredContent.ok, true);
+});
 
 test('MCP SDK discovers precise limits, verifies synthetic evidence, and recovers from controlled errors', async (t) => {
   const { client, resourceUrl } = await fixture(t);

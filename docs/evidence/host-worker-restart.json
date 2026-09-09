@@ -1,0 +1,205 @@
+{
+  "evidenceType": "SSH administration of deployed fixed fixture; not authenticated MCP evidence",
+  "observedAt": "2026-09-08T20:27:38.271187-07:00",
+  "host": "31.97.135.128",
+  "method": {
+    "jobOperations": "JobStore invoked as unprivileged praxis-probe account using /srv/praxis-probe/current/src/jobs.js",
+    "dataDirectory": "/var/lib/praxis-probe",
+    "restartedService": "praxis-probe.service",
+    "restartMethod": "Owner SSH systemctl restart praxis-probe.service",
+    "publicMcpOrOAuthUsed": false
+  },
+  "before": {
+    "webPid": 3143697,
+    "workerPid": 3143696
+  },
+  "after": {
+    "webPid": 3147257,
+    "workerPid": 3143696
+  },
+  "restartAt": "2026-09-08T20:27:20.050972-07:00",
+  "createdJob": {
+    "id": "10579cb0-e7a5-4d8d-bc86-95a7f833fb7d",
+    "label": "SSH admin web restart fixture",
+    "status": "queued",
+    "durationSeconds": 20,
+    "intervalSeconds": 2,
+    "createdAt": "2026-09-09T03:27:17.967Z",
+    "updatedAt": "2026-09-09T03:27:17.967Z",
+    "startedAt": null,
+    "finishedAt": null,
+    "cancellationRequested": false
+  },
+  "statusImmediatelyBeforeRestart": {
+    "id": "10579cb0-e7a5-4d8d-bc86-95a7f833fb7d",
+    "label": "SSH admin web restart fixture",
+    "status": "running",
+    "durationSeconds": 20,
+    "intervalSeconds": 2,
+    "createdAt": "2026-09-09T03:27:17.967Z",
+    "updatedAt": "2026-09-09T03:27:18.034Z",
+    "startedAt": "2026-09-09T03:27:18.034Z",
+    "finishedAt": null,
+    "cancellationRequested": false
+  },
+  "recoveredJob": {
+    "id": "10579cb0-e7a5-4d8d-bc86-95a7f833fb7d",
+    "label": "SSH admin web restart fixture",
+    "status": "completed",
+    "durationSeconds": 20,
+    "intervalSeconds": 2,
+    "createdAt": "2026-09-09T03:27:17.967Z",
+    "updatedAt": "2026-09-09T03:27:38.167Z",
+    "startedAt": "2026-09-09T03:27:18.034Z",
+    "finishedAt": "2026-09-09T03:27:38.167Z",
+    "cancellationRequested": false
+  },
+  "logs": {
+    "jobId": "10579cb0-e7a5-4d8d-bc86-95a7f833fb7d",
+    "status": "completed",
+    "records": [
+      {
+        "sequence": 1,
+        "event": "STARTED",
+        "runId": "10579cb0-e7a5-4d8d-bc86-95a7f833fb7d",
+        "utc": "2026-09-09T03:27:18.035Z",
+        "elapsedSeconds": 0
+      },
+      {
+        "sequence": 2,
+        "event": "HEARTBEAT",
+        "runId": "10579cb0-e7a5-4d8d-bc86-95a7f833fb7d",
+        "utc": "2026-09-09T03:27:20.048Z",
+        "elapsedSeconds": 2.008586,
+        "heartbeat": 1
+      },
+      {
+        "sequence": 3,
+        "event": "HEARTBEAT",
+        "runId": "10579cb0-e7a5-4d8d-bc86-95a7f833fb7d",
+        "utc": "2026-09-09T03:27:22.068Z",
+        "elapsedSeconds": 4.028635,
+        "heartbeat": 2
+      },
+      {
+        "sequence": 4,
+        "event": "HEARTBEAT",
+        "runId": "10579cb0-e7a5-4d8d-bc86-95a7f833fb7d",
+        "utc": "2026-09-09T03:27:24.083Z",
+        "elapsedSeconds": 6.043748,
+        "heartbeat": 3
+      },
+      {
+        "sequence": 5,
+        "event": "HEARTBEAT",
+        "runId": "10579cb0-e7a5-4d8d-bc86-95a7f833fb7d",
+        "utc": "2026-09-09T03:27:26.094Z",
+        "elapsedSeconds": 8.05452,
+        "heartbeat": 4
+      },
+      {
+        "sequence": 6,
+        "event": "HEARTBEAT",
+        "runId": "10579cb0-e7a5-4d8d-bc86-95a7f833fb7d",
+        "utc": "2026-09-09T03:27:28.106Z",
+        "elapsedSeconds": 10.066134,
+        "heartbeat": 5
+      },
+      {
+        "sequence": 7,
+        "event": "HEARTBEAT",
+        "runId": "10579cb0-e7a5-4d8d-bc86-95a7f833fb7d",
+        "utc": "2026-09-09T03:27:30.117Z",
+        "elapsedSeconds": 12.077662,
+        "heartbeat": 6
+      },
+      {
+        "sequence": 8,
+        "event": "HEARTBEAT",
+        "runId": "10579cb0-e7a5-4d8d-bc86-95a7f833fb7d",
+        "utc": "2026-09-09T03:27:32.13Z",
+        "elapsedSeconds": 14.08974,
+        "heartbeat": 7
+      },
+      {
+        "sequence": 9,
+        "event": "HEARTBEAT",
+        "runId": "10579cb0-e7a5-4d8d-bc86-95a7f833fb7d",
+        "utc": "2026-09-09T03:27:34.14Z",
+        "elapsedSeconds": 16.100665,
+        "heartbeat": 8
+      },
+      {
+        "sequence": 10,
+        "event": "HEARTBEAT",
+        "runId": "10579cb0-e7a5-4d8d-bc86-95a7f833fb7d",
+        "utc": "2026-09-09T03:27:36.155Z",
+        "elapsedSeconds": 18.115373,
+        "heartbeat": 9
+      },
+      {
+        "sequence": 11,
+        "event": "HEARTBEAT",
+        "runId": "10579cb0-e7a5-4d8d-bc86-95a7f833fb7d",
+        "utc": "2026-09-09T03:27:38.167Z",
+        "elapsedSeconds": 20.127985,
+        "heartbeat": 10
+      },
+      {
+        "sequence": 12,
+        "event": "COMPLETED",
+        "runId": "10579cb0-e7a5-4d8d-bc86-95a7f833fb7d",
+        "utc": "2026-09-09T03:27:38.167Z",
+        "elapsedSeconds": 20.127985
+      }
+    ],
+    "nextCursor": 12
+  },
+  "podcastRepositories": [
+    {
+      "path": "/opt/podcast-discord",
+      "head": "feef620f1958b24e2a0de50f28361a9d9e2db4ef",
+      "porcelain": ""
+    },
+    {
+      "path": "/opt/podcast-production",
+      "head": "2b5c4273d3f7b249f8626a8575ba79fe0f66c339",
+      "porcelain": ""
+    }
+  ],
+  "checks": {
+    "originalJobRecovered": true,
+    "jobCompleted": true,
+    "webPidChanged": true,
+    "workerPidUnchanged": true,
+    "explicitCompletedRecord": true,
+    "podcastTreesClean": true,
+    "podcastHeadsMatchBaseline": true
+  },
+  "unrelatedProcessesAfterCheck": [
+    {
+      "service": "Apocrypha",
+      "pid": 2217438,
+      "comm": "node",
+      "originalPidStillPresent": true
+    },
+    {
+      "service": "VPS Observer",
+      "pid": 2973852,
+      "comm": "node",
+      "originalPidStillPresent": true
+    }
+  ],
+  "finalServiceStates": [
+    {
+      "substate": "running",
+      "service": "praxis-probe.service",
+      "active": "active"
+    },
+    {
+      "substate": "running",
+      "service": "praxis-probe-worker.service",
+      "active": "active"
+    }
+  ]
+}

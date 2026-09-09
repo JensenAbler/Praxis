@@ -4,6 +4,8 @@ set -euo pipefail
 release="${1:?Supply the exact release directory name}"
 [[ "$release" =~ ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ ]] || exit 2
 test "$(id -u)" -eq 0
+exec 9>/run/lock/praxis-probe-deploy.lock
+flock -n 9 || { printf 'Another Praxis Probe deployment is running.\n' >&2; exit 2; }
 root=/srv/praxis-probe
 candidate="$root/releases/$release"
 builder=praxis-probe-build

@@ -1,0 +1,108 @@
+{
+  "observedAt": "2026-09-09T03:27:32.763Z",
+  "method": "Unauthenticated HTTPS fetch from bootstrap laptop",
+  "records": [
+    {
+      "path": "/praxis-probe/healthz",
+      "status": 200,
+      "challenge": null,
+      "body": {
+        "ok": true,
+        "name": "Praxis Probe",
+        "version": "0.1.0",
+        "release": "probe-4abf8f3604cb",
+        "bootId": "a38a690f-515a-491e-81a7-81670d3b416b"
+      }
+    },
+    {
+      "path": "/.well-known/oauth-protected-resource/praxis-probe/mcp",
+      "status": 200,
+      "challenge": null,
+      "body": {
+        "resource": "https://mcp.jensenabler.com/praxis-probe/mcp",
+        "authorization_servers": [
+          "https://mcp.jensenabler.com/praxis-probe/oauth"
+        ],
+        "scopes_supported": [
+          "praxis:probe",
+          "offline_access"
+        ],
+        "resource_name": "Praxis Probe",
+        "bearer_methods_supported": [
+          "header"
+        ]
+      }
+    },
+    {
+      "path": "/.well-known/oauth-authorization-server/praxis-probe/oauth",
+      "status": 200,
+      "challenge": null,
+      "body": {
+        "authorization_endpoint": "https://mcp.jensenabler.com/praxis-probe/oauth/auth",
+        "claims_parameter_supported": false,
+        "claims_supported": [
+          "sub",
+          "sid",
+          "auth_time",
+          "iss"
+        ],
+        "code_challenge_methods_supported": [
+          "S256"
+        ],
+        "end_session_endpoint": "https://mcp.jensenabler.com/praxis-probe/oauth/session/end",
+        "grant_types_supported": [
+          "authorization_code",
+          "refresh_token"
+        ],
+        "issuer": "https://mcp.jensenabler.com/praxis-probe/oauth",
+        "jwks_uri": "https://mcp.jensenabler.com/praxis-probe/oauth/jwks",
+        "registration_endpoint": "https://mcp.jensenabler.com/praxis-probe/oauth/reg",
+        "authorization_response_iss_parameter_supported": true,
+        "response_modes_supported": [
+          "form_post",
+          "fragment",
+          "query"
+        ],
+        "response_types_supported": [
+          "code"
+        ],
+        "scopes_supported": [
+          "openid",
+          "offline_access",
+          "praxis:probe"
+        ],
+        "subject_types_supported": [
+          "public"
+        ],
+        "token_endpoint_auth_methods_supported": [
+          "none",
+          "client_secret_basic",
+          "client_secret_post"
+        ],
+        "token_endpoint": "https://mcp.jensenabler.com/praxis-probe/oauth/token",
+        "id_token_signing_alg_values_supported": [
+          "RS256"
+        ],
+        "pushed_authorization_request_endpoint": "https://mcp.jensenabler.com/praxis-probe/oauth/request",
+        "request_uri_parameter_supported": false,
+        "dpop_signing_alg_values_supported": [
+          "ES256",
+          "Ed25519",
+          "EdDSA"
+        ],
+        "claim_types_supported": [
+          "normal"
+        ]
+      }
+    },
+    {
+      "path": "/praxis-probe/mcp",
+      "status": 401,
+      "challenge": "Bearer error=\"invalid_token\", error_description=\"Missing Authorization header\", scope=\"praxis:probe\", resource_metadata=\"https://mcp.jensenabler.com/.well-known/oauth-protected-resource/praxis-probe/mcp\"",
+      "body": {
+        "error": "invalid_token",
+        "error_description": "Missing Authorization header"
+      }
+    }
+  ]
+}

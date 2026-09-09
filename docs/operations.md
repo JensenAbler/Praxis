@@ -8,6 +8,7 @@
 - Separate systemd `praxis-probe.service` and `praxis-probe-worker.service`, unprivileged user `praxis-probe`. Web memory cap 256MB/25% CPU; worker 96MB/15% CPU. Worker has no network. Web accepts loopback proxy traffic only.
 - SQLite jobs, audit observations, and OAuth state under private `/var/lib/praxis-probe`. This single-host fixture shares a runtime UID; it is not the future isolation boundary for arbitrary development commands.
 - Root-only credential originals under `/etc/praxis-probe/credentials`; systemd loads only the web service's required credentials. Public-key material is intentionally published through OAuth JWKS.
+- Initial deployed source commit `4abf8f3604cb`, archive SHA-256 `b4c40571dc74ccbd507588d502abe0550803fdc1ed8eb3e185e56f3d52ad91fc`; configuration backup `/root/praxis-probe-backups/20260909T031822Z-h2lQy3`.
 - Candidate dependency installation/tests run under distinct `praxis-probe-build` identity, without runtime-directory access. This bootstrap installer is owner-run code, not an application-controlled updater.
 
 The probe exposes only a fixed heartbeat loop. No repository access, host administration, production adapter, external model call, browser tool, or general shell is present.
@@ -31,6 +32,8 @@ No off-host backup or host-loss recovery is claimed. SQLite WAL with synchronous
 ## Bootstrap and independent recovery
 
 Generate credentials with `node scripts/create-credentials.js <private-directory>` outside Git. On Windows restrict the directory ACL before generation. Copy only password-hash, jwks.json and cookie-keys.json to the root-only server credential directory. Transfer an explicitly reviewed source archive to a unique release directory. Run `bash /srv/praxis-probe/releases/<release>/deploy/install.sh <release>` through existing owner SSH. The script validates release names, tests without root, backs up changed configuration, validates nginx, activates only the two probe services, and gracefully reloads nginx. Upgrades refuse active jobs.
+
+Use the latest repository installer for future bootstrap releases: it adds an exclusive deployment lock beyond the installer captured in the initial source archive. The application/worker source is unchanged.
 
 Inspect without changes:
 
