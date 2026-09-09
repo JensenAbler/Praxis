@@ -158,8 +158,8 @@ try:
         raise SystemExit(128 + interrupted[-1])
     # No INSERT/UPDATE/DELETE is performed by this reservation. The unit's normal
     # 15-second stop policy completes before releasing the lock to other writers.
-    subprocess.run(['systemctl', 'stop', 'praxis-code.service'], check=True)
-    state = subprocess.check_output(['systemctl', 'show', 'praxis-code.service', '-p', 'ActiveState', '--value'], text=True).strip()
+    subprocess.run(['systemctl', 'stop', 'praxis-code.service'], check=True, start_new_session=True)
+    state = subprocess.check_output(['systemctl', 'show', 'praxis-code.service', '-p', 'ActiveState', '--value'], text=True, start_new_session=True).strip()
     if state != 'inactive':
         raise SystemExit(f'Coding shutdown did not reach inactive state: {state}')
 finally:
