@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "evidenceType": "Linux candidate qualification from persisted test logs",
+  "sourceCommit": "d5a6b8d6613bbb805cdee46937a86150f49e5b0b",
+  "release": "coding-d5a6b8d6613b",
+  "version": "0.4.0",
+  "collectedAt": "2026-09-09T14:50:50.575806-07:00",
+  "sourceVerification": {
+    "method": "git get-tar-commit-id on the uploaded source archive, plus SHA-256 comparison of every archived regular file against the installed candidate release",
+    "archiveSha256": "18cf1f5b4db325806d318edcea79ba4cca3879493480176c250e2a5a67a856f1",
+    "archivedFilesCompared": 123,
+    "mismatches": 0
+  },
+  "npm": {
+    "command": "npm test",
+    "status": "passed",
+    "tests": 129,
+    "passed": 129,
+    "failed": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "durationMilliseconds": 35986.790087,
+    "logSha256": "ba2a539f1b8a53de040f4db50e9be5ffa131e09b56fa57d982dd2014dcd9da2f",
+    "evidence": "Persisted publication-npm-test.txt TAP summary",
+    "authenticatedGitWorkflow": {
+      "testFile": "test/git-mcp.test.js",
+      "transport": "Authenticated MCP gateway to coding HTTP service to publishing HTTP broker",
+      "repository": "Actual local bare Git fixture",
+      "exercised": [
+        "sync main and create an immutable source snapshot",
+        "create and edit an isolated workspace",
+        "create a real Git commit and push the local remote main",
+        "restart all three services and recover with a fresh MCP client",
+        "forward a deployment and recover its durable receipt",
+        "reject probe-only permission and owner injection at service boundaries"
+      ],
+      "deployment": "Mocked fixed deployment; no production activation",
+      "credentials": "Ephemeral fixture JWT keys, no live owner password or GitHub credentials"
+    }
+  },
+  "python": {
+    "status": "passed with skips",
+    "testsRun": 47,
+    "passed": 42,
+    "failed": 0,
+    "skipped": 5,
+    "durationSeconds": 5.463,
+    "logSha256": "197af6353bee99d4634a4798ac1a36e8dbd80cc46c300ff5e62afd38f76f5644",
+    "evidence": "Persisted publication-python-test.txt unittest summary",
+    "skipScope": "Root-only fixture tests skipped in the unprivileged qualification run"
+  },
+  "separateRootDeploymentHelper": {
+    "status": "passed",
+    "testsRun": 23,
+    "failed": 0,
+    "skipped": 0,
+    "durationSeconds": 4.783,
+    "evidence": "Read independently from /root/praxis-deploy-helper-tests/fixture-result.txt",
+    "scope": "Deployment helper tests use disposable fixture repositories and a fixture service, not production podcast-discord"
+  },
+  "limits": [
+    "These results qualify the candidate source; they do not establish live GitHub publication or production deployment through Praxis.",
+    "No fresh phone workflow or phone performance was measured.",
+    "The authenticated local Git tests mock deployment activation.",
+    "The separate real Podman MCP fixture is recorded in publication-v04-mcp.json."
+  ]
+}
