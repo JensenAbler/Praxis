@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
   "evidenceKind": "owner-bootstrap-deployment-observations",
-  "status": "activation_pending",
+  "status": "active",
   "endpoint": "https://mcp.jensenabler.com/praxis-probe/mcp",
-  "currentInstalledRelease": "coding-0121604a83cf",
-  "codingEnabled": false,
+  "currentInstalledRelease": "coding-8e25c6cf9000",
+  "codingEnabled": true,
   "installations": [
     {
       "release": "coding-53cf0cdab55c",
@@ -19,6 +19,13 @@
       "archiveSha256": "da4e979dd977bc172eac6910b1d2b86dbf2f685884a4056bd2105d381ec0ae06",
       "linuxTests": { "total": 57, "passed": 57, "failed": 0, "skipped": 0 },
       "backup": "/root/praxis-probe-backups/20260909T153847Z-fKRgyO"
+    },
+    {
+      "release": "coding-8e25c6cf9000",
+      "commit": "8e25c6cf9000e3b5f3bf0b2642a8cbe434d5c964",
+      "archiveSha256": "7e3ffebcafa1b913883328aa7b9146552123d33ee7c38b6f563f798a64be3377",
+      "linuxTests": { "total": 59, "passed": 59, "failed": 0, "skipped": 0 },
+      "backup": "/root/praxis-probe-backups/20260909T154713Z-DNFUnK"
     }
   ],
   "activationAttempts": [
@@ -31,6 +38,20 @@
       "cause": "The executable-entry check compared a canonical ES module URL with the unresolved /current symlink path, so it skipped starting the HTTP server.",
       "gatewayConfigurationRestored": true,
       "backup": "/root/praxis-probe-backups/coding-activation-gW0Uz3Rl"
+    },
+    {
+      "release": "coding-8e25c6cf9000",
+      "verifiedAt": "2026-09-09T16:01:07Z",
+      "result": "active",
+      "backendListenerStarted": true,
+      "backendEnabled": true,
+      "backendPid": 3457078,
+      "backendBootId": "f76d9fa3-7668-4bfc-835d-d0957e0a6bc4",
+      "gatewayBootId": "7b54d3b6-4ea9-4b37-999c-e663d582abe1",
+      "publicHealth": { "ok": true, "name": "Praxis", "version": "0.2.0", "release": "coding-8e25c6cf9000" },
+      "publicScopes": ["praxis:probe", "praxis:code", "offline_access"],
+      "observedSystemdLimits": { "MemoryMax": 1610612736, "MemorySwapMax": 0, "TasksMax": 256, "CPUQuotaPerSecUSec": "1s" },
+      "backup": "/root/praxis-probe-backups/coding-activation-mRwp13JF"
     }
   ],
   "workstationOutageRecovery": {
@@ -43,7 +64,8 @@
     "scope": "The workstation lost power. This does not establish VPS reboot or host-loss recovery. Existing jobs were inspected before new fixtures were started."
   },
   "preservedApplications": {
-    "observedAt": "2026-09-09T15:41:00Z",
+    "observedAt": "2026-09-09T16:06:47Z",
+    "phase": "Post-activation checks for coding-8e25c6cf9000",
     "podcastDiscord": { "revision": "feef620f1958b24e2a0de50f28361a9d9e2db4ef", "workingTreeClean": true },
     "podcastProduction": { "revision": "2b5c4273d3f7b249f8626a8575ba79fe0f66c339", "workingTreeClean": true },
     "apocryphaPid": 2217438,
@@ -52,5 +74,7 @@
     "scope": "The same listener PIDs and clean source revisions were observed before and after the Praxis installation. No unrelated service restart was requested."
   },
   "phoneCodingAcceptance": "pending",
+  "registeredPraxisSourceRevision": "53cf0cdab55c0262f3cf8fa9246db5f3681cbe1a",
+  "configurationNotes": "Runtime release updated independently of registered source snapshots. Current Discord instructions include observed baseline failures; historical replay source and task were unchanged.",
   "claudeAcceptance": "pending"
 }

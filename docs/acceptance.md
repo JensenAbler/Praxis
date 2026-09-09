@@ -1,6 +1,32 @@
-# Diagnostic acceptance
+# Praxis acceptance
 
-This matrix covers the agreed capability probe. The complete original Praxis specification is not implemented or represented as complete.
+The first coding workflow is deployed on runtime `coding-8e25c6cf9000`. Automated local, Linux, and authenticated-client evidence are recorded separately from native ChatGPT and iPhone observations. The full original specification and later roadmap are not represented as complete.
+
+## Coding workflow
+
+| Check | Status | Evidence and scope |
+| --- | --- | --- |
+| Complete candidate test suite | Passed on Linux | Runtime `coding-8e25c6cf9000`: 59 tests passed, zero failures/skips, under the separate build UID before installation. Includes authenticated HTTP MCP integration with test credentials and startup/health/shutdown through the release symlink. |
+| Source snapshots, isolated workspaces, edits, diffs, receipts | Passed in automated tests | `test/workspaces.test.js` and `test/coding-mcp.test.js` cover all edit actions, ownership, hash/revision conflicts, path/link rejection, mutation recovery, and bounded pagination. |
+| Stable command identity and start timestamp | Passed in regression tests | `test/code-jobs.test.js` observes a response while runtime inspection is pending, reopens SQLite, recovers/completes the same command, and verifies unchanged `startedAt` without another launch. Runtime deadlines still use actual observed start time. |
+| Real Linux command lifecycle and isolation policy | Passed in the recorded host fixture | [Host fixture evidence](evidence/coding-host-bootstrap.json): real fail/edit/pass, cgroup files, network/mount policy, recovery, artifacts, cancellation, independent timeout, bounded output, and filesystem capacity. The receipt identifies the exact source/image scope; deliberate resource exhaustion is not claimed. |
+| Full authenticated MCP with actual Podman | Passed on the deployed runtime | [MCP host evidence](evidence/coding-mcp-host.json): fixture `95f95917-78b7-434b-baf8-24361d07da64` passed all six groups, covering permission boundaries, discovery/create, edits/conflicts, real command across gateway recreation, fresh-client recovery/idempotency, and paginated logs/artifacts/diff/receipts. Artifact hash was independently verified. The earlier timestamp failure and read-only recovery remain recorded. Temporary fixture authority is distinct from live owner OAuth. |
+| Prepared dependencies and clean project checks | Mixed baseline results | [Project validation](evidence/project-validation.json) records isolated, offline checks without candidate edits. The historical replay passed 75 tests, production snapshot passed 35 Python tests, and the registered Praxis snapshot passed. Current Discord snapshot reported 93 passed/2 failed and is not accepted as passing. Runtime release and registered source revisions differ intentionally. |
+| Current Discord native media failure investigation | Reproduced and narrowed | [Synthetic media diagnostic](evidence/native-media-diagnostic.json): short silent input with `dynaudnorm` crashed, including with one-thread settings; omitting the filter or using longer input succeeded. Observed events do not support PID-limit or OOM causation. This is not a validated fix or a passing Discord baseline. |
+| Independent historical task checker | Base rejected; historical reference accepted in local mocked checks | [Checker baseline](evidence/replay-checker-baseline.json). Reference source stays outside candidate context. This is not a new agent implementation, real-provider evaluation, or OS-isolation result. |
+| Public coding activation | Passed | At `2026-09-09T16:01:07Z`, public health reported Praxis 0.2.0 on `coding-8e25c6cf9000`; the separate coding backend was active and enabled with its configured cgroup bounds. [Operations](operations.md) records release, archive, backup, and boot identities. |
+| Native ChatGPT coding discovery | Passed | Refresh on the existing Praxis connection loaded 31 actions: 22 coding and nine probe tools, with the coding scope required. Discovery is not proof of phone execution. |
+| Native ChatGPT `praxis:code` grant | Confirmed; actual coding execution pending | [Connection evidence](evidence/chatgpt-coding-connection.json): native consent explicitly described isolated coding, and the existing connection reports OAuth with zero reconnect-needed labels. Read-only server counts at `2026-09-09T16:05:09.253960+00:00` found two active refresh-token records containing `praxis:code`; token values were not exposed. An expired authorization attempt was resolved by a fresh reconnect using the existing owner session, without password entry. This does not establish native coding-tool execution. |
+| Actual iPhone coding task and fresh-conversation recovery | Pending owner run | [Coding phone prompts](coding-phone-test.md). Record actual workspace/job/operation IDs, complete test summaries, diff recovery, and tooling friction. |
+| Actual Claude coding connection | Not exercised | Separate account/client acceptance remains necessary. |
+| Host restart/loss and off-host backup | Not exercised | Local persistence and application recreation do not establish host-loss recovery. |
+| GitHub tools, production deployment/maintenance, browser use, self-update | Later milestones | No success-returning placeholders are exposed. Public development of this repository is owner bootstrap work, separate from Praxis agent capabilities. |
+
+The authenticated host fixture recreates a gateway application instance and HTTP listener while its coding backend remains alive in the same test process. It must not be described as a restart of an OS service process. A terminal job receipt with exit 0 is insufficient by itself: use final suite summaries, retained logs, and independent behavioral checks where available. Current limitations and failed attempts remain evidence even after a corrected run passes.
+
+## Historical diagnostic probe
+
+The following matrix covers the bounded heartbeat probe, including the actual iPhone diagnostic run. It does not establish coding acceptance.
 
 | Check | Status | Evidence |
 | --- | --- | --- |
@@ -17,7 +43,7 @@ This matrix covers the agreed capability probe. The complete original Praxis spe
 | Actual iPhone tool use and fresh-conversation recovery | Passed in this owner-reported run, corroborated by VPS records | evidence/iphone-probe-report.md and evidence/iphone-recovery-server.json; one job, 24 heartbeats, 26 records, all six initial request receipts matched. Client serialization/extra error-label observations remain unresolved. |
 | Actual Claude connection | Not exercised | Separate account/client experiment |
 | Host restart/loss and off-host backup | Not exercised | No reboot or production disruption |
-| Full coding, browser, protected adapters, self-update, replay eval | Deferred | Original specification and constraints.md |
+| Coding workflow and replay evaluation | Tracked separately above | Probe success is not a substitute for coding acceptance. Browser, protected production adapters, and self-update remain later milestones. |
 
 Release `probe-4abf8f3604cb` passed all 16 then-existing tests on the VPS as the separate build user. A subsequent local test explicitly verified the legacy 2025-11-25 MCP protocol, in addition to the SDK client. No runtime source changed for that added test.
 
@@ -29,4 +55,4 @@ The first native browser sign-in returned `Invalid form origin`. `Referrer-Polic
 
 Both podcast repositories retained their original deployed HEADs and clean working trees after bootstrap, recorded in the SSH evidence. The only intentional service restart in the durability check was praxis-probe.service.
 
-Do not interpret the heartbeat fixture as proof of arbitrary coding-job isolation or deployment safety. All checks concern this bounded diagnostic service.
+Do not interpret the heartbeat fixture as proof of arbitrary coding-job isolation or deployment safety. The historical checks in this section concern the bounded diagnostic service.

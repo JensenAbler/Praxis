@@ -1,54 +1,95 @@
-# Probe operations
+# Praxis operations
 
-## Deployment inventory and boundaries
+## Deployment status
 
-- Existing VPS 31.97.135.128 and TLS hostname mcp.jensenabler.com; no new purchases.
-- Fixed path `/praxis-probe/` and three path-qualified OAuth metadata locations, forwarded by nginx to loopback port 8790. Existing Apocrypha and observer locations remain in place.
-- Immutable root-owned releases under `/srv/praxis-probe/releases/`, selected by `/srv/praxis-probe/current`.
-- Separate systemd `praxis-probe.service` and `praxis-probe-worker.service`, unprivileged user `praxis-probe`. Web memory cap 256MB/25% CPU; worker 96MB/15% CPU. Worker has no network. Web accepts loopback proxy traffic only.
-- SQLite jobs, audit observations, and OAuth state under private `/var/lib/praxis-probe`. This single-host fixture shares a runtime UID; it is not the future isolation boundary for arbitrary development commands.
-- Root-only credential originals under `/etc/praxis-probe/credentials`; systemd loads only the web service's required credentials. Public-key material is intentionally published through OAuth JWKS.
-- Initial deployed source commit `4abf8f3604cb`, archive SHA-256 `b4c40571dc74ccbd507588d502abe0550803fdc1ed8eb3e185e56f3d52ad91fc`; configuration backup `/root/praxis-probe-backups/20260909T031822Z-h2lQy3`.
-- Current release `probe-d78e02c44615` corrects native OAuth form origin handling; archive SHA-256 `c7763aa0869adae1403f181e0e5700c9f83f23a213a0b4cf864fa9ed57cb5a85`, configuration backup `/root/praxis-probe-backups/20260909T035847Z-bevMeR`. All 17 tests passed on the host before activation.
-- Candidate dependency installation/tests run under distinct `praxis-probe-build` identity, without runtime-directory access. This bootstrap installer is owner-run code, not an application-controlled updater.
+Runtime release `coding-8e25c6cf9000` is active. All 59 tests passed on Linux under the separate build identity, with zero skips, including startup/health/shutdown through the release symlink. The authenticated MCP fixture passed all six groups using the real fixed container image before activation. The archive SHA-256 is `7e3ffebcafa1b913883328aa7b9146552123d33ee7c38b6f563f798a64be3377`; the installation backup is `/root/praxis-probe-backups/20260909T154713Z-DNFUnK`, and the successful activation backup is `/root/praxis-probe-backups/coding-activation-mRwp13JF`.
 
-The probe exposes only a fixed heartbeat loop. No repository access, host administration, production adapter, external model call, browser tool, or general shell is present.
+At `2026-09-09T16:01:07Z`, public health reported Praxis 0.2.0 on this release, gateway boot `7b54d3b6-4ea9-4b37-999c-e663d582abe1`. The backend was active and enabled, boot `f76d9fa3-7668-4bfc-835d-d0957e0a6bc4`, with the configured aggregate cgroup bounds. Native ChatGPT discovery shows 31 actions. The explicit coding grant is confirmed: native reconnect reports OAuth with no reconnect-needed labels, and read-only server counts at `2026-09-09T16:05:09.253960+00:00` found two active refresh-token records containing `praxis:code`, without exposing token values. See [connection evidence](evidence/chatgpt-coding-connection.json). Actual native coding-tool execution and phone acceptance remain pending.
 
-## Authentication
+The runtime release and registered project source revisions are separate: the registered Praxis source remains `53cf0cdab55c0262f3cf8fa9246db5f3681cbe1a`. The fixed dependency image remains `sha256:a807793c27f53bf93480fc3dcfe73b2ab1b6bdf8b3aa1aca820118fd43767170`.
 
-Issuer is `https://mcp.jensenabler.com/praxis-probe/oauth`; resource audience is the exact `/mcp` endpoint. Owner principal is `jensen`, scope `praxis:probe`. Authorization code + PKCE S256, owner password and consent, dynamic registration, and rotating refresh tokens are implemented using oidc-provider. Access JWTs last ten minutes; refresh tokens last 30 days. Refresh is tested across service recreation. Offline JWT validation means already issued access tokens may remain valid for up to ten minutes after grant revocation.
+The endpoint is `https://mcp.jensenabler.com/praxis-probe/mcp`; the issuer remains `https://mcp.jensenabler.com/praxis-probe/oauth`. Historical paths and service names are retained for continuity. The ChatGPT connection is now named **Praxis**. Its existing probe authorization does not confer coding rights.
 
-Password, signing key, and cookie keys must survive normal releases. Losing or replacing them changes authorization continuity. Password renewal and key rotation are exceptional operator work for this probe; the full Praxis account-management design is deferred. Sign-in itself uses an HTTPS phone-accessible form.
+## Services and protected storage
 
-The local owner password file is outside the repository, in `C:\Users\Jensen\.codex\praxis-probe-private\login.txt`, with inherited permissions removed. Transfer it to the owner's password manager; never paste it into chat. Other files in that private directory contain sensitive signing or verification-client state and are not deliverables.
+| Component | Boundary and location |
+| --- | --- |
+| HTTPS gateway | Existing nginx routes forward `/praxis-probe/` and path-qualified OAuth metadata to loopback port 8790. Apocrypha and VPS Observer routes remain intact. |
+| OAuth/MCP application | `praxis-probe.service`, user `praxis-probe` (UID 995), 256 MiB memory and 25% CPU. Root-owned immutable releases live under `/srv/praxis-probe/releases/`, selected by `/srv/praxis-probe/current`. |
+| Bounded diagnostic worker | `praxis-probe-worker.service`, same diagnostic UID, 96 MiB memory and 15% CPU, no network. It runs only the fixed heartbeat fixture. |
+| Coding backend/supervisor | `praxis-code.service`, separate user `praxis-code` (UID 993, GID 983), loopback port 8792. It independently validates original bearer tokens and has no OAuth private keys or owner password. |
+| OAuth credentials and state | Root-only originals under `/etc/praxis-probe/credentials`; systemd loads credentials only for the web service. Private OAuth, probe job, and audit data live under `/var/lib/praxis-probe`. |
+| Coding configuration and metadata | Root-owned `/etc/praxis-code/config.json` contains registered source paths, fixed runner settings, and public verification keys. Private coding journals, copied log records, and artifacts live under `/var/lib/praxis-code`. Commands never mount these directories. |
+| Source exports | Root-owned immutable tracked-file exports under `/srv/praxis-code/projects/<project>/<commit>`. Exporting excludes Git internals, credential/runtime paths, links, and nonregular files. This filter supplements review; it is not a complete secret detector. |
+| Command-writable disk | `/srv/praxis-code/storage`, an ext4 filesystem backed by a preallocated, root-owned 8 GiB file. Workspaces, container images, and container log files share approximately 7.8 GiB of usable capacity. |
 
-## Jobs, quotas, and evidence
+The mount is persisted by `srv-praxis\x2dcode-storage.mount`, with `nosuid,nodev`; the coding unit requires it. Runtime state is under `/run/praxis-code`. Explicit Podman graphroot/runroot arguments prevent fallback into a home-directory image store. Application quotas separately bound metadata, receipts, artifacts, and diff caches on the host filesystem; the 8 GiB workspace/image cap does not describe total host disk usage.
 
-One active job, 1–180 seconds, heartbeat interval 1–10 seconds. Start retries with the same principal/key/payload recover the same job; changed input returns IDEMPOTENCY_CONFLICT. Fresh clients can list and inspect all owner jobs. Completed jobs are not rerun. A killed worker's previously running job is marked interrupted on recovery. A PID-only singleton check can conservatively refuse startup after PID reuse; inspect the recorded PID before operator intervention.
+Apocrypha, VPS Observer, both live podcast repositories and services, OpenClaw, and Docker remain outside ordinary coding access. Preserve their deployed revisions and configurations. Source exports and test workspaces are independent copies.
 
-Jobs/logs are retained up to 1,000 jobs, then new creation stops until an operator archives data. Audit observations retain approximately the latest 10,000 records. `resultJsonBytes` measures one JSON result, not the complete MCP envelope, which also contains a text copy. Synthetic byte counts describe payload only. These fixtures measure specific calls, not a universal client output limit.
+## Command execution policy
 
-No off-host backup or host-loss recovery is claimed. SQLite WAL with synchronous FULL and process-restart tests provide local durability evidence. Do not copy only a live `.sqlite` file while ignoring its WAL; use SQLite backup or stop both probe services before a coherent backup. Never place the data directory on NFS.
+The service selects an exact local image digest and fixed Podman/crun arguments. Callers supply bounded argv, an allowed environment subset, and workspace-relative paths. They cannot select another image, host mount, socket, network mode, or container policy. Commands run in rootless Podman with `keep-id` user mapping, no network, a read-only image root, dropped capabilities, and container `no-new-privileges`. Only the selected workspace is bound writable; bounded temporary filesystems are also available. No host Docker socket or production credentials are mounted.
 
-## Bootstrap and independent recovery
+The enclosing coding systemd unit enforces aggregate limits across its backend and commands: 1.5 GiB memory, zero swap, one CPU, and 256 tasks. Per-container cgroups are disabled; the effective ancestor cgroup is the measured boundary. The outer service permits the required setuid `newuidmap`/`newgidmap` helpers, so its `NoNewPrivileges` setting is false. Container `no-new-privileges` remains true. A separate distro `crun` is pinned without changing Docker's runtime.
 
-Generate credentials with `node scripts/create-credentials.js <private-directory>` outside Git. On Windows restrict the directory ACL before generation. Copy only password-hash, jwks.json and cookie-keys.json to the root-only server credential directory. Transfer an explicitly reviewed source archive to a unique release directory. Run `bash /srv/praxis-probe/releases/<release>/deploy/install.sh <release>` through existing owner SSH. The script validates release names, tests without root, backs up changed configuration, validates nginx, activates only the two probe services, and gracefully reloads nginx. Upgrades refuse active jobs.
+One coding command may be active at a time. Command runtime is 1–900 seconds with independent runtime timeout enforcement; image/user-mapping preparation has a separate 120-second control-call deadline. Cold preparation can take tens of seconds. Persisted status remains available during that work. Registered validation instructions use dependencies prepared in the read-only image; commands cannot install from the network. The historical replay alone uses a bundle installed with `--legacy-peer-deps` to accommodate its unchanged lockfile; see [replay evaluations](replay-evals.md).
 
-Use the latest repository installer for future bootstrap releases. The current release includes an exclusive deployment lock, complete configuration rollback, and refusal to upgrade while jobs are active.
+## Authentication and grants
 
-Inspect without changes:
+Authorization code + PKCE S256, owner password and consent, dynamic registration, and rotating refresh tokens are implemented using oidc-provider. The principal is `jensen`; the resource audience is the exact MCP URL. Each tool enforces its scope: `praxis:probe` for diagnostics and `praxis:code` for coding. The backend independently requires `praxis:code` using public signing keys. Refreshing an old probe grant does not add coding permission; the client must obtain a new, explicit coding grant.
+
+Access JWTs last ten minutes; refresh tokens last 30 days. Offline verification means issued access tokens can remain valid for up to ten minutes after grant revocation. Preserve the password hash, signing key, and cookie keys across releases. Password renewal and key rotation require reviewed operator work. The owner password is outside Git, including the private local `C:\Users\Jensen\.codex\praxis-probe-private\login.txt`; never paste it into chat or command arguments. Other files in that private directory may contain credentials and are not deliverables.
+
+## Jobs, recovery, and quotas
+
+Coding jobs and mutation intents are persisted before effects. Identical principal/idempotency-key/payload retries recover existing receipts; changed input returns `IDEMPOTENCY_CONFLICT`. Use workspace, job, and operation lists after a missing response or fresh conversation. A missing client response does not establish that a command did not run.
+
+The coding supervisor is independent of MCP requests and the gateway process. Gateway-only restart leaves coding supervision running. Recovery inspects deterministic container identities and preserves ambiguous work without launching it again. A prepared container is not started during recovery. A runtime outage leaves the job active and its workspace locked until observed state resolves the uncertainty. The PID lease treats possible PID reuse conservatively as still owned.
+
+`startedAt` retains its first non-null public value. Observed runtime start time still controls deadlines. Confirmed worker timeout is `timed_out`; a stopped container with the runtime's negative monitor sentinel and matching elapsed time is reported as `interrupted` with `timeout_inferred` and an unknown process exit code. Unknown terminal containers are retained for operator diagnosis.
+
+The coding unit uses `KillMode=control-group` and `OOMPolicy=kill`. Restarting that unit or losing the host can interrupt its commands. Recovery must report observed outcomes without rerunning ambiguous commands. The probe worker behaves separately: its previously running heartbeat is marked interrupted if that worker is killed. A phone or gateway disconnect is not equivalent to stopping either worker.
+
+| Retention/control | Coding limit |
+| --- | --- |
+| Active/retained command jobs | 1 active, 200 retained |
+| Stored command output | 1 MiB and 8,192 output records per job; explicit truncation |
+| Artifacts | 16 per job, 512 KiB each, 2 MiB aggregate per job |
+| Live workspaces | 20 |
+| Mutation receipts | 10,000; 128 MiB aggregate stored request/plan data |
+| Diff cache | One private cache, at most 600 MiB |
+
+See [workspace contracts](workspace-contract.md) for source, edit, and page limits. Quota exhaustion requires eligible workspace cleanup or owner maintenance. Do not remove database rows or container files casually to bypass a quota. Probe limits remain separate: one active 1–180 second heartbeat job, up to 1,000 retained jobs and approximately 10,000 recent audit records.
+
+No off-host backup, host-reboot acceptance, or host-loss recovery is claimed. SQLite WAL with synchronous FULL provides local durability; do not back up only a live `.sqlite` file and ignore its WAL. Use SQLite backup or quiesce the relevant services for coherent database/filesystem backup. Never place runtime SQLite on NFS. Preserve credentials and metadata separately from disposable workspaces.
+
+## Bootstrap, activation, and future updates
+
+Bootstrap is owner administration, not an agent-controlled updater. Review an exact source archive, prepare protected configuration and immutable exports, run `npm test` under the separate `praxis-probe-build` UID, and exercise authenticated MCP before activation. The build identity has no runtime credentials or runtime-directory access.
+
+`deploy/install.sh` is the probe-era installer. Under the exclusive deployment lock, it now refuses execution when the coding service is active **or** the coding gateway drop-in exists. It does not coordinate coding jobs or backend migrations. Do not remove the guard/drop-in to force an ordinary update. Future coding-service releases require a reviewed procedure that accounts for both services, active execution, compatible metadata, exact source/image identity, and rollback. Independent self-update remains a later milestone.
+
+For first coding activation only, `deploy/enable-code.sh <installed-release>` validates the installed release and protected configuration, starts the backend, verifies health, adds the gateway's loopback coding URL, restarts the gateway, and verifies coding metadata. The endpoint and issuer do not change. Failure restores gateway configuration but leaves the backend available for inspection so an already accepted command is not killed by a rollback assumption. Backups are under `/root/praxis-probe-backups/`.
+
+Read-only operator checks:
 
 ```sh
-systemctl status praxis-probe.service praxis-probe-worker.service --no-pager
+systemctl status praxis-probe.service praxis-probe-worker.service praxis-code.service --no-pager
 readlink /srv/praxis-probe/current
 curl -fsS https://mcp.jensenabler.com/praxis-probe/healthz
+curl -fsS http://127.0.0.1:8792/healthz
 nginx -t
 ```
 
-Application-only restart (jobs stay supervised):
+Gateway-only restart, with both workers left running:
 
 ```sh
 systemctl restart praxis-probe.service
 ```
 
-Installer rollback restores previous files, release selection, and prior service activity if activation fails. Backups are under `/root/praxis-probe-backups/`. For emergency disablement, stop only `praxis-probe.service` and `praxis-probe-worker.service`; existing services need no restart. To remove the route, restore the matching backed-up nginx site/snippet, validate with `nginx -t`, then `systemctl reload nginx`. Preserve runtime data and credentials for diagnosis. Manual release rollback must use an existing known-good immutable release with compatible databases; code rollback does not undo data changes. Full independent transactional self-update is outside this probe.
+To stop accepting new public requests while preserving ongoing work, stop only the gateway and inspect the workers separately. Stopping the coding unit can terminate its active command; retain its database, logs, artifacts, and diagnostic container state. Any nginx removal or rollback must restore matching route configuration, pass `nginx -t`, and use a graceful reload. Code rollback does not undo database or workspace effects.
+
+## Historical probe releases
+
+The initial deployed source `4abf8f3604cb` had archive SHA-256 `b4c40571dc74ccbd507588d502abe0550803fdc1ed8eb3e185e56f3d52ad91fc`, with backup `/root/praxis-probe-backups/20260909T031822Z-h2lQy3`. Release `probe-d78e02c44615` corrected native OAuth form origin handling; archive SHA-256 `c7763aa0869adae1403f181e0e5700c9f83f23a213a0b4cf864fa9ed57cb5a85`, backup `/root/praxis-probe-backups/20260909T035847Z-bevMeR`, and all 17 tests passed on the host before activation. These identify historical probe evidence, not the coding candidate.

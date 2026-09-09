@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "evidenceKind": "native-ChatGPT-web-connection-and-owner-OAuth-metadata",
+  "observedDate": "2026-09-09",
+  "status": "connected_with_coding_scope",
+  "name": "Praxis",
+  "appId": "asdk_app_6aa0d8a46ad08191b05827a9824cd295",
+  "versionId": "asdk_app_v_6aa0d8a46adc8191a1d06dd0d4e9fe0d",
+  "endpoint": "https://mcp.jensenabler.com/praxis-probe/mcp",
+  "release": "coding-8e25c6cf9000",
+  "nativeObservations": {
+    "existingConnectionReused": true,
+    "actionsRefreshToast": "Actions refreshed.",
+    "codingActions": 22,
+    "diagnosticActions": 9,
+    "codingRequiredScope": "praxis:code",
+    "authorizationUsed": "OAuth",
+    "consentDescribedSourceEditingAndSandboxedCommands": true,
+    "consentDescribedNoNetworkOrProductionCredentials": true,
+    "existingOwnerSessionUsed": true,
+    "passwordEntryRequired": false,
+    "reconnectNeededLabelsAfterCompletion": 0,
+    "chatgptPermissionSetting": "Allow low-risk actions (default), unchanged"
+  },
+  "serverCorroboration": {
+    "observedAt": "2026-09-09T16:05:09.253960+00:00",
+    "method": "Read-only SQLite counts of active OAuth records, emitting only model counts and whether the coding scope was present.",
+    "activeRefreshRecordsContainingCodingScope": 2,
+    "credentialOrTokenValuesPublished": false
+  },
+  "friction": [
+    "A consent page remained visible after an initial click; a later submission reported an expired or invalid interaction. Server metadata already contained a coding grant, while ChatGPT still showed reconnect-needed labels.",
+    "A fresh Reconnect completed using the existing owner session. Reconnect-needed labels disappeared and server records confirmed coding-scoped refresh authorization. The exact cause of the first handoff mismatch is not established."
+  ],
+  "limitsOfEvidence": [
+    "This verifies web connection discovery and coding authorization, not execution of a coding task from an iPhone.",
+    "The existing diagnostic connector also successfully called probe_capabilities after the workstation outage; its request was e035c0c7-b566-4c54-a9c1-7fecc0cfa293 at 2026-09-09T16:00:10.247Z.",
+    "Actual iPhone implementation and fresh-conversation coding recovery remain pending the owner-run prompts."
+  ]
+}
