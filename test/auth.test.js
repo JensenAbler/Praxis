@@ -65,6 +65,8 @@ async function fixture(t, { integrated = false } = {}) {
         }
         response = await browser(target.href);
       } else if (response.status === 200) {
+        // The browser's native form submission must retain its real Origin header.
+        assert.equal(response.headers.get('referrer-policy'), 'strict-origin');
         const html = await response.text();
         const action = html.match(/<form method="post" action="([^"]+)"/)?.[1];
         const csrf = html.match(/name="csrf" value="([^"]+)"/)?.[1];
@@ -118,6 +120,7 @@ test('owner password, CSRF and form origin are enforced', async (t) => {
   assert.equal((await f.flow(client, { passwordOverride: 'incorrect' })).status, 401);
   assert.equal((await f.flow(client, { missingCsrf: true })).status, 403);
   assert.equal((await f.flow(client, { originOverride: 'https://untrusted.example' })).status, 403);
+  assert.equal((await f.flow(client, { originOverride: 'null' })).status, 403);
 });
 
 test('PKCE code verifier and confidential client secret are checked', async (t) => {

@@ -139,7 +139,9 @@ export async function createAuth({ issuer, resourceUrl, passwordHash, jwks, cook
   provider.proxy = issuerUrl.protocol === 'https:';
   const router = express.Router();
   router.use((_req, res, next) => {
-    res.set({ 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer', 'X-Content-Type-Options': 'nosniff',
+    // Native form POSTs under no-referrer send Origin: null, defeating our exact-origin
+    // CSRF check. strict-origin preserves the origin without leaking paths or queries.
+    res.set({ 'Cache-Control': 'no-store', 'Referrer-Policy': 'strict-origin', 'X-Content-Type-Options': 'nosniff',
       'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'" });
     next();
   });
