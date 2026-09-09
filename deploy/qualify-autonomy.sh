@@ -200,7 +200,7 @@ class Qualification:
     def properties(self, user, group, log):
         return ['User=' + user, 'Group=' + group, 'NoNewPrivileges=yes', 'ProtectSystem=strict',
                 'ProtectHome=yes', 'PrivateDevices=yes', 'ProtectKernelTunables=yes', 'ProtectKernelModules=yes',
-                'ProtectControlGroups=yes', 'ProtectKernelLogs=yes', 'CapabilityBoundingSet=', 'RestrictSUIDSGID=yes',
+                'ProtectControlGroups=yes', 'ProtectKernelLogs=yes', 'CapabilityBoundingSet=',
                 'RestrictRealtime=yes', 'LockPersonality=yes', 'ProtectProc=invisible', 'ProcSubset=pid',
                 'KillMode=control-group', 'TimeoutStopSec=10', 'MemorySwapMax=0', 'LimitFSIZE=134217728',
                 'TemporaryFileSystem=/tmp:size=268435456,mode=1777 /var/tmp:size=67108864,mode=1777 /run:size=16777216,mode=755',

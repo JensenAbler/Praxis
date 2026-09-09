@@ -148,7 +148,7 @@ def bootstrap_targets():
         '/usr/local/libexec/praxis-updater', '/usr/local/libexec/praxis_updater_host.py',
         '/usr/local/libexec/praxis-deploy-discord', '/usr/local/libexec/praxis-deploy-project',
         '/usr/local/lib/praxis/registry-proxy.py', '/usr/local/lib/praxis/registry-relay.mjs',
-        '/etc/praxis-updater/config.json', '/etc/praxis-updater/health-public.json',
+        '/etc/praxis-updater/config.json', '/etc/praxis-updater/health-public.json', '/etc/praxis-updater/control.env',
         '/srv/praxis-app/current', '/srv/praxis-control/current', str(FENCE),
         str(ADMISSION_GATE), str(ADMISSION_DROPIN),
     ]]
@@ -352,7 +352,8 @@ def bootstrap(source, helper, receipt, commit, backup, transaction):
         git_config['repositories'].append({'projectId': 'praxis', 'directory': repo_path, 'remoteUrl': 'git@github.com:JensenAbler/Praxis.git',
           'defaultBranch': 'main', 'allowedBranches': ['main'], 'author': {'name': 'JensenAbler', 'email': '20964948+JensenAbler@users.noreply.github.com'},
           'transportEnv': {'GIT_SSH_COMMAND': 'ssh -F /dev/null -i /var/lib/praxis-git/home/.ssh/praxis_repo -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=/var/lib/praxis-git/home/.ssh/known_hosts'}})
-    install_text('/etc/systemd/system/praxis-probe.service.d/autonomy.conf', '[Service]\nWorkingDirectory=/srv/praxis-control/current\nExecStart=\nExecStart=/usr/bin/node /srv/praxis-control/current/src/server.js\nEnvironment=PRAXIS_TOOL_MANIFEST=/srv/praxis-app/current/coding-tools.json\nEnvironment=PRAXIS_RELEASE_CONTROL_URL=http://127.0.0.1:8793/call\nEnvironment=PRAXIS_HEALTH_JWKS=/etc/praxis-updater/health-public.json\n')
+    install_text('/etc/praxis-updater/control.env', 'PRAXIS_RELEASE=control-' + commit[:12] + '\n')
+    install_text('/etc/systemd/system/praxis-probe.service.d/autonomy.conf', '[Service]\nWorkingDirectory=/srv/praxis-control/current\nExecStart=\nExecStart=/usr/bin/node /srv/praxis-control/current/src/server.js\nEnvironmentFile=/etc/praxis-updater/control.env\nEnvironment=PRAXIS_TOOL_MANIFEST=/srv/praxis-app/current/coding-tools.json\nEnvironment=PRAXIS_RELEASE_CONTROL_URL=http://127.0.0.1:8793/call\nEnvironment=PRAXIS_HEALTH_JWKS=/etc/praxis-updater/health-public.json\n')
     install_text('/etc/systemd/system/praxis-code.service.d/autonomy.conf', '[Service]\nWorkingDirectory=/srv/praxis-app/current\nExecStart=\nExecStart=/usr/bin/node /srv/praxis-app/current/src/code/server.js\n')
     install_text('/etc/systemd/system/praxis-git.service.d/autonomy.conf', '[Service]\nWorkingDirectory=/srv/praxis-control/current\nExecStart=\nExecStart=/usr/bin/flock --nonblock /var/lib/praxis-git/broker.lock /usr/bin/node /srv/praxis-control/current/src/git/server.js\nPrivateTmp=no\nReadWritePaths=/var/lib/praxis-updater /var/lib/praxis-control /srv/praxis-apps /etc/nginx/praxis-apps /etc/systemd/system /var/log/nginx\n')
     install_text('/etc/systemd/system/praxis-updater.service', '[Unit]\nDescription=Independent Praxis application updater\nAfter=network.target srv-praxis\\x2dstage.mount praxis-dependencies.service\nRequires=srv-praxis\\x2dstage.mount\n\n[Service]\nType=simple\nUser=root\nExecStart=/usr/bin/python3 /usr/local/libexec/praxis-updater --worker\nRestart=on-failure\nRestartSec=3\nUMask=0077\nMemoryMax=512M\nCPUQuota=50%\nTasksMax=128\n\n[Install]\nWantedBy=multi-user.target\n')

@@ -165,7 +165,7 @@ class Host:
             'TemporaryFileSystem=/tmp:size=268435456,mode=1777 /var/tmp:size=134217728,mode=1777',
             'NoNewPrivileges=yes', 'ProtectSystem=strict', 'ProtectHome=yes', 'PrivateDevices=yes',
             'ProtectKernelTunables=yes', 'ProtectKernelModules=yes', 'ProtectControlGroups=yes',
-            'CapabilityBoundingSet=', 'RestrictSUIDSGID=yes', 'LockPersonality=yes',
+            'CapabilityBoundingSet=', 'LockPersonality=yes',
             'MemoryMax=1536M', 'MemorySwapMax=0', 'CPUQuota=100%', 'TasksMax=256',
             'RuntimeMaxSec=' + str(timeout), 'TimeoutStopSec=10', 'KillMode=control-group',
             'StandardOutput=append:' + str(log_path), 'StandardError=append:' + str(log_path),
