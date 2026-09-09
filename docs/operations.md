@@ -58,7 +58,7 @@ The coding unit uses `KillMode=control-group` and `OOMPolicy=kill`. Restarting t
 | Retention/control | Coding limit |
 | --- | --- |
 | Active/retained command jobs | 1 active, 200 retained |
-| Stored command output | 1 MiB and 8,192 output records per job; explicit truncation |
+| Stored command output | Immutable head: 1 MiB and 8,192 output records; new jobs also have a 64 KiB/256-record rolling tail; explicit loss facts |
 | Artifacts | 16 per job, 512 KiB each, 2 MiB aggregate per job |
 | Live workspaces | 20 |
 | Mutation receipts | 10,000; 128 MiB aggregate stored request/plan data |
@@ -72,7 +72,9 @@ No off-host backup, host-reboot acceptance, or host-loss recovery is claimed. SQ
 
 Bootstrap is owner administration, not an agent-controlled updater. Review an exact source archive, prepare protected configuration and immutable exports, run `npm test` under the separate `praxis-probe-build` UID, and exercise authenticated MCP before activation. The build identity has no runtime credentials or runtime-directory access.
 
-`deploy/install.sh` is the probe-era installer. Under the exclusive deployment lock, it now refuses execution when the coding service is active **or** the coding gateway drop-in exists. It does not coordinate coding jobs or backend migrations. Do not remove the guard/drop-in to force an ordinary update. Future coding-service releases require a reviewed procedure that accounts for both services, active execution, compatible metadata, exact source/image identity, and rollback. Independent self-update remains a later milestone.
+`deploy/install.sh` is the probe-era installer. Under the exclusive deployment lock, it refuses execution when the coding service is active **or** the coding gateway drop-in exists. It does not coordinate coding jobs or backend migrations. Do not remove the guard/drop-in to force an ordinary update. Independent self-update remains a later milestone.
+
+For a reviewed manual coding release update, use `deploy/update-coding-release.sh <tested-release> <private-acceptance-receipt.json>`. Its header specifies the receipt fields and deterministic source-tree digest; `--tree-hash <candidate>` computes that digest. Prepare dependencies and run `npm test` as the separate build identity, then run the authenticated real-container fixture against that exact candidate before writing acceptance evidence. The update refuses active jobs or prepared edits, preserves the canonical endpoint, image, project configuration, credentials, and original persisted tables, and gates public ingress during activation checks. Before reopening, failures restore the old release/configuration; after reopening, automatic rollback is withheld because new work may have been admitted. The procedure never restores old database snapshots. It is operator administration outside the agent tool surface.
 
 For first coding activation only, `deploy/enable-code.sh <installed-release>` validates the installed release and protected configuration, starts the backend, verifies health, adds the gateway's loopback coding URL, restarts the gateway, and verifies coding metadata. The endpoint and issuer do not change. Failure restores gateway configuration but leaves the backend available for inspection so an already accepted command is not killed by a rollback assumption. Backups are under `/root/praxis-probe-backups/`.
 

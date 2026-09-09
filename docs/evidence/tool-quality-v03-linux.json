@@ -1,0 +1,18 @@
+{
+  "evidenceKind": "linux-npm-test-on-immutable-candidate",
+  "release": "coding-98c4f1d79036",
+  "sourceCommit": "98c4f1d790362db3538247c6ef326fac206aaccf",
+  "archiveSha256": "57ce29626eab4fe9b0de0093ef24748f241d99e7437ce0f52e5b4a51e1164c63",
+  "nodeVersion": "22.22.0",
+  "executionIdentity": "praxis-probe-build",
+  "dependencyPreparation": "npm ci --ignore-scripts with package-lock.json",
+  "command": "npm test",
+  "counts": {
+    "tests": 99,
+    "pass": 99,
+    "fail": 0,
+    "skipped": 0
+  },
+  "logSha256": "f93a80a52092114cd7c7a5dd5930c474c298314c302f8c52f2040ce334897978",
+  "nativePhoneRun": false
+}

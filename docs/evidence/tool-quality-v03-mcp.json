@@ -1,0 +1,118 @@
+{
+  "evidenceKind": "authenticated-MCP-client-temporary-authority",
+  "fixtureId": "f296d4fd-a13f-4d6c-9f5d-fd85b11592a7",
+  "startedAt": "2026-09-09T20:34:45.428Z",
+  "authentication": "Ephemeral fixture issuer and signing keys; no live OAuth authority, owner password, or ChatGPT sign-in.",
+  "executor": "Real PodmanRunner, using the protected fixed image and existing dedicated container storage.",
+  "gatewayRestartMode": "Gateway application instance and HTTP listener recreated in the same fixture process; coding backend remains alive.",
+  "assertions": [
+    {
+      "name": "permission_boundaries",
+      "gatewayInsufficientScopeDenied": true,
+      "backendMissingMalformedAndProbeTokenDenied": true,
+      "codeTokenCannotUseProbeTools": true,
+      "passedAt": "2026-09-09T20:34:46.073Z"
+    },
+    {
+      "name": "source_discovery_and_create",
+      "workspaceId": "d713860c-abdc-48d3-844d-94578b06f7c1",
+      "createOperationId": "305529ac-cec8-4d1b-be6e-321cf4e5e26f",
+      "createIdempotencyVerified": true,
+      "passedAt": "2026-09-09T20:34:46.379Z"
+    },
+    {
+      "name": "all_edit_actions_and_conflicts",
+      "actions": [
+        "patch",
+        "write",
+        "rename",
+        "delete"
+      ],
+      "editIdempotencyVerified": true,
+      "staleRevisionDenied": true,
+      "pathEscapeDenied": true,
+      "smallPatchesToLargeFile": true,
+      "sameFileSequentialPatches": true,
+      "structuredInvalidArgument": true,
+      "passedAt": "2026-09-09T20:34:46.757Z"
+    },
+    {
+      "name": "real_command_and_gateway_restart",
+      "jobId": "6b8c8eea-4d49-4c79-b4c8-bc1afff503ca",
+      "runningStartedAt": "2026-09-09T20:34:47.124Z",
+      "realContainerRunningAfterGatewayRestart": true,
+      "passedAt": "2026-09-09T20:34:47.339Z"
+    },
+    {
+      "name": "fresh_client_recovers_completed_job",
+      "sameWorkspace": true,
+      "sameJob": true,
+      "backendBootIdUnchanged": true,
+      "jobIdempotencyVerified": true,
+      "passedAt": "2026-09-09T20:34:52.675Z"
+    },
+    {
+      "name": "persisted_logs_artifact_diff_and_mutation_receipts",
+      "logPages": 3,
+      "logRecords": 6,
+      "artifactPages": 4,
+      "artifactHashIndependentlyVerified": true,
+      "diffPages": 5,
+      "mutationReceiptRecovered": true,
+      "passedAt": "2026-09-09T20:34:53.138Z"
+    },
+    {
+      "name": "noisy_job_retains_final_output",
+      "jobId": "3fe3858e-eec2-47c6-8d14-87b716472157",
+      "exitCode": 0,
+      "finalSummaryInStatus": true,
+      "finalSummaryInFilteredTail": true,
+      "headTruncationExplicit": true,
+      "statusCommandCompact": true,
+      "fullCommandRecoverable": true,
+      "outputRetention": {
+        "mode": "head-and-tail",
+        "headBytes": 874770,
+        "headLimitReached": true,
+        "runnerLogLoss": true,
+        "observedOutputBytes": 1845197,
+        "observedRecordCount": 17228,
+        "observationStartsAfterLegacyHead": false,
+        "skippedContainerLogBytes": 1077658,
+        "tailBytes": 27505,
+        "tailRecords": 256,
+        "firstTailSequence": 16973,
+        "lastTailSequence": 17228,
+        "tailEvictedRecords": 16972,
+        "completeOriginalOutput": false,
+        "explanation": "Head records keep their original sequence. The separate rolling tail contains only observed output fragments; its sequence does not match head sequences. Tail eviction does not itself mean the head lost output. Runner loss or skipped container bytes can mean output was never observed."
+      },
+      "passedAt": "2026-09-09T20:34:54.930Z"
+    }
+  ],
+  "status": "completed",
+  "release": "coding-98c4f1d79036",
+  "image": "sha256:a807793c27f53bf93480fc3dcfe73b2ab1b6bdf8b3aa1aca820118fd43767170",
+  "source": {
+    "kind": "synthetic immutable fixture",
+    "baseRevision": "52db39666413aaf7f666d93f1e5a9d5ccab6bb7ea054d452b72265bd36d8e7ac"
+  },
+  "backendBootId": "25126a54-690e-43b5-aa14-788b8739e1ed",
+  "replayProjects": [],
+  "workspaceId": "d713860c-abdc-48d3-844d-94578b06f7c1",
+  "createOperationId": "305529ac-cec8-4d1b-be6e-321cf4e5e26f",
+  "applyOperationId": "371cea0d-2c8c-4f3c-8771-ba1db156b294",
+  "jobId": "6b8c8eea-4d49-4c79-b4c8-bc1afff503ca",
+  "gatewayRestartedAt": "2026-09-09T20:34:47.339Z",
+  "jobStartedAt": "2026-09-09T20:34:47.124Z",
+  "jobFinishedAt": "2026-09-09T13:34:52.175161848-07:00",
+  "jobExitCode": 0,
+  "artifact": {
+    "id": "5e38f00b796afd2166d8e60809e8e7e4c9457618e656bdec16a58ebfed11b027",
+    "bytes": 64,
+    "sha256": "44f1a2c4a5955545a5cd3e1aeadcf884e1bb5dbcea5074a6f72a38fd761c7a94"
+  },
+  "finishedAt": "2026-09-09T20:34:54.976Z",
+  "elapsedMilliseconds": 9548,
+  "fixtureStateRetained": true
+}
