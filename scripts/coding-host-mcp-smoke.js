@@ -63,7 +63,7 @@ try {
   receipt.release = supplied.release || 'host-mcp-fixture';
   receipt.image = supplied.runnerConfig.image;
   const directory = `/var/lib/praxis-code/mcp-fixture-${fixtureId}`;
-  const workspaceDirectory = `/srv/praxis-code/storage/mcp-workspaces-${fixtureId}`;
+  const workspaceDirectory = `/srv/praxis-code/storage/workspaces/mcp-${fixtureId}`;
   const snapshotPath = join(directory, 'snapshot');
   mkdirSync(snapshotPath, { recursive: true, mode: 0o700 });
   mkdirSync(workspaceDirectory, { recursive: true, mode: 0o700 });
@@ -95,7 +95,8 @@ try {
   backend = await createCodingService({
     issuer, resourceUrl, publicJwks: { keys: [publicJwk] }, dataDirectory: join(directory, 'backend'),
     workspaceDirectory, release: receipt.release, pollIntervalMs: 100,
-    runnerConfig: { ...supplied.runnerConfig, workspaceRoot: workspaceDirectory, logDirectory: join(directory, 'runner-logs') },
+    runnerConfig: { ...supplied.runnerConfig, workspaceRoot: workspaceDirectory,
+      logDirectory: `/srv/praxis-code/storage/container-logs/mcp-${fixtureId}` },
     projects: [{ id: 'host-fixture', name: 'Host MCP fixture', repository: 'fixture:synthetic', revision: baseRevision, snapshotPath,
       instructions: 'Synthetic source used only for authenticated transport and real container evidence.', validationCommands: [['node', '-e', "require('node:assert/strict').equal(require('./answer.cjs').answer, 42)"]] }],
   });
@@ -172,7 +173,7 @@ try {
   const jobRequest = { workspaceId, expectedRevision: edited.result.revision, idempotencyKey: `job-${fixtureId}`, label: `Host MCP command ${fixtureId}`,
     argv: ['node', '-e', command], timeoutSeconds: 20, artifactPaths: ['report.txt'] };
   const job = await call(client, 'job_start', jobRequest); fixtureJobId = job.id; receipt.jobId = job.id;
-  const running = await awaitStatus(client, job.id, 'running');
+  const running = await awaitStatus(client, job.id, 'running', 180000);
   const backendBefore = backend.jobs.get({ owner: 'jensen', jobId: job.id });
   assert.equal(backendBefore.status, 'running');
   for (const old of clients) await old.close();
