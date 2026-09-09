@@ -1,0 +1,13 @@
+node_modules/
+.env
+.env.*
+!.env.example
+var/
+secrets/
+*.sqlite
+*.sqlite-*
+*.db
+*.db-*
+*.tgz
+test-results/
+.local/

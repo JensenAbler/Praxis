@@ -1,0 +1,26 @@
+{
+  "name": "praxis-probe",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "An isolated, authenticated MCP fixture for measuring real ChatGPT and Claude client behavior.",
+  "engines": { "node": ">=22.22.0" },
+  "scripts": {
+    "start": "node src/server.js",
+    "worker": "node src/worker.js",
+    "test": "node --test",
+    "test:mcp": "node scripts/probe-client.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/server": "2.0.0",
+    "@modelcontextprotocol/node": "2.0.0",
+    "@modelcontextprotocol/express": "2.0.0",
+    "express": "5.2.1",
+    "jose": "6.2.12",
+    "oidc-provider": "9.12.2",
+    "zod": "4.5.4"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/client": "2.0.0"
+  }
+}
