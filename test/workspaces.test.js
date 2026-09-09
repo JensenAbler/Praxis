@@ -82,7 +82,8 @@ test('filesystem tools reject traversal, protected names and linked contents wit
   for (const path of ['../private/coding.sqlite', '/etc/passwd', 'C:\\Windows\\win.ini', '.env', '.git/config', 'nested/../../private']) {
     assert.throws(() => workspaces.read({ owner, workspaceId, path }));
   }
-  const secret = join(root, 'secret.txt'); writeFileSync(secret, 'not workspace source');
+  // Use an ordinary filename so the link check, rather than the protected-name filter, rejects it.
+  const secret = join(root, 'outside.txt'); writeFileSync(secret, 'not workspace source');
   linkSync(secret, join(workspacePath, 'linked.txt'));
   assert.throws(() => workspaces.read({ owner, workspaceId, path: 'linked.txt' }), { code: 'UNSAFE_PATH' });
   const info = workspaces.inspect({ owner, workspaceId });
@@ -91,7 +92,7 @@ test('filesystem tools reject traversal, protected names and linked contents wit
   assert.match(workspaces.diff({ owner, workspaceId }).diff, /Unsafe filesystem entry/);
   if (process.platform !== 'win32') {
     symlinkSync(root, join(workspacePath, 'escaped'));
-    assert.throws(() => workspaces.read({ owner, workspaceId, path: 'escaped/secret.txt' }), { code: 'UNSAFE_PATH' });
+    assert.throws(() => workspaces.read({ owner, workspaceId, path: 'escaped/outside.txt' }), { code: 'UNSAFE_PATH' });
   }
 });
 
