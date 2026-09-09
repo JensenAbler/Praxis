@@ -4,6 +4,8 @@
 
 The seed is a clean parent-commit replay, not an exact reconstruction of historical dirty files or the original machine. Its reference commit is an outcome example. The grader checks behavior, not the reference diff or exact prompt wording.
 
+The historical package lock omits peers in an optional WASM dependency branch. Default `npm ci` rejects it under both the initial Linux image's npm and a Windows npm 11.6.2 dry run. The Windows dry run succeeds with `--legacy-peer-deps`, preserving the original lock hash. Dependency-image preparation uses that explicit compatibility flag for this replay project only; it does not repair or edit the candidate's lockfile. Linux installation and actual validation must be recorded separately. This preparation reproduces a usable offline dependency bundle, not the exact historical machine or its unrecorded local lock changes.
+
 ## Run the trusted checker
 
 Mount a trusted Praxis release read-only at `/checker` and the candidate source read-only at `/candidate` in an unprivileged evaluation container. Give it no credentials, network, production mounts, host socket, or administrator rights. Set memory, process, CPU, and time limits. The trusted launcher selects these fixed mounts; candidate code must not choose them.
