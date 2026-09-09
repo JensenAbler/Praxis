@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "praxis-replay-batch-v1",
-  "status": "prepared-not-run",
+  "status": "completed-with-independent-behavioral-checks",
   "purpose": "Collect varied coding and recovery friction before changing the current tool surface.",
   "frozenRuntime": {
     "release": "coding-a41abbbbb51e",
@@ -15,8 +15,10 @@
     "historicalCheckerCalibrationEvidence": "docs/evidence/replay-batch-v1-calibration.json",
     "preparedBaselineValidation": "qualified-with-documented-native-recording-failures",
     "registeredProjectVerification": "authenticated-fixture-passed-and-live-config-registered",
-    "newAgentRuns": "not-run",
-    "newNativePhoneRuns": "not-run"
+    "newAgentRuns": "six-implementations-reported",
+    "newNativePhoneRuns": "six-owner-reported-task-and-recovery-pairs; saved-revisions-corroborated",
+    "independentCandidateGrading": "all-six-passed",
+    "independentCandidateGradingEvidence": "docs/evidence/replay-batch-v1-independent.json"
   },
   "historicalControl": {
     "caseId": "speech-first",
@@ -93,9 +95,16 @@
       "packetScenario": "standard",
       "workspaceLabel": "Praxis replay buffer-settling / batch-v1-01-buffer / standard",
       "workspaceCreationKey": "praxis:buffer-settling:batch-v1-01-buffer:standard:workspace",
-      "status": "not-run",
-      "workspaceId": null,
-      "clientType": null
+      "status": "reported-and-independently-graded",
+      "workspaceId": "9dc1f70f-1d76-4896-b110-718bbdab7588",
+      "clientType": "owner-supplied-ChatGPT-reports",
+      "reportedRevision": "90f7f16031dd77bbf81a2c4b4cf852bb2153d2fd039862bf3969375557ae0738",
+      "independentChecks": {
+        "passed": true,
+        "passedCount": 9,
+        "totalCount": 9,
+        "revision": "90f7f16031dd77bbf81a2c4b4cf852bb2153d2fd039862bf3969375557ae0738"
+      }
     },
     {
       "id": "batch-v1-02-provider",
@@ -104,9 +113,16 @@
       "packetScenario": "standard",
       "workspaceLabel": "Praxis replay provider-stream-errors / batch-v1-02-provider / standard",
       "workspaceCreationKey": "praxis:provider-stream-errors:batch-v1-02-provider:standard:workspace",
-      "status": "not-run",
-      "workspaceId": null,
-      "clientType": null
+      "status": "reported-and-independently-graded",
+      "workspaceId": "a7d0b8ad-5b14-47c0-a742-9774bebec4fa",
+      "clientType": "owner-supplied-ChatGPT-reports",
+      "reportedRevision": "899550d8fb4eee1096a148e6aa0764e5a9409ffaf466ea2e1d7420a02c06225c",
+      "independentChecks": {
+        "passed": true,
+        "passedCount": 6,
+        "totalCount": 6,
+        "revision": "899550d8fb4eee1096a148e6aa0764e5a9409ffaf466ea2e1d7420a02c06225c"
+      }
     },
     {
       "id": "batch-v1-03-vad",
@@ -115,9 +131,16 @@
       "packetScenario": "standard",
       "workspaceLabel": "Praxis replay vad-flap / batch-v1-03-vad / standard",
       "workspaceCreationKey": "praxis:vad-flap:batch-v1-03-vad:standard:workspace",
-      "status": "not-run",
-      "workspaceId": null,
-      "clientType": null
+      "status": "reported-and-independently-graded",
+      "workspaceId": "d3623b72-c0dd-4e9e-8d08-8941ff99485a",
+      "clientType": "owner-supplied-ChatGPT-reports",
+      "reportedRevision": "08f4aba3347d6765b4d86a7d5540a534ff46b6c723d03f5340ebca9835fa0467",
+      "independentChecks": {
+        "passed": true,
+        "passedCount": 6,
+        "totalCount": 6,
+        "revision": "08f4aba3347d6765b4d86a7d5540a534ff46b6c723d03f5340ebca9835fa0467"
+      }
     },
     {
       "id": "batch-v1-04-provider-repeat",
@@ -126,10 +149,17 @@
       "packetScenario": "standard",
       "workspaceLabel": "Praxis replay provider-stream-errors / batch-v1-04-provider-repeat / standard",
       "workspaceCreationKey": "praxis:provider-stream-errors:batch-v1-04-provider-repeat:standard:workspace",
-      "status": "not-run",
-      "workspaceId": null,
-      "clientType": null,
-      "instruction": "Use a fresh conversation and clean base; keep model/client/settings matched to run 02 where available. Do not reveal run 02's solution or critique."
+      "status": "reported-and-independently-graded",
+      "workspaceId": "609630d6-149c-4f6e-b9aa-a286f0133bad",
+      "clientType": "owner-supplied-ChatGPT-reports",
+      "instruction": "Use a fresh conversation and clean base; keep model/client/settings matched to run 02 where available. Do not reveal run 02's solution or critique.",
+      "reportedRevision": "de1fa815b05bd466cbe82507aedbf5436a483cf07aa2eeaffa6d16753cefaebf",
+      "independentChecks": {
+        "passed": true,
+        "passedCount": 6,
+        "totalCount": 6,
+        "revision": "de1fa815b05bd466cbe82507aedbf5436a483cf07aa2eeaffa6d16753cefaebf"
+      }
     },
     {
       "id": "batch-v1-05-buffer-repeat",
@@ -138,10 +168,17 @@
       "packetScenario": "standard",
       "workspaceLabel": "Praxis replay buffer-settling / batch-v1-05-buffer-repeat / standard",
       "workspaceCreationKey": "praxis:buffer-settling:batch-v1-05-buffer-repeat:standard:workspace",
-      "status": "not-run",
-      "workspaceId": null,
-      "clientType": null,
-      "instruction": "Use a fresh conversation and clean base; keep model/client/settings matched to run 01 where available. Do not reveal run 01's solution or critique."
+      "status": "reported-and-independently-graded",
+      "workspaceId": "48174566-a292-47ed-810c-50678de2a525",
+      "clientType": "owner-supplied-ChatGPT-reports",
+      "instruction": "Use a fresh conversation and clean base; keep model/client/settings matched to run 01 where available. Do not reveal run 01's solution or critique.",
+      "reportedRevision": "8212db885d8cd85537b0489d22d742f54e4f4a3fb43a3c96d75072ce87d49140",
+      "independentChecks": {
+        "passed": true,
+        "passedCount": 9,
+        "totalCount": 9,
+        "revision": "8212db885d8cd85537b0489d22d742f54e4f4a3fb43a3c96d75072ce87d49140"
+      }
     },
     {
       "id": "batch-v1-06-vad-artifact",
@@ -150,10 +187,17 @@
       "packetScenario": "artifact",
       "workspaceLabel": "Praxis replay vad-flap / batch-v1-06-vad-artifact / artifact",
       "workspaceCreationKey": "praxis:vad-flap:batch-v1-06-vad-artifact:artifact:workspace",
-      "status": "not-run",
-      "workspaceId": null,
-      "clientType": null,
-      "instruction": "Preserve a nonempty bounded validation artifact through job artifactPaths. A fresh conversation reads its complete contents and verifies bytes/hash without recreating the artifact job."
+      "status": "reported-and-independently-graded",
+      "workspaceId": "05f6d223-70d7-4d60-bb03-6e529b6bd504",
+      "clientType": "owner-supplied-ChatGPT-reports",
+      "instruction": "Preserve a nonempty bounded validation artifact through job artifactPaths. A fresh conversation reads its complete contents and verifies bytes/hash without recreating the artifact job.",
+      "reportedRevision": "4e4d963bdb950a17e1b83e0f5489dfaa6a8e15f1bc1b314eb81a620b95687885",
+      "independentChecks": {
+        "passed": true,
+        "passedCount": 6,
+        "totalCount": 6,
+        "revision": "4e4d963bdb950a17e1b83e0f5489dfaa6a8e15f1bc1b314eb81a620b95687885"
+      }
     }
   ],
   "executionRules": [

@@ -1,0 +1,535 @@
+{
+  "runId": "6257c249-b566-4d48-94b0-3924bd3f7185",
+  "evidenceKind": "independent-grading-of-preserved-replay-workspaces",
+  "release": "coding-a41abbbbb51e",
+  "image": "sha256:a807793c27f53bf93480fc3dcfe73b2ab1b6bdf8b3aa1aca820118fd43767170",
+  "nativePhoneRun": false,
+  "oldJobsRerun": false,
+  "candidateSourcesChanged": false,
+  "status": "completed",
+  "runs": [
+    {
+      "runId": "batch-v1-01-buffer",
+      "caseId": "buffer-settling",
+      "workspaceId": "9dc1f70f-1d76-4896-b110-718bbdab7588",
+      "baseRevision": "35d1bb2d723f7bf3960bb9cbe2a484b7d6feb0ab",
+      "revision": "90f7f16031dd77bbf81a2c4b4cf852bb2153d2fd039862bf3969375557ae0738",
+      "candidateModuleSha256": {
+        "conversation-buffer.js": "f646ff7f221b2f6786559ee6cebe509c9ad10071fbf7ec5b2240d675069bbf4d"
+      },
+      "jobs": [
+        {
+          "id": "4c0f43a5-e96d-495c-ba97-ecd5626dd8b3",
+          "status": "failed",
+          "exit_code": 1,
+          "revision_after": "017e235c1c2533a05a839c2b1ad5d05d9707105f234939790a3d9fd592182ce4",
+          "truncated": 0
+        },
+        {
+          "id": "f2b67ddb-0c0f-4f1a-a1a7-c606b823bb27",
+          "status": "completed",
+          "exit_code": 0,
+          "revision_after": "90f7f16031dd77bbf81a2c4b4cf852bb2153d2fd039862bf3969375557ae0738",
+          "truncated": 0
+        },
+        {
+          "id": "d8a044d3-dbd0-4106-8958-2aabca6c4f6a",
+          "status": "failed",
+          "exit_code": 1,
+          "revision_after": "90f7f16031dd77bbf81a2c4b4cf852bb2153d2fd039862bf3969375557ae0738",
+          "truncated": 0
+        }
+      ],
+      "unit": "praxis-grade-6257c249-b566-4d48-94b0-3924bd3f7185-batch-v1-01-buffer.service",
+      "exitCode": 0,
+      "result": {
+        "caseId": "buffer-settling",
+        "checker": "buffer-settling-v1",
+        "complete": true,
+        "passed": true,
+        "checks": [
+          {
+            "id": "duration_never_extends_fixed_delay",
+            "passed": true
+          },
+          {
+            "id": "all_asr_completions_gate_flush",
+            "passed": true
+          },
+          {
+            "id": "resumed_speech_cancels_deadline",
+            "passed": true
+          },
+          {
+            "id": "closely_arriving_results_share_deadline",
+            "passed": true
+          },
+          {
+            "id": "endpoint_and_multiple_holds_preserve_text",
+            "passed": true
+          },
+          {
+            "id": "cooldown_then_settling",
+            "passed": true
+          },
+          {
+            "id": "stale_requeue_preserves_asr_and_order",
+            "passed": true
+          },
+          {
+            "id": "empty_asr_and_timeout_recovery",
+            "passed": true
+          },
+          {
+            "id": "clear_cancels_all_pending_work",
+            "passed": true
+          }
+        ],
+        "candidateModuleSha256": {
+          "conversation-buffer.js": "f646ff7f221b2f6786559ee6cebe509c9ad10071fbf7ec5b2240d675069bbf4d"
+        },
+        "promptSha256": "f35ef2d183af92a4def42c801ea65c1f7816e1610a19b203444b26e73a4d16f5",
+        "evidenceType": "offline-virtual-clock-module-evaluation",
+        "liveServicesExercised": false,
+        "semanticReviewRequired": true,
+        "isolation": "Caller must enforce an unprivileged OS sandbox; VM restrictions are not a security boundary.",
+        "limitations": [
+          "Checks the exported buffer contract with deterministic receiver events; no Discord or ASR service is contacted.",
+          "Documentation, environment-variable deprecation, unchanged receiver policy, and candidate-authored deterministic tests require diff review."
+        ]
+      }
+    },
+    {
+      "runId": "batch-v1-02-provider",
+      "caseId": "provider-stream-errors",
+      "workspaceId": "a7d0b8ad-5b14-47c0-a742-9774bebec4fa",
+      "baseRevision": "8b098f28c96ecbde424d66fbd1ac03f0767d2fed",
+      "revision": "899550d8fb4eee1096a148e6aa0764e5a9409ffaf466ea2e1d7420a02c06225c",
+      "candidateModuleSha256": {
+        "podcast-generator.js": "4f5ad123bbc692be0d816b1e7aa04c255f2277c27f126190a86fe376fd87b58d",
+        "anthropic-messages.js": "7cd7354c491b8beda0957ba8947057d5b7a540a855e266b7b6b78e41675ec2e5"
+      },
+      "jobs": [
+        {
+          "id": "bd946eb8-abbc-43bc-8aa9-64d4c1fadc9e",
+          "status": "failed",
+          "exit_code": 1,
+          "revision_after": "a90a3948803076366118445fb31927b884cec93d5d931ebb6d7587a6ff45ce85",
+          "truncated": 0
+        },
+        {
+          "id": "6a0e97b9-1734-49ec-9586-28da3a96157e",
+          "status": "completed",
+          "exit_code": 0,
+          "revision_after": "899550d8fb4eee1096a148e6aa0764e5a9409ffaf466ea2e1d7420a02c06225c",
+          "truncated": 0
+        },
+        {
+          "id": "b270b876-3b19-49ea-abe7-433030be3413",
+          "status": "failed",
+          "exit_code": 1,
+          "revision_after": "899550d8fb4eee1096a148e6aa0764e5a9409ffaf466ea2e1d7420a02c06225c",
+          "truncated": 0
+        }
+      ],
+      "unit": "praxis-grade-6257c249-b566-4d48-94b0-3924bd3f7185-batch-v1-02-provider.service",
+      "exitCode": 0,
+      "result": {
+        "caseId": "provider-stream-errors",
+        "checker": "provider-stream-errors-v1",
+        "complete": true,
+        "passed": true,
+        "checks": [
+          {
+            "id": "provider_error_before_speech",
+            "passed": true
+          },
+          {
+            "id": "fragmented_provider_error_without_final_newline",
+            "passed": true
+          },
+          {
+            "id": "provider_error_after_partial_speech",
+            "passed": true
+          },
+          {
+            "id": "text_deltas_preserve_speech",
+            "passed": true
+          },
+          {
+            "id": "partial_json_deltas_preserve_speech",
+            "passed": true
+          },
+          {
+            "id": "genuine_silence_remains_silence",
+            "passed": true
+          }
+        ],
+        "candidateModuleSha256": {
+          "podcast-generator.js": "4f5ad123bbc692be0d816b1e7aa04c255f2277c27f126190a86fe376fd87b58d",
+          "anthropic-messages.js": "7cd7354c491b8beda0957ba8947057d5b7a540a855e266b7b6b78e41675ec2e5"
+        },
+        "promptSha256": "1ba7e7dabc78387317c868a9a6c95397c88487c1491a242c67b0d901429f8608",
+        "evidenceType": "offline-mocked-module-evaluation",
+        "liveServicesExercised": false,
+        "semanticReviewRequired": true,
+        "isolation": "Caller must enforce an unprivileged OS sandbox; VM restrictions are not a security boundary."
+      }
+    },
+    {
+      "runId": "batch-v1-03-vad",
+      "caseId": "vad-flap",
+      "workspaceId": "d3623b72-c0dd-4e9e-8d08-8941ff99485a",
+      "baseRevision": "8b507b5d9678606823758eb6ed7cde05896a2cef",
+      "revision": "08f4aba3347d6765b4d86a7d5540a534ff46b6c723d03f5340ebca9835fa0467",
+      "candidateModuleSha256": {
+        "audio-receiver.js": "c6c49353a027e86d1b2ff1d7189721b26de89c07ef083cc05fdfd7e0a6fba930",
+        "silence-detector.js": "426cecb3ef1ca4cdc64372c0c38b16423c102befa36ebad826d55412135d75e5",
+        "speaker-tracker.js": "e2f9dfc32e419bdcbf6df5abcd331cba749b7632a3ed3c311f6d759aa042cfd5"
+      },
+      "jobs": [
+        {
+          "id": "7d255f0a-3894-427b-af19-861f442958d0",
+          "status": "completed",
+          "exit_code": 0,
+          "revision_after": "6a91fdc55ccf5b94513badfea89d8cea6331d8a6de42c9f0a834a41b43cbcce5",
+          "truncated": 0
+        },
+        {
+          "id": "be618507-1f53-4107-8316-2fea8ef6c43c",
+          "status": "failed",
+          "exit_code": 1,
+          "revision_after": "c3550bd16918dcf8e2f790b5bfa8393e8de76c559353a300f7f33008638da7b7",
+          "truncated": 0
+        },
+        {
+          "id": "29430409-5888-4a26-8284-004649ed0bc6",
+          "status": "completed",
+          "exit_code": 0,
+          "revision_after": "08f4aba3347d6765b4d86a7d5540a534ff46b6c723d03f5340ebca9835fa0467",
+          "truncated": 0
+        }
+      ],
+      "unit": "praxis-grade-6257c249-b566-4d48-94b0-3924bd3f7185-batch-v1-03-vad.service",
+      "exitCode": 0,
+      "result": {
+        "caseId": "vad-flap",
+        "checker": "vad-flap-v1",
+        "complete": true,
+        "passed": true,
+        "checks": [
+          {
+            "id": "silent_stops_drop_audio_keep_subscription",
+            "passed": true
+          },
+          {
+            "id": "next_speech_has_only_its_own_bytes_and_time",
+            "passed": true
+          },
+          {
+            "id": "manual_flush_rejects_noise_but_keeps_short_speech",
+            "passed": true
+          },
+          {
+            "id": "silence_rollover_drops_noise_resets_detector",
+            "passed": true
+          },
+          {
+            "id": "speaker_isolation_and_resume_preserve_audio",
+            "passed": true
+          },
+          {
+            "id": "queued_asr_snapshots_remain_distinct",
+            "passed": true
+          }
+        ],
+        "candidateModuleSha256": {
+          "audio-receiver.js": "c6c49353a027e86d1b2ff1d7189721b26de89c07ef083cc05fdfd7e0a6fba930",
+          "silence-detector.js": "426cecb3ef1ca4cdc64372c0c38b16423c102befa36ebad826d55412135d75e5",
+          "speaker-tracker.js": "e2f9dfc32e419bdcbf6df5abcd331cba749b7632a3ed3c311f6d759aa042cfd5"
+        },
+        "promptSha256": "07c365dc091f67aba6913579d244dd5488e2c078853d5ce951878a6b6117d76a",
+        "evidenceType": "offline-mocked-module-evaluation",
+        "liveServicesExercised": false,
+        "semanticReviewRequired": true,
+        "isolation": "Caller must enforce an unprivileged OS sandbox; VM restrictions are not a security boundary.",
+        "limitations": [
+          "Synthetic PCM and mocked Discord/ASR only; no codec, provider, live recording, or perceptual audio verification."
+        ]
+      }
+    },
+    {
+      "runId": "batch-v1-04-provider-repeat",
+      "caseId": "provider-stream-errors",
+      "workspaceId": "609630d6-149c-4f6e-b9aa-a286f0133bad",
+      "baseRevision": "8b098f28c96ecbde424d66fbd1ac03f0767d2fed",
+      "revision": "de1fa815b05bd466cbe82507aedbf5436a483cf07aa2eeaffa6d16753cefaebf",
+      "candidateModuleSha256": {
+        "podcast-generator.js": "5a6bac65bf6f9d3a1df860f01ff36bad366281a521e027b712938cfe438ce3dd",
+        "anthropic-messages.js": "7cd7354c491b8beda0957ba8947057d5b7a540a855e266b7b6b78e41675ec2e5"
+      },
+      "jobs": [
+        {
+          "id": "1694d675-08d7-410d-a552-b16f55ac9a82",
+          "status": "failed",
+          "exit_code": 1,
+          "revision_after": "a90a3948803076366118445fb31927b884cec93d5d931ebb6d7587a6ff45ce85",
+          "truncated": 0
+        },
+        {
+          "id": "6fc10e32-3a49-4132-9303-3c482c98a1b5",
+          "status": "completed",
+          "exit_code": 0,
+          "revision_after": "de1fa815b05bd466cbe82507aedbf5436a483cf07aa2eeaffa6d16753cefaebf",
+          "truncated": 0
+        },
+        {
+          "id": "b457d6ee-c076-4484-9858-94c641c2e680",
+          "status": "failed",
+          "exit_code": 1,
+          "revision_after": "de1fa815b05bd466cbe82507aedbf5436a483cf07aa2eeaffa6d16753cefaebf",
+          "truncated": 0
+        }
+      ],
+      "unit": "praxis-grade-6257c249-b566-4d48-94b0-3924bd3f7185-batch-v1-04-provider-repeat.service",
+      "exitCode": 0,
+      "result": {
+        "caseId": "provider-stream-errors",
+        "checker": "provider-stream-errors-v1",
+        "complete": true,
+        "passed": true,
+        "checks": [
+          {
+            "id": "provider_error_before_speech",
+            "passed": true
+          },
+          {
+            "id": "fragmented_provider_error_without_final_newline",
+            "passed": true
+          },
+          {
+            "id": "provider_error_after_partial_speech",
+            "passed": true
+          },
+          {
+            "id": "text_deltas_preserve_speech",
+            "passed": true
+          },
+          {
+            "id": "partial_json_deltas_preserve_speech",
+            "passed": true
+          },
+          {
+            "id": "genuine_silence_remains_silence",
+            "passed": true
+          }
+        ],
+        "candidateModuleSha256": {
+          "podcast-generator.js": "5a6bac65bf6f9d3a1df860f01ff36bad366281a521e027b712938cfe438ce3dd",
+          "anthropic-messages.js": "7cd7354c491b8beda0957ba8947057d5b7a540a855e266b7b6b78e41675ec2e5"
+        },
+        "promptSha256": "1ba7e7dabc78387317c868a9a6c95397c88487c1491a242c67b0d901429f8608",
+        "evidenceType": "offline-mocked-module-evaluation",
+        "liveServicesExercised": false,
+        "semanticReviewRequired": true,
+        "isolation": "Caller must enforce an unprivileged OS sandbox; VM restrictions are not a security boundary."
+      }
+    },
+    {
+      "runId": "batch-v1-05-buffer-repeat",
+      "caseId": "buffer-settling",
+      "workspaceId": "48174566-a292-47ed-810c-50678de2a525",
+      "baseRevision": "35d1bb2d723f7bf3960bb9cbe2a484b7d6feb0ab",
+      "revision": "8212db885d8cd85537b0489d22d742f54e4f4a3fb43a3c96d75072ce87d49140",
+      "candidateModuleSha256": {
+        "conversation-buffer.js": "26c8efd62014e945743f0a7ae18049d78ac4cd0d4334c732cffd6b1e433d074d"
+      },
+      "jobs": [
+        {
+          "id": "165df628-6aa9-45e1-a517-760c9f5c9b3f",
+          "status": "failed",
+          "exit_code": 1,
+          "revision_after": "017e235c1c2533a05a839c2b1ad5d05d9707105f234939790a3d9fd592182ce4",
+          "truncated": 0
+        },
+        {
+          "id": "7192b1ba-6d89-4399-9b28-6148282c943d",
+          "status": "completed",
+          "exit_code": 0,
+          "revision_after": "8212db885d8cd85537b0489d22d742f54e4f4a3fb43a3c96d75072ce87d49140",
+          "truncated": 0
+        },
+        {
+          "id": "a1d692a9-1c00-43b0-8370-93f1770e827e",
+          "status": "failed",
+          "exit_code": 1,
+          "revision_after": "8212db885d8cd85537b0489d22d742f54e4f4a3fb43a3c96d75072ce87d49140",
+          "truncated": 0
+        }
+      ],
+      "unit": "praxis-grade-6257c249-b566-4d48-94b0-3924bd3f7185-batch-v1-05-buffer-repeat.service",
+      "exitCode": 0,
+      "result": {
+        "caseId": "buffer-settling",
+        "checker": "buffer-settling-v1",
+        "complete": true,
+        "passed": true,
+        "checks": [
+          {
+            "id": "duration_never_extends_fixed_delay",
+            "passed": true
+          },
+          {
+            "id": "all_asr_completions_gate_flush",
+            "passed": true
+          },
+          {
+            "id": "resumed_speech_cancels_deadline",
+            "passed": true
+          },
+          {
+            "id": "closely_arriving_results_share_deadline",
+            "passed": true
+          },
+          {
+            "id": "endpoint_and_multiple_holds_preserve_text",
+            "passed": true
+          },
+          {
+            "id": "cooldown_then_settling",
+            "passed": true
+          },
+          {
+            "id": "stale_requeue_preserves_asr_and_order",
+            "passed": true
+          },
+          {
+            "id": "empty_asr_and_timeout_recovery",
+            "passed": true
+          },
+          {
+            "id": "clear_cancels_all_pending_work",
+            "passed": true
+          }
+        ],
+        "candidateModuleSha256": {
+          "conversation-buffer.js": "26c8efd62014e945743f0a7ae18049d78ac4cd0d4334c732cffd6b1e433d074d"
+        },
+        "promptSha256": "f35ef2d183af92a4def42c801ea65c1f7816e1610a19b203444b26e73a4d16f5",
+        "evidenceType": "offline-virtual-clock-module-evaluation",
+        "liveServicesExercised": false,
+        "semanticReviewRequired": true,
+        "isolation": "Caller must enforce an unprivileged OS sandbox; VM restrictions are not a security boundary.",
+        "limitations": [
+          "Checks the exported buffer contract with deterministic receiver events; no Discord or ASR service is contacted.",
+          "Documentation, environment-variable deprecation, unchanged receiver policy, and candidate-authored deterministic tests require diff review."
+        ]
+      }
+    },
+    {
+      "runId": "batch-v1-06-vad-artifact",
+      "caseId": "vad-flap",
+      "workspaceId": "05f6d223-70d7-4d60-bb03-6e529b6bd504",
+      "baseRevision": "8b507b5d9678606823758eb6ed7cde05896a2cef",
+      "revision": "4e4d963bdb950a17e1b83e0f5489dfaa6a8e15f1bc1b314eb81a620b95687885",
+      "candidateModuleSha256": {
+        "audio-receiver.js": "08d1e078e08ac72f553c7480f408ad01295234f652acc65e3be404c0672dfa86",
+        "silence-detector.js": "426cecb3ef1ca4cdc64372c0c38b16423c102befa36ebad826d55412135d75e5",
+        "speaker-tracker.js": "e2f9dfc32e419bdcbf6df5abcd331cba749b7632a3ed3c311f6d759aa042cfd5"
+      },
+      "jobs": [
+        {
+          "id": "687f9a54-488a-41f5-8675-35bf71048695",
+          "status": "completed",
+          "exit_code": 0,
+          "revision_after": "6a91fdc55ccf5b94513badfea89d8cea6331d8a6de42c9f0a834a41b43cbcce5",
+          "truncated": 0
+        },
+        {
+          "id": "6b9147af-2381-4619-9afd-92fd382ed9c6",
+          "status": "failed",
+          "exit_code": 1,
+          "revision_after": "fded1b1103da8a7b535e1f0748cd402cbb206c9ee9e9eed93fe93a5cde04eed0",
+          "truncated": 1
+        },
+        {
+          "id": "8660f6fa-9f9c-4c1d-9297-cb35a77ece93",
+          "status": "failed",
+          "exit_code": 1,
+          "revision_after": "1e3db80eadc90fce1dbeffc87e1ecd0b3c5707cd87362314bbf15fadefc123a5",
+          "truncated": 0
+        },
+        {
+          "id": "55a7e094-07f5-49b0-aa50-a42b00beb4c8",
+          "status": "completed",
+          "exit_code": 0,
+          "revision_after": "5c95c7277c08078d661d3801de1764324a03825ac984d161d570090578675111",
+          "truncated": 0
+        },
+        {
+          "id": "aa9e30c6-f231-41ff-8dfc-9dc92110481c",
+          "status": "completed",
+          "exit_code": 0,
+          "revision_after": "4e4d963bdb950a17e1b83e0f5489dfaa6a8e15f1bc1b314eb81a620b95687885",
+          "truncated": 0
+        }
+      ],
+      "unit": "praxis-grade-6257c249-b566-4d48-94b0-3924bd3f7185-batch-v1-06-vad-artifact.service",
+      "exitCode": 0,
+      "result": {
+        "caseId": "vad-flap",
+        "checker": "vad-flap-v1",
+        "complete": true,
+        "passed": true,
+        "checks": [
+          {
+            "id": "silent_stops_drop_audio_keep_subscription",
+            "passed": true
+          },
+          {
+            "id": "next_speech_has_only_its_own_bytes_and_time",
+            "passed": true
+          },
+          {
+            "id": "manual_flush_rejects_noise_but_keeps_short_speech",
+            "passed": true
+          },
+          {
+            "id": "silence_rollover_drops_noise_resets_detector",
+            "passed": true
+          },
+          {
+            "id": "speaker_isolation_and_resume_preserve_audio",
+            "passed": true
+          },
+          {
+            "id": "queued_asr_snapshots_remain_distinct",
+            "passed": true
+          }
+        ],
+        "candidateModuleSha256": {
+          "audio-receiver.js": "08d1e078e08ac72f553c7480f408ad01295234f652acc65e3be404c0672dfa86",
+          "silence-detector.js": "426cecb3ef1ca4cdc64372c0c38b16423c102befa36ebad826d55412135d75e5",
+          "speaker-tracker.js": "e2f9dfc32e419bdcbf6df5abcd331cba749b7632a3ed3c311f6d759aa042cfd5"
+        },
+        "promptSha256": "07c365dc091f67aba6913579d244dd5488e2c078853d5ce951878a6b6117d76a",
+        "evidenceType": "offline-mocked-module-evaluation",
+        "liveServicesExercised": false,
+        "semanticReviewRequired": true,
+        "isolation": "Caller must enforce an unprivileged OS sandbox; VM restrictions are not a security boundary.",
+        "limitations": [
+          "Synthetic PCM and mocked Discord/ASR only; no codec, provider, live recording, or perceptual audio verification."
+        ]
+      }
+    }
+  ],
+  "checkerFilesSha256": {
+    "scripts/eval-check.js": "b6b15790d80078f26d8ebee34750a2341048b1aa780b2af8a6b623b5169b5fed",
+    "eval/catalog.json": "4697fb0697c3f66e4bd701494b7100cb194d1352a79e814245f8dee4758cef71",
+    "eval/checkers/buffer-settling.js": "be51b3dbdba558e014489347ef582f94887986897a6171e0844d38863eb457eb",
+    "eval/checkers/provider-stream-errors.js": "8ae59d673add045dbee73e6a4292c288ec4fe369bb452f7a5eb3f882b70985c3",
+    "eval/checkers/support.js": "3b153c0e75496f4141eb86f267a234d32b63f5ccd531ad4d3690a515f5f1370d",
+    "eval/checkers/vad-flap.js": "bb4915d512aef6a61aaba9396e3a2e21d00108d7c3da15e17c20a8e042327a44"
+  },
+  "passed": true
+}
