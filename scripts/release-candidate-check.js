@@ -11,7 +11,7 @@ import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/cli
 import { createApp } from '../src/server.js';
 import { loadToolManifest } from '../src/tool-manifest.js';
 
-assert.notEqual(process.getuid?.(), 0);
+if (process.env.PRAXIS_EXECUTION_MODE !== 'native-root') assert.notEqual(process.getuid?.(), 0);
 const candidate = resolve(process.argv[2]), directory = resolve(process.argv[3]);
 loadToolManifest(join(candidate, 'coding-tools.json'));
 const listen = async server => { await new Promise(done => server.listen(0, '127.0.0.1', done)); return server.address().port; };

@@ -1,0 +1,17 @@
+{
+  "kind": "isolated-owner-migration-fixtures",
+  "scope": "Mocked service effects in disposable root-owned Linux directories; no live activation",
+  "unit": "praxis-native-migration-fixtures-8c917f2a.service",
+  "tests": { "passed": 23, "failed": 0, "skipped": 0 },
+  "systemdUnitSyntax": { "command": "systemd-analyze verify", "exitCode": 0 },
+  "coverage": [
+    "Native root units remove inherited filesystem/network/resource restrictions",
+    "Configuration retains historical workspaces, credentials and database paths",
+    "Active work prevents migration",
+    "Startup health failure restores configuration, units and pointers",
+    "Rollback repairs SQLite file and sidecar ownership without restoring contents",
+    "Lost final receipt resumes admission without repeating work",
+    "Interrupted pointer/configuration switches recover from the saved original pair",
+    "Native updater builds use root authority and ordinary networking"
+  ]
+}

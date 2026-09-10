@@ -1,0 +1,86 @@
+{
+  "kind": "isolated-native-systemd-runner-and-job-api-qualification",
+  "scope": "Synthetic fixtures on Alpha; no live coding-service activation and no native phone run",
+  "passed": true,
+  "systemdFixture": {
+    "startedAt": "2026-09-10T03:24:43.657Z",
+    "completedAt": "2026-09-10T03:25:02.740Z",
+    "fixture": "qualification-76601f7bb7874feeb4219c99a1057cbc",
+    "systemdVersion": 255,
+    "checks": [
+      {
+        "name": "Root UID, ordinary public HTTPS, write outside workspace, persistent home, recovery through a new runner object, no second execution",
+        "passed": true,
+        "jobId": "6820b35c-b984-4f3f-a51d-8c3eab04fa9d",
+        "timeoutSeconds": 0,
+        "exitCode": 0
+      },
+      {
+        "name": "Complete stdout and binary stderr survive bounded pagination and transient-unit cleanup",
+        "passed": true,
+        "jobId": "80907c7e-4523-41f1-aae5-6a1ffc0b37a7",
+        "stdoutBytes": 2097169,
+        "stderrBytes": 6,
+        "pages": 96,
+        "stdoutSha256": "8798a332321fc3d0e04055aa66810f0704ea2f1032788c4e5ffdd1582b7ec04d",
+        "exitCode": 0
+      },
+      {
+        "name": "Positive timeout stops a detached descendant that ignores SIGTERM",
+        "passed": true,
+        "jobId": "3ce79b76-80f9-43a8-adbc-9780eaad0e6f",
+        "timeoutSeconds": 1,
+        "exitCode": null,
+        "signal": "SIGTERM",
+        "terminationReason": "timeout"
+      },
+      {
+        "name": "Cancellation stops a detached descendant that ignores SIGTERM",
+        "passed": true,
+        "jobId": "57c596eb-187f-4d95-9d3a-c8cd67e84bad",
+        "timeoutSeconds": 0,
+        "exitCode": null,
+        "signal": "SIGTERM",
+        "terminationReason": "cancelled"
+      }
+    ],
+    "cleanup": "Only the fixture's transient units were stopped and removed; durable fixture logs and receipts remain."
+  },
+  "linuxTests": {
+    "command": "node --test test/native-runner.test.js test/native-jobs.test.js",
+    "passed": 15,
+    "failed": 0,
+    "skipped": 0,
+    "coverage": [
+      "Uncertain launch outcomes do not trigger another execution",
+      "Worker execution claim prevents duplicate process execution",
+      "Concurrent native host jobs and timeout zero",
+      "Arbitrary argv/environment and absolute host directories",
+      "Real SQLite reopen preserves request identity, output, and terminal results",
+      "Host project and data-root resolution is pinned at admission",
+      "Native timeout and cancellation preserve signal-only exit evidence",
+      "Artifacts exceed the previous total cap and follow explicitly requested file links",
+      "Workspace revision checks and post-command refresh remain functional",
+      "Dependency-preparation retries retain identity across runtime changes",
+      "Terminal legacy commands and implicit-timeout dependency requests recover after native migration without another launch"
+    ]
+  },
+  "qualifiedSourceSha256": {
+    "src/code/native-runner.js": "915b3a3a0df4ece67d21d924ea6724e2a6ae74eb9b049fa8ffba8c4270e2806f",
+    "src/code/native-worker.py": "beecc33e8c402cf70e4d3d66d092d0604e0a021468f283c399726734154bbd0c",
+    "test/native-runner.test.js": "b7f6958cd6ffe33131371b6e06fd08a7fc8ce1d7555ea82da64f677c00644c97",
+    "test/native-jobs.test.js": "b872e7f5daa8905185832e2572a8c6bf04df53316073e2d53dffefa4ca25a4e7"
+  },
+  "priorFindings": [
+    {
+      "fixture": "qualification-db81443eada24b5a81976784e999cdd6",
+      "finding": "Cancellation stopped the worker and descendants, but a signal/pipeline race recorded reason=exit instead of reason=cancelled.",
+      "resolution": "The worker checks its signal flag again after the child exits. A new fixture and new job IDs passed the repeated qualification; the original evidence was retained."
+    }
+  ],
+  "limitations": [
+    "This qualification does not claim a deployed native migration or a ChatGPT iPhone run.",
+    "Raw output has no fixed retention cap; available host storage remains finite.",
+    "Machine failure between durable launch intent and observable service admission remains explicitly uncertain and is never silently retried."
+  ]
+}

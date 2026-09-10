@@ -88,6 +88,44 @@ class HostPolicy(unittest.TestCase):
         with self.capacity(), self.assertRaisesRegex(RuntimeError, 'previous candidate unit'):
             self.host.stage_capacity()
 
+    @unittest.skipUnless(hasattr(os, 'geteuid') and os.geteuid() == 0, 'Native owner staging fixture requires isolated root Linux.')
+    def test_native_staging_uses_host_disk_without_legacy_quota_or_mount_requirement(self):
+        self.host.native = True
+        for index in range(20): (self.host.root / ('retained-' + str(index))).mkdir()
+        with patch.object(module.os.path, 'ismount', side_effect=AssertionError('No native mount requirement')), \
+             patch.object(module.os, 'statvfs', side_effect=AssertionError('No native storage quota')):
+            self.host.stage_capacity()
+        self.assertTrue(any(command[:2] == ['systemctl', 'list-units'] for command in self.commands))
+
+    @unittest.skipUnless(hasattr(os, 'geteuid') and os.geteuid() == 0, 'Native owner staging fixture requires isolated root Linux.')
+    def test_native_stage_has_root_identity_persistent_home_and_no_proxy_or_sandbox(self):
+        self.host.native = True; self.host.config = {'nativeHome': '/fixture/native-home'}
+        source = self.host.stages / 'native-fixture'; source.mkdir()
+        self.host.stage_unit(str(uuid.uuid4()), 'build', source, ['node', 'fixture.js'])
+        args = next(command for command in self.commands if command[0] == 'systemd-run')
+        for value in ['--property=User=root', '--property=Group=root', '--property=TasksMax=infinity',
+                      '--property=MemoryMax=infinity', '--property=CPUQuota=', '--setenv=HOME=/fixture/native-home',
+                      '--setenv=PRAXIS_EXECUTION_MODE=native-root']:
+            self.assertIn(value, args)
+        for value in ['PrivateNetwork', 'ProtectSystem', 'InaccessiblePaths', 'praxis-registry.sock', 'TemporaryFileSystem']:
+            self.assertFalse(any(value in argument for argument in args))
+        self.assertTrue(any(command[:2] == ['systemctl', 'show'] for command in self.commands), 'Cleanup still confirms completion')
+
+    def test_native_source_allows_control_changes_but_still_checks_exact_export_bytes(self):
+        export = self.base / 'exports/fixture'; source = export / 'files'; source.mkdir(parents=True)
+        (source / 'gateway.js').write_text('new root-authorized gateway')
+        entries = module.safe_tree(source)
+        manifest = {'version': 1, 'projectId': 'praxis', 'commit': 'a' * 40, 'revision': 'b' * 64,
+                    'entries': {name: {'sha256': value['sha256'], 'size': value['bytes'], 'mode': value['mode']} for name, value in entries.items()}}
+        (export / 'manifest.json').write_text(json.dumps(manifest))
+        self.host.config = {'exportDirectory': str(export.parent), 'protectedFiles': {'gateway.js': 'old-hash'}}
+        args = {'exportId': 'fixture', 'sourceCommit': 'a' * 40, 'sourceDigest': 'b' * 64}
+        with self.assertRaisesRegex(RuntimeError, 'protected installed'): self.host._source(args)
+        self.host.native = True
+        self.assertEqual(self.host._source(args)[1], entries)
+        (source / 'gateway.js').write_text('different bytes')
+        with self.assertRaisesRegex(RuntimeError, 'export bytes changed'): self.host._source(args)
+
     def test_shutdown_requires_observed_absence_or_inactivity(self):
         self.host.stop_stage('praxis-stage-fixture-build')
         self.unit_state = 'LoadState=loaded\nActiveState=inactive\nMainPID=0\nControlGroup=\n'

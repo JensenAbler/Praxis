@@ -2,10 +2,12 @@
 import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 
-if (process.getuid?.() === 0) throw new Error('Candidate builds cannot run as root');
+const native = process.env.PRAXIS_EXECUTION_MODE === 'native-root';
+if (process.getuid?.() === 0 && !native) throw new Error('Candidate builds cannot run as root outside the owner-enabled native execution mode');
 const cwd = resolve(process.argv[2] || '');
 for (const [command, args] of [
-  [process.execPath, ['/usr/local/lib/praxis/registry-relay.mjs', 'npm', 'ci', '--no-audit', '--no-fund']],
+  native ? ['npm', ['ci', '--no-audit', '--no-fund']] :
+    [process.execPath, ['/usr/local/lib/praxis/registry-relay.mjs', 'npm', 'ci', '--no-audit', '--no-fund']],
   ['npm', ['test']],
   [process.execPath, ['scripts/export-tool-manifest.js', 'coding-tools.json']]
 ]) {

@@ -44,7 +44,7 @@ def file_hash(path):
     return h.hexdigest()
 
 
-def safe_tree(root, allow_dependency_links=False):
+def safe_tree(root, allow_dependency_links=False, enforce_limits=True):
     root = pathlib.Path(root)
     require(root.is_dir() and not root.is_symlink(), 'Expected an ordinary source tree.')
     entries, total = {}, 0
@@ -59,7 +59,7 @@ def safe_tree(root, allow_dependency_links=False):
             continue
         require(stat.S_ISREG(info.st_mode) and info.st_nlink == 1, 'Release contains a special or hard-linked file.')
         total += info.st_size
-        require(total <= 1024 * 1024 * 1024 and len(entries) < 100000, 'Release exceeds bounded storage limits.')
+        require(not enforce_limits or total <= 1024 * 1024 * 1024 and len(entries) < 100000, 'Release exceeds bounded storage limits.')
         entries[relative] = {'sha256': file_hash(path), 'bytes': info.st_size, 'mode': '100755' if info.st_mode & 0o111 else '100644'}
     return entries
 
@@ -81,6 +81,7 @@ def fingerprints(filename, before=None):
 class Host:
     def __init__(self, config):
         self.config = config
+        self.native = config.get('executionMode') == 'native-root'
         self.root = pathlib.Path(config['releasesRoot'])
         self.current = pathlib.Path(config['currentLink'])
         self.stages = pathlib.Path(config['stagingRoot'])
@@ -89,10 +90,13 @@ class Host:
         self.fence = pathlib.Path(config['generationFencePath'])
         self.control = pathlib.Path(config['controlRoot'])
         self.code_config = pathlib.Path(config['codingConfig'])
-        self.stage_user = config.get('stageUser', 'praxis-stage')
+        self.stage_user = 'root' if self.native else config.get('stageUser', 'praxis-stage')
         self.health_user = config.get('healthUser', 'praxis-health')
         self.uid = pwd.getpwnam(self.stage_user).pw_uid
         self.gid = pwd.getpwnam(self.stage_user).pw_gid
+
+    def scan(self, root, allow_dependency_links=False):
+        return safe_tree(root, allow_dependency_links, enforce_limits=not getattr(self, 'native', False))
 
     @staticmethod
     def run(argv, timeout=60, check=True):
@@ -175,11 +179,22 @@ class Host:
             'BindReadOnlyPaths=/run/praxis-dependencies/proxy.sock:/run/praxis-registry.sock',
             'SupplementaryGroups=praxis-code',
         ]
+        native = getattr(self, 'native', False)
+        if native:
+            properties = ['User=root', 'Group=root', 'Type=exec', 'ExitType=cgroup',
+                'KillMode=control-group', 'RuntimeMaxSec=' + str(timeout), 'TimeoutStopSec=10',
+                'TasksMax=infinity', 'MemoryMax=infinity', 'MemoryHigh=infinity', 'MemorySwapMax=infinity', 'CPUQuota=',
+                'StandardOutput=append:' + str(log_path), 'StandardError=append:' + str(log_path)]
         # Only the temporary preparation/smoke directory is writable, never the
         # immutable candidate artifact or any live operational state.
         args = ['systemd-run', '--quiet', '--wait', '--collect', '--unit=' + unit]
         for prop in properties: args.append('--property=' + prop)
-        args += ['--setenv=HOME=/tmp', '--setenv=NODE_ENV=test', '--setenv=CI=true', '--working-directory=' + str(source), *argv]
+        home = self.config.get('nativeHome', '/var/lib/praxis-root/home') if native else '/tmp'
+        args += ['--setenv=HOME=' + home, '--setenv=NODE_ENV=test', '--setenv=CI=true']
+        if native:
+            args += ['--setenv=PRAXIS_EXECUTION_MODE=native-root', '--setenv=XDG_CACHE_HOME=' + home + '/.cache',
+                     '--setenv=npm_config_cache=' + home + '/.npm']
+        args += ['--working-directory=' + str(source), *argv]
         result = None
         run_error = None
         try:
@@ -222,6 +237,17 @@ class Host:
                 require(not direct.exists() or not direct.read_text().strip(), 'Candidate child processes remain; do not copy or seal its writable source.')
 
     def stage_capacity(self):
+        if getattr(self, 'native', False):
+            for directory in (self.staging_mount, self.stages, self.root):
+                current = directory.lstat()
+                require(stat.S_ISDIR(current.st_mode) and current.st_uid == 0 and current.st_mode & 0o022 == 0
+                        and directory.resolve() == directory.absolute(), 'Native release storage is not a protected canonical directory.')
+            # Prevent ambiguous concurrent preparations; no filesystem quota or
+            # count-based retention restriction applies to native root execution.
+            running = self.run(['systemctl', 'list-units', '--all', '--plain', '--no-legend',
+                                '--state=active,activating,deactivating', 'praxis-stage-*'], timeout=20)
+            require(not running.stdout.strip(), 'A previous candidate unit remains active; recover it before another preparation.')
+            return
         mount = self.staging_mount
         require(mount.is_dir() and not mount.is_symlink() and mount.resolve() == mount.absolute()
                 and os.path.ismount(mount), 'Preparation requires the configured dedicated staging mount.')
@@ -260,13 +286,14 @@ class Host:
         manifest = json.loads(manifest_path.read_text())
         require(manifest.get('version') == 1 and manifest.get('projectId') == 'praxis' and manifest.get('commit') == args['sourceCommit'] and manifest.get('revision') == args['sourceDigest'], 'Release source differs from synchronized Praxis commit.')
         source = export / 'files'
-        entries = safe_tree(source)
+        entries = self.scan(source)
         require(set(entries) == set(manifest['entries']), 'Source export file set changed.')
         for name, value in entries.items():
             expected = manifest['entries'][name]
             require(value['sha256'] == expected['sha256'] and value['bytes'] == expected['size'] and value['mode'] == expected['mode'], 'Source export bytes changed.')
-        for name, expected_hash in self.config.get('protectedFiles', {}).items():
-            require(name in entries and entries[name]['sha256'] == expected_hash, 'Candidate changes protected installed code: ' + name)
+        if not getattr(self, 'native', False):
+            for name, expected_hash in self.config.get('protectedFiles', {}).items():
+                require(name in entries and entries[name]['sha256'] == expected_hash, 'Candidate changes protected installed code: ' + name)
         return source, entries
 
     def prepare(self, operation, args):
@@ -281,7 +308,7 @@ class Host:
         self._own_stage(stage)
         self.stage_unit(operation, 'build', stage,
                         ['/usr/bin/node', str(self.control / 'scripts/release-build.js'), str(stage)], timeout=900, writable=True)
-        built = safe_tree(stage, allow_dependency_links=True)
+        built = self.scan(stage, allow_dependency_links=True)
         source_after = {name: value for name, value in built.items() if name != 'coding-tools.json' and not name.startswith('node_modules/')}
         require(source_after == original, 'Candidate build changed the source being released.')
         tool_path = stage / 'coding-tools.json'
@@ -299,7 +326,7 @@ class Host:
             else:
                 os.chown(path, 0, 0)
                 os.chmod(path, 0o755 if path.is_dir() or path.stat().st_mode & 0o111 else 0o644)
-        sealed = safe_tree(installed, allow_dependency_links=True)
+        sealed = self.scan(installed, allow_dependency_links=True)
         artifact_hash = hashlib.sha256(json.dumps(sealed, sort_keys=True).encode()).hexdigest()
         metadata = {'sourceCommit': args['sourceCommit'], 'artifactSha256': artifact_hash, 'sourceDigest': args['sourceDigest'], 'release': release}
         atomic_json(installed / 'release.json', metadata, mode=0o644)
@@ -312,8 +339,11 @@ class Host:
         self.stage_unit(operation, 'readiness', smoke,
                         ['/usr/bin/node', str(self.control / 'scripts/release-candidate-check.js'), str(installed), str(smoke)], timeout=120)
         require(fingerprints(smoke / 'coding.sqlite', before) == before, 'Candidate readiness changed existing operational data in the disposable compatibility copy.')
+        native = getattr(self, 'native', False)
         value = {**metadata, 'testEvidence': {'npmTestPassed': True, 'authenticatedMcpPassed': True, 'operationalDataPreservedInCopy': True,
-                    'stagingPrivateNetwork': True, 'liveAuthorityAvailable': False}, 'scope': 'Coding application and data-only tool manifest; protected gateway/adapters/updater unchanged.'}
+                    'stagingPrivateNetwork': not native, 'liveAuthorityAvailable': native},
+                 'scope': ('Coding application and tool manifest activation; native root jobs can separately maintain all host components.'
+                           if native else 'Coding application and data-only tool manifest; protected gateway/adapters/updater unchanged.')}
         atomic_json(prepared, value)
         return value
 
@@ -368,7 +398,7 @@ class Host:
     def switch(self, target, operation):
         release = self.release_path(target)
         metadata = json.loads((release / 'release.json').read_text())
-        sealed = safe_tree(release, allow_dependency_links=True)
+        sealed = self.scan(release, allow_dependency_links=True)
         sealed.pop('release.json', None)
         require(hashlib.sha256(json.dumps(sealed, sort_keys=True).encode()).hexdigest() == metadata['artifactSha256'], 'Immutable candidate artifact changed.')
         next_link = self.current.with_name('next-' + operation)
