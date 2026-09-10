@@ -1,7 +1,7 @@
 import express from 'express';
-import { readFileSync, mkdirSync } from 'node:fs';
-import { join, resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { readFileSync, mkdirSync, realpathSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { createMcpHandler } from '@modelcontextprotocol/server';
 import { toNodeHandler } from '@modelcontextprotocol/node';
@@ -113,7 +113,9 @@ export function configFromEnvironment() {
   };
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+let entry = false;
+try { entry = process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url)); } catch {}
+if (entry) {
   const service = await createApp(configFromEnvironment());
   const http = service.app.listen(Number(process.env.PORT || 8790), '127.0.0.1', () => console.log(JSON.stringify({ event: 'listening', version: VERSION })));
   const shutdown = () => { http.close(async () => { await service.close(); process.exit(0); }); setTimeout(() => process.exit(1), 10000).unref(); };
