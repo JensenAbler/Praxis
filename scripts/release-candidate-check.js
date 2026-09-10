@@ -29,6 +29,10 @@ const outboxDirectory = join(directory, 'outbox'), exportDirectory = join(direct
 mkdirSync(outboxDirectory, { recursive: true }); mkdirSync(exportDirectory, { recursive: true });
 const backendConfig = { port, issuer, resourceUrl, publicJwks, dataDirectory: directory, workspaceDirectory: join(directory, 'workspaces'),
   staging: true, release: 'candidate-readiness',
+  // Readiness only reads fixture state. Any accidental execution must fail closed.
+  runnerConfig: { image: `sha256:${'0'.repeat(64)}`, workspaceRoot: join(directory, 'workspaces'),
+    logDirectory: join(directory, 'runner-logs'), storageRoot: join(directory, 'runner-storage'),
+    runRoot: join(directory, 'runner-runtime'), binary: '/usr/bin/false', runtimeBinary: '/usr/bin/false' },
   git: { url: 'http://127.0.0.1:1/call', outboxDirectory, exportDirectory },
   projects: [{ id: 'release-check', name: 'Release checker fixture', revision: 'a'.repeat(40), snapshotPath: source }] };
 const configPath = join(directory, 'candidate.json'); writeFileSync(configPath, JSON.stringify(backendConfig));
