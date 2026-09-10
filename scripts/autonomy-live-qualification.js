@@ -6,7 +6,7 @@ import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/cli
 import { authorize } from './oauth-client.js';
 
 const [phase, stateFile, projectName] = process.argv.slice(2);
-assert.ok(['prepare', 'publish', 'deploy', 'recover'].includes(phase));
+assert.ok(['prepare', 'publish', 'deploy', 'deploy-retry', 'recover'].includes(phase));
 assert.match(projectName || '', /^[a-z][a-z0-9-]{0,39}$/);
 assert.ok(stateFile && process.env.PRAXIS_PASSWORD_FILE && process.env.PRAXIS_CLIENT_STATE);
 const state = existsSync(stateFile) ? JSON.parse(readFileSync(stateFile, 'utf8'))
@@ -117,19 +117,29 @@ try {
     const published = await completedOperation('publish', 'project_publish', { projectId: state.projectId, visibility: 'private',
       commitOperationId: committed.operationId, idempotencyKey: key('publish') });
     state.publishedCommit = published.result.commit; state.publicationOperationId = published.operationId; save();
-  } else if (phase === 'deploy') {
+  } else if (phase === 'deploy' || phase === 'deploy-retry') {
     assert.ok(state.publicationOperationId);
+    const deploymentStep = phase === 'deploy-retry' ? 'deploy-after-staging-fix' : 'deploy';
+    if (phase === 'deploy-retry') {
+      const prior = await call('git_operation_status', { operationId: state.steps.deploy.result.operationId });
+      assert.equal(prior.status, 'failed', 'Explicit repair retry requires a confirmed failed original operation');
+      state.observations.originalDeploymentFailure = prior; save();
+    }
     const before = await call('deployment_status', { projectId: state.projectId });
     state.observations.deploymentBefore ??= before; save();
-    const deployed = await completedOperation('deploy', 'project_deploy', { publicationOperationId: state.publicationOperationId,
-      expectedHead: before.currentHead, preparedDependenciesId: state.preparedDependenciesId, idempotencyKey: key('deploy') });
+    if (phase === 'deploy-retry') assert.equal(before.currentHead, state.observations.deploymentBefore.currentHead,
+      'Application head advanced after the original failure; inspect explicit deployment recovery instead');
+    state.deploymentStep = deploymentStep; save();
+    const deployed = await completedOperation(deploymentStep, 'project_deploy', { publicationOperationId: state.publicationOperationId,
+      expectedHead: before.currentHead, preparedDependenciesId: state.preparedDependenciesId, idempotencyKey: key(deploymentStep) });
     state.deployment = deployed; save();
   }
-  if (phase === 'recover' || phase === 'deploy') {
+  if (['recover', 'deploy', 'deploy-retry'].includes(phase)) {
+    const deploymentStep = state.deploymentStep || 'deploy';
     if (!state.deployment) {
-      const operationId = state.steps.deploy?.result?.operationId;
+      const operationId = state.steps[deploymentStep]?.result?.operationId;
       assert.ok(operationId, 'No deployment ID was saved; resume deploy with the existing state and original idempotency key.');
-      state.deployment = await observeOperation('deploy', operationId); save();
+      state.deployment = await observeOperation(deploymentStep, operationId); save();
     }
     state.observations.workspace = await call('workspace_inspect', { workspaceId: state.workspaceId });
     state.observations.project = await call('project_inspect', { projectId: state.projectId });
@@ -141,7 +151,7 @@ try {
     const body = await response.json();
     assert.deepEqual(body, { message: 'Praxis independent project workflow', dependencyVerified: true });
     state.observations.https = { url, status: response.status, body, observedAt: new Date().toISOString() };
-    for (const label of ['create', 'commit', 'publish', 'deploy']) {
+    for (const label of ['create', 'commit', 'publish', deploymentStep]) {
       const operation = await call('git_operation_status', { operationId: state.steps[label].result.operationId });
       assert.equal(operation.status, 'completed'); state.steps[label].recovered = operation;
     }

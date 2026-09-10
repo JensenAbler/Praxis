@@ -1,0 +1,46 @@
+{
+  "evidenceKind": "authenticated-chatgpt-web-interface",
+  "recordedAt": "2026-09-10T00:22:25Z",
+  "refreshCompletedAt": null,
+  "timestampNote": "The refresh completed before this record was written; its exact completion time was not captured.",
+  "connection": {
+    "name": "Praxis",
+    "appId": "asdk_app_6aa18e1760dc81919cb05f7e2c199665",
+    "endpoint": "https://mcp.jensenabler.com/praxis/mcp",
+    "authorizationUsed": "OAuth",
+    "mode": "development"
+  },
+  "action": "Selected Refresh in the existing connection's Settings Information section after the live v0.5 bootstrap succeeded.",
+  "result": {
+    "refreshCompleted": true,
+    "refreshButtonReenabled": true,
+    "existingConnectionPreserved": true,
+    "reconnected": false,
+    "signedInAgain": false,
+    "criticalToolsObserved": [
+      "project_create",
+      "project_publish",
+      "project_deploy",
+      "dependency_prepare",
+      "production_diagnosis",
+      "production_restart",
+      "deployment_history",
+      "deployment_rollback",
+      "praxis_release_plan",
+      "praxis_release_apply",
+      "praxis_release_status",
+      "praxis_release_history",
+      "praxis_release_rollback"
+    ],
+    "additionalContractChangesObserved": [
+      "job_start advertises registries as an opt-in network mode for public npm/PyPI installs.",
+      "deployment_fast_forward accepts preparedDependenciesId for dependency changes."
+    ]
+  },
+  "scope": {
+    "verified": "ChatGPT's existing connected-plugin settings displayed the refreshed tool metadata in an authenticated browser session.",
+    "nativePhoneRunPerformed": false,
+    "toolsInvokedThroughThisBrowserCheck": false,
+    "limitations": "This check does not establish that a new iPhone conversation has discovered or successfully invoked these tools. Live API qualification is separate evidence."
+  }
+}
