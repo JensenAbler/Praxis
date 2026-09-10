@@ -1,0 +1,247 @@
+{
+  "kind": "native-root-production-migration-and-owner-authenticated-API-acceptance",
+  "passed": true,
+  "nativePhoneRun": false,
+  "sourceCommit": "d75788a6e2e66357bd4d3ee01ade490cc76dc0a1",
+  "applicationRelease": "app-native-d75788a6e2e6",
+  "controlRelease": "d75788a6e2e6",
+  "artifactSha256": "5fb537a58e8a6529c4513aa71ffd84ee940a6640d0e4277681805f4cc6c1253b",
+  "exactSourceQualification": {
+    "pythonTests": {
+      "skipped": 0,
+      "failed": 0,
+      "passed": 157
+    },
+    "qualificationId": "autonomy-d75788a6e2e6-36c76a4569eb",
+    "authenticatedCandidateMcpPassed": true,
+    "scope": "Isolated exact-source Linux tests and inert candidate executor; separate real native execution evidence follows.",
+    "npmTest": {
+      "skipped": 0,
+      "failed": 0,
+      "passed": 200
+    }
+  },
+  "migration": {
+    "previousApplication": "app-5c1b8996c7e2-fb3fad80",
+    "phase": "completed",
+    "nativeService": {
+      "user": "root",
+      "configuredRestrictionsRemoved": true
+    },
+    "authenticatedLiveHealthPassed": true,
+    "historicalStoragePreserved": true,
+    "databaseContentsRestored": false,
+    "previousControl": "b8975385bc4f",
+    "operationId": "04e9a95b-6ccc-4a22-82eb-e87249dab7d8"
+  },
+  "preservation": {
+    "repositories": {
+      "/opt/podcast-discord": "5dc2a1c1863673e118427da7ad31c931647f5fd4",
+      "/opt/podcast-production": "2b5c4273d3f7b249f8626a8575ba79fe0f66c339"
+    },
+    "credentialFilesUnchanged": true,
+    "databaseRowsAndSchemasPreserved": {
+      "coding": true,
+      "git": true,
+      "updater": true
+    },
+    "unchangedServices": {
+      "apocrypha.service": true,
+      "nginx.service": true,
+      "podcast-discord.service": true,
+      "podcast-production.service": true,
+      "praxis-app-p-c87f42bd454c031b-praxis-autonomy-smoke-20260909.service": true,
+      "vps-observer.service": true
+    },
+    "scope": "Compared immediately after migration, before adding native acceptance jobs and host registrations",
+    "productionRepositoriesUnchanged": true,
+    "passed": true
+  },
+  "liveAcceptance": {
+    "backendRestart": {
+      "beforeBootId": "42541c97-fbc1-45cf-a3d7-675dd5ba821d",
+      "afterBootId": "a382b50a-fa2f-4587-b3af-dd06fdd038f2",
+      "restartJobId": "45d5dedd-4f0b-444d-ba39-956001d1f1b3",
+      "heartbeatJobId": "ab181772-4d88-43f9-ab18-ae3e30e97c8a",
+      "heartbeatRecords": 32,
+      "heartbeatSha256": "e316c4e620c3efc241a88ea81d354ff6d36140cd64a6e2fb6be40c9fa5464994",
+      "starts": 1,
+      "completions": 1,
+      "heartbeats": 30,
+      "elapsedSeconds": 30.061201427,
+      "completedAt": "2026-09-10T03:48:26.348Z"
+    },
+    "captures": {
+      "stdout": {
+        "cursor": 2097235,
+        "pages": 9,
+        "expectedBytes": 2097235,
+        "expectedSha256": "bcf24d48dbc8a0d534ac318ea0ec5ba2ed5baa760e96e63151064ee67eb77211",
+        "sha256": "bcf24d48dbc8a0d534ac318ea0ec5ba2ed5baa760e96e63151064ee67eb77211",
+        "complete": true,
+        "completedAt": "2026-09-10T03:46:38.211Z"
+      },
+      "artifact": {
+        "cursor": 2097189,
+        "pages": 65,
+        "expectedBytes": 2097189,
+        "expectedSha256": "d4a6a5c160293ee7f0ac94b89193501ce4f4ca3405a6ee625bace8b1f79fe873",
+        "sha256": "d4a6a5c160293ee7f0ac94b89193501ce4f4ca3405a6ee625bace8b1f79fe873",
+        "complete": true,
+        "completedAt": "2026-09-10T03:47:42.217Z"
+      }
+    },
+    "dependencyInstall": {
+      "uid": 0,
+      "cwd": "/var/lib/praxis-root/acceptance/7db4ef94-b0cd-4e39-a164-7b3ad4f7632c",
+      "home": "/var/lib/praxis-root/home",
+      "customEnvironment": true,
+      "cache": "/var/lib/praxis-root/home/.npm",
+      "packageVersion": "7.0.0"
+    },
+    "jobs": [
+      {
+        "terminationReason": "exit",
+        "jobId": "0872e850-085f-4e48-9f12-1f075e9e8f66",
+        "status": "completed",
+        "label": "create",
+        "timeoutSeconds": 0,
+        "exitCode": 0
+      },
+      {
+        "terminationReason": "exit",
+        "jobId": "47556b72-e39b-4365-b5e8-f3bbae65d779",
+        "status": "completed",
+        "label": "install",
+        "timeoutSeconds": 0,
+        "exitCode": 0
+      },
+      {
+        "terminationReason": "exit",
+        "jobId": "29fc42d3-bba8-4b16-9c21-f8dc977e4e3e",
+        "status": "completed",
+        "label": "large-output",
+        "timeoutSeconds": 0,
+        "exitCode": 0
+      },
+      {
+        "terminationReason": "exit",
+        "jobId": "ab181772-4d88-43f9-ab18-ae3e30e97c8a",
+        "status": "completed",
+        "label": "heartbeat",
+        "timeoutSeconds": 0,
+        "exitCode": 0
+      },
+      {
+        "terminationReason": "exit",
+        "jobId": "45d5dedd-4f0b-444d-ba39-956001d1f1b3",
+        "status": "completed",
+        "label": "restart",
+        "timeoutSeconds": 0,
+        "exitCode": 0
+      },
+      {
+        "terminationReason": "cancelled",
+        "jobId": "b94d1d28-f9f4-43fc-be1d-acd1668e8dbd",
+        "status": "cancelled",
+        "label": "cancel-worker",
+        "timeoutSeconds": 0,
+        "exitCode": null
+      },
+      {
+        "terminationReason": "timeout",
+        "jobId": "872dccc7-6ff6-40f5-b642-3c764f9cfad8",
+        "status": "timed_out",
+        "label": "deadline",
+        "timeoutSeconds": 2,
+        "exitCode": null
+      }
+    ],
+    "resume": "One prepare invocation reached its client time budget during artifact pagination. The same state, job IDs, keys and cursor resumed successfully; no commands were restarted.",
+    "freshClientRecovery": {
+      "observedAt": "2026-09-10T03:50:56.512Z",
+      "freshClient": true,
+      "release": "app-native-d75788a6e2e6",
+      "bootId": "a382b50a-fa2f-4587-b3af-dd06fdd038f2",
+      "jobIds": {
+        "create": "0872e850-085f-4e48-9f12-1f075e9e8f66",
+        "install": "47556b72-e39b-4365-b5e8-f3bbae65d779",
+        "large-output": "29fc42d3-bba8-4b16-9c21-f8dc977e4e3e",
+        "heartbeat": "ab181772-4d88-43f9-ab18-ae3e30e97c8a",
+        "restart": "45d5dedd-4f0b-444d-ba39-956001d1f1b3"
+      },
+      "artifactSha256": "d4a6a5c160293ee7f0ac94b89193501ce4f4ca3405a6ee625bace8b1f79fe873",
+      "stdoutSha256": "bcf24d48dbc8a0d534ac318ea0ec5ba2ed5baa760e96e63151064ee67eb77211",
+      "heartbeatSha256": "e316c4e620c3efc241a88ea81d354ff6d36140cd64a6e2fb6be40c9fa5464994"
+    },
+    "hostProjectId": "dc0dbd3a-f900-4892-9150-54c570559f5c",
+    "startedAt": "2026-09-10T03:46:13.973Z",
+    "execution": {
+      "runtime": "native-root:linux:x64:node-22.22.0",
+      "user": "root",
+      "network": "ordinary host networking",
+      "containers": false,
+      "home": "/var/lib/praxis-root/home",
+      "jobsDirectory": "/var/lib/praxis-root/jobs",
+      "defaultTimeoutSeconds": 0,
+      "maxTimeoutSeconds": null,
+      "maxActiveJobs": null,
+      "resourceLimits": "No Praxis CPU, memory, process-count or storage quota. Host capacity and explicitly requested job deadlines apply.",
+      "persistence": "Independent systemd units supervise each native worker. Persistent homes/caches and job files survive client/backend restarts. Ambiguous executions are never relaunched automatically.",
+      "output": "Complete stdout/stderr and ordered event files remain on disk without retention-size truncation. job_status/job_logs provide bounded indexed excerpts; use rawLogs paths with host tools for full output."
+    },
+    "completedAt": "2026-09-10T03:50:56.516Z",
+    "fileChecks": {
+      "hiddenFileWritePatchRead": true,
+      "literalSearch": true,
+      "binaryRoundTrip": true
+    },
+    "runId": "7db4ef94-b0cd-4e39-a164-7b3ad4f7632c"
+  },
+  "projectDiscovery": {
+    "privateEpisodeContentPublished": false,
+    "registrations": [
+      {
+        "hostProjectId": "6109436a-6872-411b-8378-13b16e0b485a",
+        "path": "/opt/podcast-discord",
+        "dataRoots": {
+          "content": "/opt/clawcast-network/content",
+          "episodePlans": "/opt/clawcast-network/content/episode-plans",
+          "logs": "/tmp",
+          "recordings": "/opt/clawcast-network/content/recordings"
+        },
+        "name": "podcast-discord"
+      },
+      {
+        "hostProjectId": "65f7fb2e-c194-42a5-9b0b-366522d73e6e",
+        "path": "/srv/praxis-app/current",
+        "dataRoots": {
+          "control": "/srv/praxis-control/current",
+          "home": "/var/lib/praxis-root/home",
+          "jobs": "/var/lib/praxis-root/jobs",
+          "state": "/var/lib/praxis-code/live"
+        },
+        "name": "Praxis"
+      }
+    ],
+    "productionLogMetadataReadable": true,
+    "recordingsDirectoryListed": true
+  },
+  "chatGptConnection": {
+    "descriptionUpdated": true,
+    "toolDefinitionsRefreshed": true,
+    "phoneRun": false,
+    "authenticatedApiToolCount": 58,
+    "observedHostFileAndProjectTools": true,
+    "observedNativeJobDescription": true
+  },
+  "relatedEvidence": [
+    "native-root-runner.json",
+    "native-root-migration-fixtures.json"
+  ],
+  "limitsOfEvidence": [
+    "Synthetic acceptance establishes native execution and persisted recovery, not live Discord/provider behavior.",
+    "Original container histories and unrelated applications were preserved; Praxis now executes new coding jobs natively.",
+    "The installed application source is the stated d75788a commit; the final documentation and owner acceptance script are published separately."
+  ]
+}

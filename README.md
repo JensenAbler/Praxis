@@ -4,7 +4,7 @@ Praxis gives conversational models a persistent computer they can use to build s
 
 **Version 0.6.0 makes native root access on Alpha the primary workflow.** Agents work directly with host projects and absolute paths, run ordinary commands with host networking, and recover jobs from later conversations. There is no container, filesystem allowlist, registry proxy, command allowlist, or Praxis resource quota in native mode. Files, package caches, and complete command logs persist on the host.
 
-**Rollout status:** the native implementation is being qualified. This document does not yet claim a completed 0.6 production deployment or phone run. The preceding verified application release is `app-5c1b8996c7e2-fb3fad80`; its [0.5 evidence](docs/evidence/autonomy-v05-live.json) records API-driven project creation, dependency installation, publication, deployment, self-update, and fresh-client recovery.
+**Rollout status:** native release `app-native-d75788a6e2e6` is live on Alpha. [Recorded acceptance](docs/evidence/native-root-live.json) covers root execution, normal dependency installation, complete output/artifact recovery, cancellation, deadlines, and a job surviving a live backend restart. Existing production services and historical database contents were preserved. ChatGPT's existing Praxis connection has refreshed tool definitions; a new native iPhone task has not yet been run.
 
 Endpoint: **https://mcp.jensenabler.com/praxis/mcp**
 

@@ -2,7 +2,7 @@
 
 Praxis 0.6 uses native root jobs and direct host files as its primary interface to Alpha. The owner requested full host access so a conversational model can build projects, diagnose production, install dependencies, publish changes, and maintain Praxis without a separate Codex operator.
 
-**Qualification status:** implementation and local fixtures are available. Native Linux qualification, authenticated deployment evidence, and a native phone run must be recorded separately. This document does not establish that those milestones have completed.
+**Qualification status:** `app-native-d75788a6e2e6` is deployed on Alpha. Exact-source Linux qualification passed 200 Node tests, 157 Python tests, and authenticated MCP checks. Separate real systemd tests and [owner-authenticated live acceptance](evidence/native-root-live.json) passed, including backend restart survival and fresh-client recovery. ChatGPT's Praxis tool definitions were refreshed. A new native iPhone task remains untested.
 
 ## Projects and paths
 
@@ -27,6 +27,8 @@ For example, attach existing directories with:
 The same name and paths returns the existing registration. A name already pointing elsewhere requires `replace: true` to change it. This updates discovery only; it does not move files or change Git state.
 
 Host file calls accept either an absolute `path`, or `hostProjectId` with a project-relative `path`. Add `dataRoot` to resolve relative paths from a named data directory. Parent paths and symlinks resolve normally; attached directories are not access boundaries. Native commands can also use an absolute `cwd` without any registration.
+
+Alpha now has discoverable `podcast-discord` and `Praxis` host registrations. The podcast registration points to the deployed source and names its content, recordings, episode plans, and log directories. The Praxis registration points to the installed application and names its control, state, job, and home directories. These are live directories; registration does not create a development copy. An agent can create an ordinary Git checkout wherever appropriate and attach it separately.
 
 ## File tools
 

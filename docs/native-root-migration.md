@@ -38,4 +38,4 @@ python3 QUALIFIED_TREE/deploy/migrate-native-root.py recover PRIVATE_BACKUP
 
 Recovery completes a confirmed activation without repeating jobs, or restores an unfinished migration while it still owns admission and no work is active. It refuses to restore over a later operation. Newly prepared files remain available for diagnosis. Do not retry `apply` against an existing release target or restore a database snapshot over subsequently accepted work.
 
-These are implementation and qualification instructions. They do not by themselves claim an actual production migration or a native iPhone run has completed.
+The initial migration completed on 2026-09-10 UTC with application `app-native-d75788a6e2e6` and control `d75788a6e2e6`. [Live evidence](evidence/native-root-live.json) records authenticated startup, preservation checks, native commands, and restart recovery. The migration retained historical storage and unrelated services; it did not delete Docker or other applications' containers. A native iPhone task has not yet been run.
