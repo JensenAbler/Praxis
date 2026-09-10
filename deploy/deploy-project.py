@@ -288,7 +288,12 @@ class ProjectDeployment:
             module = importlib.util.module_from_spec(specification)
             loader.exec_module(module)
             adapter = module.Deployment
-        worker = adapter(repository=files, state=self.state, expected_uid=self.expected_uid)
+        # Keep extraction beside this pending release, not on the separate
+        # journal bind mount; Linux rename rejects moves across bind mounts even
+        # when both paths report the same underlying st_dev.
+        dependency_state = files.parent / '.dependency-state'
+        worker = adapter(repository=files, state=self.state, dependency_state=dependency_state,
+                         expected_uid=self.expected_uid)
         def hashes(_commit):
             return {key: hashlib.sha256((files / name).read_bytes()).hexdigest() if (files / name).exists() else None
                     for name, key in [('package.json', 'packageJsonSha256'), ('package-lock.json', 'packageLockSha256'),
@@ -296,7 +301,7 @@ class ProjectDeployment:
         worker._dependency_manifest_hashes = hashes
         try:
             worker._prepare_dependencies(record)
-            os.rename(self.state / (record['operationId'] + '.dependencies') / 'node_modules', files / 'node_modules')
+            os.rename(dependency_state / (record['operationId'] + '.dependencies') / 'node_modules', files / 'node_modules')
         except Exception as error:
             if getattr(error, 'code', '').startswith('DEPENDENC'):
                 raise ProjectDeploymentError(error.code, str(error)) from None

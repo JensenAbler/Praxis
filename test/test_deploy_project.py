@@ -1,5 +1,6 @@
 """Fixed new-project deployer fixtures: no real services, nginx or candidate execution."""
 import hashlib
+import errno
 import io
 import importlib.util
 import json
@@ -9,6 +10,7 @@ import tempfile
 import subprocess
 import tarfile
 import unittest
+from unittest.mock import patch
 import uuid
 
 SPEC = importlib.util.spec_from_file_location('deploy_project', Path(__file__).resolve().parents[1] / 'deploy/deploy-project.py')
@@ -310,9 +312,20 @@ class ProjectTests(unittest.TestCase):
             'packageLockSha256': hashlib.sha256(lock.encode()).hexdigest(), 'shrinkwrapSha256': None,
             'platform': 'linux', 'arch': 'x64', 'nodeMajor': int(node)}))
         request['preparedDependenciesId'] = artifact
+        rename = os.rename
+        renamed = []
+
+        def mounted_rename(source, destination):
+            source, destination = Path(source), Path(destination)
+            if source.is_relative_to(self.worker.state) != destination.is_relative_to(self.worker.state):
+                raise OSError(errno.EXDEV, 'fixture: distinct journal and application bind mounts')
+            renamed.append((source, destination))
+            return rename(source, destination)
+
         previous = os.umask(0o077)
         try:
-            result = self.worker.handle(request)
+            with patch.object(deployment.os, 'rename', side_effect=mounted_rename):
+                result = self.worker.handle(request)
         finally:
             os.umask(previous)
         self.assertEqual(result['phase'], 'completed', result)
@@ -320,6 +333,13 @@ class ProjectTests(unittest.TestCase):
         self.assertEqual(modules.stat().st_mode & 0o777, 0o755)
         self.assertEqual((modules / 'example').stat().st_mode & 0o777, 0o755)
         self.assertEqual((modules / 'example/index.js').stat().st_mode & 0o777, 0o644)
+        self.assertEqual(len(renamed), 2)
+        self.assertTrue(all(source.is_relative_to(self.worker.applications) and destination.is_relative_to(self.worker.applications)
+                            for source, destination in renamed))
+        private = modules.parent.parent / '.dependency-state'
+        self.assertEqual(private.stat().st_mode & 0o777, 0o700)
+        self.assertTrue((private / (request['operationId'] + '.dependencies') / 'ready.json').is_file())
+        self.assertFalse((self.worker.state / (request['operationId'] + '.dependencies')).exists())
 
 
 class ValidationTests(unittest.TestCase):

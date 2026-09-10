@@ -94,7 +94,7 @@ class Deployment:
 
     def __init__(self, repository=REPOSITORY, state=STATE, origin=ORIGIN,
                  unit=UNIT, expected_uid=0, grace_seconds=5, log_path=LOG,
-                 dependencies=DEPENDENCIES, dependency_uid=None):
+                 dependencies=DEPENDENCIES, dependency_uid=None, dependency_state=None):
         self.repository = Path(repository)
         self.state = Path(state)
         self.origin = origin
@@ -105,6 +105,10 @@ class Deployment:
         self.log_path = Path(log_path)
         self.dependencies = Path(dependencies)
         self.dependency_uid = dependency_uid
+        # State journals are on a separate systemd bind mount. Every dependency
+        # rename, including rollback snapshots, must stay on the repository mount.
+        self.dependency_state = (Path(dependency_state) if dependency_state is not None else
+                                 self.repository / '.git' / 'praxis-deployment-dependencies')
 
     def _trusted_path(self, path, directory=False, private=False):
         path = Path(path)
@@ -330,11 +334,29 @@ class Deployment:
             raise DeploymentError('DEPENDENCIES_UNTRUSTED', 'A prepared dependency artifact is unsafe or oversized.')
         return os.fdopen(fd, 'rb')
 
+    def _ensure_dependency_state(self):
+        self._trusted_path(self.repository, directory=True)
+        self._trusted_path(self.dependency_state.parent, directory=True)
+        self.dependency_state.mkdir(mode=0o700, exist_ok=True)
+        self._trusted_path(self.dependency_state, directory=True, private=True)
+
+    def _check_legacy_dependency_storage(self, *operation_ids):
+        # Never relocate old stages or rollback snapshots implicitly. Their
+        # durable operations may have stopped between the two activation renames.
+        for operation_id in operation_ids:
+            for suffix in ('.dependencies', '.previous-dependencies'):
+                legacy = self.state / (operation_id + suffix)
+                if legacy.exists() or legacy.is_symlink():
+                    raise DeploymentError('DEPENDENCIES_STORAGE_LEGACY',
+                        'An older dependency stage is preserved; protected migration is required before this operation can resume.')
+
     def _prepare_dependencies(self, record):
         artifact = record.get('preparedDependenciesId')
         if not artifact:
             return
-        stage = self.state / (record['operationId'] + '.dependencies')
+        self._check_legacy_dependency_storage(record['operationId'])
+        self._ensure_dependency_state()
+        stage = self.dependency_state / (record['operationId'] + '.dependencies')
         ready = stage / 'ready.json'
         if ready.exists():
             self._trusted_path(stage, directory=True, private=True)
@@ -456,10 +478,12 @@ class Deployment:
     def _dependency_activation(self, record):
         if not record.get('preparedDependenciesId') and not record.get('restoreDependenciesFrom'):
             return
-        target_stage = (self.state / (record['operationId'] + '.dependencies') / 'node_modules'
+        self._check_legacy_dependency_storage(record['operationId'], *([record['restoreDependenciesFrom']] if record.get('restoreDependenciesFrom') else []))
+        self._ensure_dependency_state()
+        target_stage = (self.dependency_state / (record['operationId'] + '.dependencies') / 'node_modules'
                         if record.get('preparedDependenciesId') else
-                        self.state / (record['restoreDependenciesFrom'] + '.previous-dependencies'))
-        previous = self.state / (record['operationId'] + '.previous-dependencies')
+                        self.dependency_state / (record['restoreDependenciesFrom'] + '.previous-dependencies'))
+        previous = self.dependency_state / (record['operationId'] + '.previous-dependencies')
         current = self.repository / 'node_modules'
         restore_empty = record.get('restoreDependenciesEmpty', False)
         if record['phase'] == 'checkout_updated':
@@ -564,11 +588,15 @@ class Deployment:
             return self._save(record, 'uncertain', error={'code': 'DEPLOYMENT_DRIFT',
                               'message': 'Checkout changed after its recorded update; no restart was attempted.'})
         if record['phase'] in ('dependencies_intent', 'dependencies_previous_saved', 'dependencies_updated'):
+            try:
+                self._check_legacy_dependency_storage(record['operationId'], *([record['restoreDependenciesFrom']] if record.get('restoreDependenciesFrom') else []))
+            except DeploymentError as error:
+                return self._save(record, 'uncertain', error={'code': error.code, 'message': str(error)})
             current = self.repository / 'node_modules'
-            previous = self.state / (record['operationId'] + '.previous-dependencies')
-            target = (self.state / (record['operationId'] + '.dependencies') / 'node_modules'
+            previous = self.dependency_state / (record['operationId'] + '.previous-dependencies')
+            target = (self.dependency_state / (record['operationId'] + '.dependencies') / 'node_modules'
                       if record.get('preparedDependenciesId') else
-                      self.state / (record['restoreDependenciesFrom'] + '.previous-dependencies'))
+                      self.dependency_state / (record['restoreDependenciesFrom'] + '.previous-dependencies'))
             clean = head == record['targetCommit'] and self._clean()
             restored_empty = record.get('restoreDependenciesEmpty', False)
             prior_saved = previous.exists() if record['dependencyHadPrevious'] else not previous.exists()
@@ -710,7 +738,8 @@ class Deployment:
                     if key in request:
                         record[key] = request[key]
                 if source and source.get('preparedDependenciesId'):
-                    previous_dependencies = self.state / (source['operationId'] + '.previous-dependencies')
+                    self._check_legacy_dependency_storage(source['operationId'])
+                    previous_dependencies = self.dependency_state / (source['operationId'] + '.previous-dependencies')
                     if source.get('dependencyHadPrevious'):
                         if not previous_dependencies.exists():
                             raise DeploymentError('DEPENDENCIES_ROLLBACK_UNAVAILABLE', 'The recorded previous dependency tree is no longer retained.')

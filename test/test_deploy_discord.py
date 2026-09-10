@@ -4,6 +4,7 @@ Run on Linux: python3 -m unittest discover -s test -p test_deploy_discord.py
 No production repository, network credential, or actual service is used.
 """
 import importlib.util
+import errno
 import datetime
 import hashlib
 import io
@@ -15,6 +16,7 @@ import tempfile
 import tarfile
 import time
 import unittest
+from unittest.mock import patch
 import uuid
 
 SPEC = importlib.util.spec_from_file_location('deploy_discord', Path(__file__).resolve().parents[1] / 'deploy' / 'deploy-discord.py')
@@ -517,6 +519,61 @@ class DeploymentTests(unittest.TestCase):
             json.dumps({'scripts': {'install': 'touch ' + str(marker)}}).encode(), None)])
         self.assertEqual(self.worker.handle(request)['phase'], 'completed')
         self.assertFalse(marker.exists())
+
+    def test_dependency_activation_and_rollback_do_not_cross_journal_bind_mount(self):
+        modules = self.repo / 'node_modules'
+        modules.mkdir()
+        (modules / 'old.js').write_text('old dependency')
+        request = self.dependency_request()
+        rename = os.rename
+        renamed = []
+
+        def mounted_rename(source, destination):
+            source, destination = Path(source), Path(destination)
+            if source.is_relative_to(self.worker.state) != destination.is_relative_to(self.worker.state):
+                raise OSError(errno.EXDEV, 'fixture: distinct journal and repository bind mounts')
+            renamed.append((source, destination))
+            return rename(source, destination)
+
+        with patch.object(deployment.os, 'rename', side_effect=mounted_rename):
+            self.assertEqual(self.worker.handle(request)['phase'], 'completed')
+            rollback = {'action': 'rollback', 'operationId': str(uuid.uuid4()), 'expectedHead': request['targetCommit'],
+                        'deploymentOperationId': request['operationId']}
+            self.assertEqual(self.worker.handle(rollback)['phase'], 'completed')
+        self.assertEqual(len(renamed), 4)
+        self.assertTrue(all(source.is_relative_to(self.repo) and destination.is_relative_to(self.repo)
+                            for source, destination in renamed))
+        self.assertEqual(self.worker.dependency_state, self.repo / '.git/praxis-deployment-dependencies')
+        self.assertEqual(self.worker.dependency_state.stat().st_mode & 0o777, 0o700)
+        self.assertEqual((modules / 'old.js').read_text(), 'old dependency')
+        self.assertEqual(git(self.repo, 'status', '--porcelain'), '')
+
+    def test_legacy_dependency_stage_is_preserved_and_blocks_implicit_migration(self):
+        request = self.dependency_request()
+        self.worker.state.mkdir(mode=0o700)
+        legacy = self.worker.state / (request['operationId'] + '.dependencies')
+        legacy.mkdir(mode=0o700)
+        (legacy / 'evidence').write_text('preserve exact earlier staging')
+        result = self.worker.handle(request)
+        self.assertEqual(result['error']['code'], 'DEPENDENCIES_STORAGE_LEGACY')
+        self.assertEqual((legacy / 'evidence').read_text(), 'preserve exact earlier staging')
+        self.assertEqual(git(self.repo, 'rev-parse', 'HEAD'), self.base)
+        self.assertEqual(self.worker.restart_count, 0)
+
+    def test_dependency_storage_refuses_symlink_or_shared_directory(self):
+        for symlink in (False, True):
+            with self.subTest(symlink=symlink):
+                request = self.dependency_request()
+                path = self.worker.dependency_state
+                if symlink:
+                    path.rmdir()
+                    path.symlink_to(self.root / 'dependencies', target_is_directory=True)
+                else:
+                    path.mkdir(mode=0o755)
+                result = self.worker.handle(request)
+                self.assertEqual(result['error']['code'], 'UNTRUSTED_PATH')
+                self.assertEqual(git(self.repo, 'rev-parse', 'HEAD'), self.base)
+                self.assertEqual(self.worker.restart_count, 0)
 
     def test_dependency_manifest_and_runtime_mismatches_block_checkout(self):
         for changes in ({'packageJsonSha256': '0' * 64}, {'nodeMajor': 999}, {'arch': 'arm64'}):
