@@ -1,5 +1,11 @@
 # Praxis
 
+## Required source workflow
+
+Required source workflow: recover the registered project and existing Praxis workspaces; sync main and create a managed workspace only when a fresh base is needed. Make source changes and run checks inside that Praxis workspace, review the diff, then commit and push from that workspace. Fast-forward the registered deployment on Alpha to the published commit and verify it. Do not edit deployed source in place or create ad hoc clones, repositories, or worktrees under /opt or elsewhere. Create a new repository only when the user explicitly requests one; a request to fix or improve an existing project is not that authorization. This workflow applies to Praxis itself. Native root access remains available for read-only diagnosis and authorized operations; it does not waive the source workflow.
+
+This owner requirement supersedes earlier instructions that describe direct host source editing as the primary workflow. Root access is an execution capability, not permission to bypass workspace provenance.
+
 The owner now explicitly authorizes native root access on Alpha: remove container execution and the previous filesystem, networking, production-inspection, and host-administration restrictions. Implement supervised native processes, persistent homes/caches, ordinary networking and dependency installation, and generic project/host access to source and operational data. This supersedes the earlier sandbox and protected-adapter-only requirements. The existing probe remains a bounded regression fixture.
 
 - Keep the probe's built-in heartbeat tools bounded. Owner-authenticated native commands run as root with normal host access; do not recreate the removed restrictions in another layer.

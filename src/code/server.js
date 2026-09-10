@@ -1,4 +1,5 @@
 import express from 'express';
+import { SOURCE_WORKFLOW, SOURCE_WORKFLOW_STEPS } from '../workflow-policy.js';
 import { mkdirSync, readFileSync, realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
@@ -69,6 +70,7 @@ export async function createCodingService(config) {
         scope: 'Registered immutable source snapshots and isolated coding workspaces. ChatGPT or Claude supplies reasoning.',
         workflow: ['projects_list', 'project_inspect', 'workspace_create', 'file_read/code_search', 'workspace_apply', 'job_start', 'job_status/job_logs', 'workspace_diff'],
         recovery: 'Use workspaces_list, jobs_list, and operations_list in a fresh conversation. Keep the same idempotency key and inputs after uncertain responses. A terminal or ambiguous command is never automatically rerun.',
+        sourceWorkflow: { policy: SOURCE_WORKFLOW, enforcement: 'Required agent workflow; native root commands are not an OS sandbox and can technically bypass it.' },
         usage: {
           sourceFreshness: "Run project_sync before creating a workspace when you need current GitHub main, and inspect its completed sync receipt. Existing workspaces retain their immutable base and cannot be rebased in place; create a new workspace from the fresh snapshot to reconcile newer source.",
           pagination: 'Omit optional page sizes initially. Copy nextCursor exactly; cursors are opaque and may not equal the number of returned rows. Diff maxBytes is a byte budget, while list/log limits count records.',
@@ -89,7 +91,7 @@ export async function createCodingService(config) {
         publication: git ? { defaultBranch: 'main', projects: config.git.projectIds || ['discord'],
           newProjects: { templates: ['node', 'python', 'static'], defaultVisibility: 'private',
             workflow: ['project_create', 'git_operation_status', 'workspace_create', 'edit/check/review', 'git_commit', 'git_operation_status', 'project_publish', 'git_operation_status'],
-            authorization: 'Local creation needs only the configured project broker. GitHub repository creation additionally requires a protected provisioning credential; GITHUB_SETUP_REQUIRED means local coding is still available.' },
+            authorization: 'Create a new local or GitHub repository only when explicitly requested by the user. Existing-project work uses its managed workspace. GitHub creation additionally requires the configured provisioning credential.' },
           workflow: ['project_sync', 'git_operation_status', 'workspace_create', 'edit/check/review', 'git_commit', 'git_operation_status', 'git_push', 'git_operation_status', 'deployment_status', 'deployment_fast_forward', 'git_operation_status'],
           recovery: 'Each write returns a durable operationId. Poll git_operation_status until terminal. Commit captures the exact idle workspace revision; push publishes that commit with an expected remote-head precondition. Remote conflicts require source reconciliation. Recover uncertain operations; do not recreate them.',
           deployment: 'Podcast-discord supports exact-main fast-forward, matched npm dependency bundles, operational diagnosis, recorded restart and rollback. Owner-created projects deploy as stateless Node/Python/static HTTP services on a separate origin, with at most five apps and bounded resources. Production observations distinguish process health, recorded login and live provider behavior.' } : { enabled: false },
@@ -107,11 +109,11 @@ export async function createCodingService(config) {
         ],
         ...(native ? {
           scope: 'Owner-authenticated native root access to Alpha. No containers, filesystem allowlists, registry proxy, command allowlist, or production-content redaction in host tools.',
-          workflow: ['host_projects_list', 'host_files_list/host_file_read/host_search', 'host_file_patch or job_start', 'job_status/job_logs', 'review with native git diff', 'native git commit/push and deployment commands'],
+          workflow: SOURCE_WORKFLOW_STEPS,
           hostAccess: { user: 'root', filesystem: 'All host paths; projects and named data roots are discovery shortcuts, not access boundaries.',
             commands: 'Use job_start with hostProjectId or any absolute cwd. Shells, Git, SSH, systemctl, database tools, browser automation and normal package managers may run as native host programs.',
             content: 'Logs, transcripts, recordings, images and generated results are accessible through generic host tools, including hidden files and symlinks. No content is redacted.',
-            projects: 'Use host_project_attach for any existing directory or create one using a native command. No project templates or registration are required for host execution.' },
+            projects: 'Use host_project_attach for discovery of existing deployment/data directories. Source development requires a managed Praxis workspace. A new repository requires an explicit user request; do not create ad hoc clones or worktrees.' },
           execution: { runtime: runner.executionIdentity, user: 'root', network: 'ordinary host networking', containers: false,
             home: runner.homeDirectory, jobsDirectory: runner.jobsDirectory, defaultTimeoutSeconds: 0, maxTimeoutSeconds: null, maxActiveJobs: null,
             resourceLimits: 'No Praxis CPU, memory, process-count or storage quota. Host capacity and explicitly requested job deadlines apply.',
@@ -120,13 +122,13 @@ export async function createCodingService(config) {
           dependencies: { registryAccessEnabled: true, preparationEnabled: Boolean(config.dependencyDirectory),
             workflow: 'Use ordinary npm, pip, apt, Git or other installers with host networking and persistent caches. Private registries and Git dependencies are available with installed owner credentials. Existing dependency_prepare is an optional provenance/publishing convenience.',
             persistentHome: runner.homeDirectory },
-          selfImprovement: { enabled: true, boundary: 'Native root jobs can maintain every Praxis component, including gateway, coding tools, configuration, authentication, deployment helpers and updater.',
+          selfImprovement: { enabled: true, boundary: 'Praxis source changes follow the same managed workspace, review, commit and push workflow. Activate only the published revision through the release procedure; native root access supports diagnosis and authorized operations.',
             recovery: 'Preserve a working release and durable job records when changing the service. The existing release tools remain a convenient staged activation path; they are not an authority boundary.' },
           limits: { requestBytes: 524288, resultPages: 'Bounded pages keep tool responses usable; they do not limit file size, total raw logs or host access.',
             indexedJobExcerpts: { headBytes: CODE_JOB_LIMITS.logBytes, tailBytes: CODE_JOB_LIMITS.tailBytes },
             compatibilityWorkspaces: 'Immutable workspace/export tools retain their source-snapshot semantics. Direct host tools and commands are unrestricted and support live files of any size.' },
           disabled: [],
-          recovery: 'Use host_projects_list and jobs_list in a fresh conversation. Inspect job_status before repeating work; preserve the original key and inputs after uncertainty. Native raw logs remain on disk. Root jobs can diagnose and maintain the control services directly.'
+          recovery: 'Use projects_list, workspaces_list and jobs_list to recover source work; use host_projects_list for operational data. Inspect job_status before repeating work and preserve keys after uncertainty. Native raw logs remain on disk.'
         } : {})
       } : await (() => {
         if (tool.target === 'host' && !native) throw new WorkspaceError('NATIVE_EXECUTION_REQUIRED', 'Host access requires the native-root service. This compatibility instance only serves workspace tools.');

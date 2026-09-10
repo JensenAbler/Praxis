@@ -444,3 +444,25 @@ test('authenticated native host workflow exposes live project files and root job
   assert.equal((await call(fresh, 'host_projects_list')).projects[0].hostProjectId, attached.hostProjectId);
   assert.equal((await call(fresh, 'jobs_list', { hostProjectId: attached.hostProjectId })).jobs[0].id, job.id);
 });
+
+test('authenticated native clients receive the required workspace workflow at initialization, discovery and capability reads', async t => {
+  const f = await fixture(t, { native: true });
+  const client = await f.connect();
+  const instructions = client.getInstructions();
+  assert.match(instructions, /commit and push from that workspace/);
+  assert.match(instructions, /new repository only when the user explicitly requests/);
+  assert.match(instructions, /This workflow applies to Praxis itself/);
+  const caps = await call(client, 'capabilities');
+  assert.match(caps.sourceWorkflow.policy, /Do not edit deployed source in place/);
+  assert.match(caps.sourceWorkflow.enforcement, /not an OS sandbox/);
+  assert.equal(caps.workflow[0], 'projects_list/workspaces_list');
+  assert.ok(caps.workflow.indexOf('git_commit') < caps.workflow.indexOf('git_push'));
+  assert.equal(caps.execution.user, 'root');
+  const { tools } = await client.listTools();
+  for (const name of ['job_start', 'host_file_write', 'host_file_patch']) {
+    assert.match(tools.find(tool => tool.name === name).description, /managed Praxis workspace/);
+  }
+  for (const name of ['project_create', 'project_publish']) {
+    assert.match(tools.find(tool => tool.name === name).description, /user explicitly requests a new repository/);
+  }
+});

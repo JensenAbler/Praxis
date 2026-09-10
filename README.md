@@ -2,21 +2,23 @@
 
 Praxis gives conversational models a persistent computer they can use to build software, publish it, operate production services, and improve Praxis itself. ChatGPT or Claude supplies the reasoning; Praxis supplies remote MCP tools and durable execution. Development happens in this public repository.
 
-**Version 0.6.0 makes native root access on Alpha the primary workflow.** Agents work directly with host projects and absolute paths, run ordinary commands with host networking, and recover jobs from later conversations. There is no container, filesystem allowlist, registry proxy, command allowlist, or Praxis resource quota in native mode. Files, package caches, and complete command logs persist on the host.
+**Source development uses managed Praxis workspaces.** Required source workflow: recover the registered project and existing Praxis workspaces; sync main and create a managed workspace only when a fresh base is needed. Make source changes and run checks inside that Praxis workspace, review the diff, then commit and push from that workspace. Fast-forward the registered deployment on Alpha to the published commit and verify it. Do not edit deployed source in place or create ad hoc clones, repositories, or worktrees under /opt or elsewhere. Create a new repository only when the user explicitly requests one; a request to fix or improve an existing project is not that authorization. This workflow applies to Praxis itself. Native root access remains available for read-only diagnosis and authorized operations; it does not waive the source workflow.
+
+Version 0.6.0 provides native root execution with ordinary host networking and durable jobs. There is no container, filesystem allowlist, registry proxy, command allowlist, or Praxis resource quota in native mode. Files, package caches, and complete command logs persist on the host.
 
 **Rollout status:** native release `app-native-d75788a6e2e6` is live on Alpha. [Recorded acceptance](docs/evidence/native-root-live.json) covers root execution, normal dependency installation, complete output/artifact recovery, cancellation, deadlines, and a job surviving a live backend restart. Existing production services and historical database contents were preserved. ChatGPT's existing Praxis connection has refreshed tool definitions; a new native iPhone task has not yet been run.
 
 Endpoint: **https://mcp.jensenabler.com/praxis/mcp**
 
-## Work directly on the host
+## Managed source work and host operations
 
-Start with `capabilities` and `host_projects_list`. Use `host_project_attach` to save an existing project directory and optional named data roots, such as recordings or logs. Attachment is a discovery shortcut; native commands also accept any absolute working directory without a project registration.
+Start with `capabilities`, `projects_list`, and `workspaces_list` for source work. Use `host_projects_list` for live operational data. Use `host_project_attach` to save an existing project directory and optional named data roots, such as recordings or logs. Attachment is a discovery shortcut; native commands also accept any absolute working directory without a project registration.
 
 The host tools cover directory discovery, metadata, text and binary reads, literal search, writes, and exact-text patches. They follow symlinks and include hidden files, Git metadata, environment files, logs, transcripts, recordings, and generated assets. Reads are paginated so large files fit into tool responses. Files are live, and optional SHA-256 preconditions help detect intervening changes.
 
 Use `job_start` for commands such as tests, `npm`, `pip`, Git, SSH, service operations, or installed browser automation. Jobs run as root, support concurrency, and continue independently of the MCP backend and phone connection. `timeoutSeconds: 0`, the native default, means no deadline. Each submission returns a durable ID; `job_status` provides the outcome and recent output. Its `rawLogs` paths expose complete stdout, stderr, and ordered events through the host file tools.
 
-Git publication and deployment can use ordinary host commands and existing credentials. The default publication target remains `main`. Native jobs can maintain every Praxis component, including its gateway, authentication, configuration, tool server, deployment helpers, and updater. See [the native workflow and recovery contract](docs/native-root.md).
+Commit and push the reviewed managed workspace through the Git publication tools. Fast-forward the deployment to that published commit; do not develop in the deployment checkout. The default publication target remains `main`. Native jobs can maintain every Praxis component, including its gateway, authentication, configuration, tool server, deployment helpers, and updater. See [the native workflow and recovery contract](docs/native-root.md).
 
 ## Recover an existing task
 
@@ -26,7 +28,7 @@ Indexed log pages are compact excerpts. For details beyond those excerpts, use `
 
 ## Compatibility workflows and evidence
 
-Immutable source snapshots and workspace tools remain available for historical replays or work that benefits from an explicit base revision. Their existing source and snapshot rules still apply. Direct host paths are the primary workflow for live files and unrestricted project work.
+Immutable source snapshots and managed workspace tools are the required source-development workflow, including for Praxis itself. Direct host paths support operational diagnosis and authorized runtime maintenance.
 
 The previous [project creation](docs/new-projects.md), [deployment](docs/new-project-deployment.md), [production recovery](docs/production-recovery.md), and [staged self-update](docs/self-improvement.md) adapters remain optional conveniences. Their adapter-specific assumptions describe those workflows, not the extent of native root access. Ordinary native dependency installation does not require a sealed bundle; `dependency_prepare` remains useful when a compatible deployment adapter needs package provenance.
 

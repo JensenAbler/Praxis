@@ -1,4 +1,5 @@
 import { randomUUID, createHash } from 'node:crypto';
+import { SOURCE_WORKFLOW } from './workflow-policy.js';
 import { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import { codeTools, parseArguments } from './code/schema.js';
@@ -16,7 +17,7 @@ export function createProbeServer({ jobs, audit, resourceUrl, bootId, release, a
   if (owner !== 'jensen') throw new Error('Authenticated owner required');
   const server = new McpServer({ name: 'Praxis', version: coding ? '0.6.0' : VERSION }, {
     instructions: coding
-      ? 'Praxis supplies tools; you supply reasoning. Start with capabilities and host_projects_list. On native-root releases, job_start runs ordinary host commands as root with persistent home/caches and full networking, filesystem and service access. Use a hostProjectId or absolute cwd; projects and data roots are discovery shortcuts, not access boundaries. Read source, logs, transcripts, recordings and generated results with host_file_read/host_search, and edit with host_file_patch or native commands. Use normal package managers, Git commit/push to main and deployment commands. Native root jobs can maintain every Praxis component. Existing immutable workspace and registered publication/release tools remain optional conveniences with their documented snapshot semantics. Copy returned cursors, prefer compact job_status and targeted log reads; complete native raw logs remain at the paths in job_status. Retain IDs and idempotency keys across conversations and never recreate ambiguously completed work. Tool schema changes require refreshing client connection metadata and starting a new conversation. Probe tools remain bounded diagnostics.'
+      ? SOURCE_WORKFLOW + ' Start with capabilities, projects_list and workspaces_list. Read logs, recordings and live state with host tools. Jobs run as native root with ordinary networking and persistent caches. Preserve IDs and idempotency keys after uncertainty; inspect job_status before repeating work. Complete raw logs remain recoverable. Refresh client connection metadata after tool changes. Probe tools remain bounded diagnostics.'
       : 'This is an isolated diagnostic fixture. Call probe_capabilities first. Start only a bounded heartbeat job using a unique idempotencyKey, save its job ID, and inspect it through probe_job_status/logs. In a fresh conversation, probe_jobs_list recovers existing jobs. These tools provide no source access, arbitrary commands, production access, or model execution. Never recreate a job merely because a response was lost; repeat the same idempotency key or list existing jobs. Results describe only this fixture.'
   });
   const register = (name, title, description, inputSchema, handler, readOnly = true, destructive = false, scope = SCOPE) => {
