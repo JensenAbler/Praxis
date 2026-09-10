@@ -1,0 +1,112 @@
+{
+  "version": 1,
+  "kind": "owner executor image build, real offline container fixture, and production configuration activation",
+  "reason": "The development image lacked ssh-keygen, which prevented the real deploy-key creation and recovery test from running during Praxis self-validation.",
+  "image": {
+    "baseDigest": "sha256:a807793c27f53bf93480fc3dcfe73b2ab1b6bdf8b3aa1aca820118fd43767170",
+    "testedDigest": "sha256:22195be39c8e4c9301004271f1699c1e7f1b975f593e159ba6bc6fd25c12e96b",
+    "requestedPackage": "openssh-client",
+    "observedPackageVersion": "1:9.2p1-2+deb12u10",
+    "observedNodeVersion": "v22.23.2"
+  },
+  "build": {
+    "passed": true,
+    "kind": "owner-authorized rootless Podman build",
+    "recipe": "FROM sha256:a807793c27f53bf93480fc3dcfe73b2ab1b6bdf8b3aa1aca820118fd43767170\nRUN apt-get update && apt-get install -y --no-install-recommends openssh-client && rm -rf /var/lib/apt/lists/*\n",
+    "recipeSha256": "ca4e9440c307d3dbbf9743d44fec3df5c45d153120d4fc0224468804ac688c5e",
+    "recipeScope": "Private owner overlay; no tracked image recipe or self-update workspace files were changed.",
+    "reproducibility": "The exact base image must already exist in the rootless image store. Package repositories were not snapshot-pinned, so later builds may resolve different package versions. The tested digest identifies the resulting image used here.",
+    "baseImagePullPolicy": "never",
+    "packageNetwork": "Package installation used the base image's configured Debian repositories during this owner build.",
+    "ordinaryJobNetworkPolicyChanged": false,
+    "hostCredentialsPassed": false,
+    "environmentCleared": true,
+    "productionPathsMasked": true,
+    "storage": "Existing dedicated hard-capped executor filesystem",
+    "memoryLimitBytes": 1610612736,
+    "swapLimitBytes": 0,
+    "cpuQuotaPercent": 100,
+    "taskLimit": 256,
+    "runtimeLimitSeconds": 900
+  },
+  "offlineFixture": {
+    "kind": "actual rootless container; direct runtime fixture, not authenticated MCP",
+    "passed": true,
+    "attempt": 2,
+    "imageDigest": "sha256:22195be39c8e4c9301004271f1699c1e7f1b975f593e159ba6bc6fd25c12e96b",
+    "uid": 993,
+    "rootFilesystemReadOnly": true,
+    "network": "none",
+    "capabilitiesDropped": "ALL",
+    "noNewPrivileges": true,
+    "hostDataBindMounts": false,
+    "temporaryKeyStorage": "Disposable container tmpfs",
+    "containerRuntimeLimitSeconds": 120,
+    "enclosingUnitRuntimeLimitSeconds": 180,
+    "memoryLimitBytes": 1610612736,
+    "swapLimitBytes": 0,
+    "cpuQuotaPercent": 100,
+    "taskLimit": 256,
+    "keyType": "ssh-ed25519",
+    "keyGenerationPassed": true,
+    "recoveredPublicKeyMatchedGeneratedPublicKey": true,
+    "privateKeyMode": "0600",
+    "sampledProductionCredentialFilesReadable": false,
+    "privateKeyMaterialPublished": false,
+    "firstAttempt": {
+      "result": "Fixture assertion error; original failure evidence preserved.",
+      "keyGenerationAndRecoveryAssertionsPassedBeforeFailure": true,
+      "failure": "Python Path.exists raised PermissionError while checking an inaccessible protected directory.",
+      "correction": "A separate fixture attempt used a readability check that treats denied access as inaccessible. Its package-version query also avoided service-manager environment expansion.",
+      "imageRebuiltForRetry": false
+    }
+  },
+  "activation": {
+    "kind": "owner maintenance on the production coding service",
+    "completed": true,
+    "newImageDigest": "sha256:22195be39c8e4c9301004271f1699c1e7f1b975f593e159ba6bc6fd25c12e96b",
+    "applicationReleaseAtActivation": "app-bootstrap-ceaefce00923",
+    "onlyConfigurationFieldChanged": "runnerConfig.image",
+    "configurationOwner": "root",
+    "configurationGroup": "praxis-code",
+    "configurationMode": "0640",
+    "configurationBackedUp": true,
+    "admissionFencedDuringMaintenance": true,
+    "noActiveCodingJobsPreparedEditsGitOperationsOrReleaseOperationsBeforeChange": true,
+    "restartedServices": [
+      "praxis-code.service"
+    ],
+    "admissionReopenedAfterHealthAndPreservationChecks": true,
+    "authenticatedHealth": {
+      "attempt": 1,
+      "exitCode": 0,
+      "authenticatedMcpPassed": true,
+      "recoveryToolsPresent": true,
+      "sourceRead": true,
+      "persistedJobStatusRead": true,
+      "invalidAuthorizationRejected": true
+    },
+    "preservation": {
+      "passed": true,
+      "baseline": "Fresh online SQLite backups and metadata captured immediately before this image-only activation.",
+      "codingTablesCompared": 12,
+      "gitTablesCompared": 2,
+      "updaterTablesCompared": 1,
+      "existingRowsAndSchemasUnchanged": true,
+      "newDatabaseRowsAllowedInComparison": false,
+      "excludedEphemeralTables": [
+        "code_runner_lock"
+      ],
+      "oauthAndProtectedGitUpdaterFilesUnchanged": true,
+      "comparedProductionRepositoryHeadsUnchanged": true,
+      "comparedOtherManagedServiceIdentitiesUnchanged": true,
+      "applicationAndControlPointersUnchanged": true,
+      "allOtherCodingConfigurationFieldsUnchanged": true
+    }
+  },
+  "notEstablishedByThisEvidence": [
+    "A complete passing Praxis self-validation suite on the new image",
+    "A completed Praxis self-update",
+    "A native iPhone run using the new image"
+  ]
+}

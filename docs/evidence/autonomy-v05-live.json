@@ -1,0 +1,506 @@
+{
+  "version": 1,
+  "kind": "owner-authenticated-api-and-owner-bootstrap-live-evidence",
+  "milestone": "Praxis 0.5 autonomy",
+  "recordedAt": "2026-09-10T01:01:18.660Z",
+  "nativePhoneRun": false,
+  "scope": "Completed owner-authenticated API workflows, including independent Praxis application publication, preparation, activation and fresh-client recovery, plus separately qualified owner bootstrap/control maintenance. Native iPhone 0.5 acceptance and an actual self-rollback have not been run.",
+  "installedRelease": {
+    "application": "app-5c1b8996c7e2-fb3fad80",
+    "applicationSourceCommit": "5c1b8996c7e252c82b4a001c2b37f72051698729",
+    "control": "b8975385bc4f",
+    "controlSourceCommit": "b8975385bc4f2325291d984a742b8bb52ba1b591"
+  },
+  "exactControlQualification": {
+    "sourceCommit": "b8975385bc4f2325291d984a742b8bb52ba1b591",
+    "artifactSha256": "68c5798f6918fdab2fe7397abab799df468331d78b7a2a51a9b75fa897ca68ad",
+    "node": {
+      "kind": "isolated Linux test suite",
+      "command": "npm test",
+      "tests": 169,
+      "passed": 169,
+      "failed": 0,
+      "exitCode": 0
+    },
+    "python": {
+      "kind": "isolated owner-root Linux helper fixtures; simulated production effects",
+      "command": "python3 -m unittest discover -s test -p test_*.py",
+      "tests": 142,
+      "passed": 142,
+      "failed": 0,
+      "durationSeconds": 28.506,
+      "exitCode": 0,
+      "logSha256": "024ab02aaed81b731f32edeee7ed5e7f2cf332c9c40579c817371c9ee052da08"
+    },
+    "authenticatedCandidateMcpPassed": true,
+    "provenance": "Exact-source qualified artifact acceptance and saved test results; distinct from the real API jobs below."
+  },
+  "ownerActivation": {
+    "initialBootstrap": {
+      "sourceCommit": "3c9dd86433ee41f4941add780c18a09c1f1e741e",
+      "outcome": "failed-and-restored",
+      "cause": "Gateway bootstrap guard interaction required correction; prior configuration and service activation were restored."
+    },
+    "correctedBootstrap": {
+      "sourceCommit": "ceaefce00923cddc029ff04121ceaa24b30d3059",
+      "outcome": "completed",
+      "applicationRelease": "app-bootstrap-ceaefce00923",
+      "controlRelease": "control-ceaefce00923",
+      "candidateTestsPassed": true,
+      "authenticatedCandidateMcpPassed": true,
+      "authenticatedLiveMcpPassed": true,
+      "preservation": {
+        "codingTablesChecked": 10,
+        "gitTablesChecked": 1,
+        "existingRowsPreserved": true,
+        "credentialsPreserved": true,
+        "unrelatedProductionRevisionsAndServicesPreserved": true
+      }
+    },
+    "protectedHelperMaintenance": {
+      "sourceCommit": "b8975385bc4f2325291d984a742b8bb52ba1b591",
+      "outcome": "completed",
+      "controlRelease": "b8975385bc4f",
+      "applicationRelease": "app-bootstrap-ceaefce00923",
+      "applicationPointerAndCodingReleaseUnchanged": true,
+      "purpose": "Stage dependencies on each deployment filesystem before atomic rename; repair the cross-mount deployment failure.",
+      "preservation": {
+        "codingTablesChecked": 12,
+        "gitTablesChecked": 2,
+        "changedExistingTables": 0,
+        "existingRowsPreserved": true,
+        "credentialsPreserved": true,
+        "unrelatedProductionRevisionsAndServicesPreserved": true
+      },
+      "databaseRestorePerformed": false
+    },
+    "provenance": "Owner-controlled bootstrap, rollback, maintenance and preservation receipts. Database row contents and private storage locations are omitted."
+  },
+  "newProject": {
+    "kind": "owner-authenticated-API-live-fixture",
+    "projectId": "p-c87f42bd454c031b-praxis-autonomy-smoke-20260909",
+    "template": "node",
+    "workspaceId": "faebf567-e540-490e-80a2-a02de9dbef0e",
+    "repositoryVisibility": "private",
+    "branch": "main",
+    "publishedCommit": "b3ced31cd6fecbe29231cf7e2daac647f3443ab8",
+    "validatedRevision": "53fe40a10c2cad7197d51b1d08c238a1140542cc08f562cbe184ced4aa99a52d",
+    "create": {
+      "operationId": "7e81470a-9087-4436-b626-21f54dc27221",
+      "status": "completed",
+      "phase": "completed",
+      "completedAt": "2026-09-10T00:14:43.831Z"
+    },
+    "workspaceCreation": {
+      "operationId": "74818fa2-7b21-4cc8-adb1-20856488c149",
+      "status": "completed",
+      "completedAt": "2026-09-10T00:14:44.897Z"
+    },
+    "sourceEdit": {
+      "operationId": "11b98712-58e2-4370-814f-97b4e02abec0",
+      "status": "completed",
+      "completedAt": "2026-09-10T00:14:51.272Z"
+    },
+    "commit": {
+      "operationId": "ae4aaba8-d89f-40fe-bc9c-3a66181af680",
+      "status": "completed",
+      "phase": "completed",
+      "completedAt": "2026-09-10T00:15:24.308Z"
+    },
+    "publication": {
+      "operationId": "d96dc555-dd30-4b49-8095-2a7fb4ee820f",
+      "status": "completed",
+      "phase": "completed",
+      "completedAt": "2026-09-10T00:15:31.625Z"
+    },
+    "dependencyInstall": {
+      "jobId": "95c599dc-ce7e-4a54-9db3-345d7475a805",
+      "status": "completed",
+      "exitCode": 0,
+      "network": "registries",
+      "revisionAfter": "d52b005c9298c660d4b0afcc1ae3197e6505912b84140f9832197180d9eeebd4",
+      "completedAt": "2026-09-09T17:14:47.847096149-07:00",
+      "package": "is-number@7.0.0",
+      "isolatedDevelopment": true
+    },
+    "offlineValidation": {
+      "jobId": "17663f83-e759-41c3-882f-9a41d71b1059",
+      "status": "completed",
+      "exitCode": 0,
+      "network": "none",
+      "revisionAfter": "53fe40a10c2cad7197d51b1d08c238a1140542cc08f562cbe184ced4aa99a52d",
+      "completedAt": "2026-09-09T17:14:52.741136621-07:00",
+      "tests": 2,
+      "passed": 2,
+      "failed": 0
+    },
+    "dependencyPreparation": {
+      "jobId": "7f246d71-7d16-4745-b947-77b0994d2e42",
+      "status": "completed",
+      "exitCode": 0,
+      "network": "none",
+      "revisionAfter": "53fe40a10c2cad7197d51b1d08c238a1140542cc08f562cbe184ced4aa99a52d",
+      "completedAt": "2026-09-09T17:14:54.942154851-07:00",
+      "preparedDependenciesId": "4b5133611b100fde6876a9c60f188ed05051fb0403ec831d06bab8ab885dd23d",
+      "archiveBytes": 20480,
+      "packageJsonSha256": "c8658a83af1529e10f39af14f118cde2cebf49591618e278655fc1ca1a96d5fc",
+      "packageLockSha256": "39c1959768a33f01a588fa04346d284fe2c4e9fa6d36ad59c93bf68c41db69db",
+      "platform": "linux",
+      "arch": "x64",
+      "nodeVersion": "v22.23.2",
+      "imageDigest": "sha256:a807793c27f53bf93480fc3dcfe73b2ab1b6bdf8b3aa1aca820118fd43767170"
+    },
+    "initialDeployment": {
+      "operationId": "befca047-fde2-45df-b8bb-92394dc0b5c9",
+      "status": "failed",
+      "phase": "deploy_intent",
+      "completedAt": "2026-09-10T00:16:05.130Z",
+      "helperStatus": "failed",
+      "helperErrorCode": "DEPLOYMENT_IO_FAILED",
+      "cause": "Cross-filesystem rename during dependency staging; the failed receipt was retained.",
+      "repeatPolicy": "The original failed operation was not restarted. After inspecting the known failed result and repairing the helper, the operator submitted a separate deployment operation with a new idempotency key."
+    },
+    "successfulDeployment": {
+      "operationId": "3d9757c6-42a9-4e38-b4f7-5e3d512a3be5",
+      "status": "completed",
+      "phase": "completed",
+      "completedAt": "2026-09-10T00:32:29.601Z",
+      "targetCommit": "b3ced31cd6fecbe29231cf7e2daac647f3443ab8",
+      "processState": "active",
+      "processSubstate": "running",
+      "helperHealth": {
+        "kind": "https-healthz-and-process-stability",
+        "observedSeconds": 3
+      }
+    },
+    "directHttps": {
+      "observedAt": "2026-09-10T00:34:24.455Z",
+      "status": 200,
+      "response": {
+        "message": "Praxis independent project workflow",
+        "dependencyVerified": true
+      },
+      "normalCertificateAndHostnameVerification": true,
+      "dns": "The local Windows/Wi-Fi resolver retained NXDOMAIN for the new app hostname. This process used Cloudflare public DNS for that hostname while normal TLS verification remained enabled; no additional DNS zone change was made."
+    },
+    "freshClientRecovery": {
+      "completedAt": "2026-09-10T00:34:25.841Z",
+      "separateOAuthClient": true,
+      "recovered": [
+        "workspace",
+        "project",
+        "completed creation/commit/publication/deployment receipts",
+        "dependency bundle",
+        "live HTTPS response"
+      ],
+      "mutationJobsRecreated": false,
+      "limitations": "Fresh authenticated API-client recovery; not a native-phone conversation."
+    }
+  },
+  "productionDiagnosis": {
+    "observedAt": "2026-09-10T00:15:40.502Z",
+    "kind": "authenticated read-only production_diagnosis and deployment_history",
+    "projectId": "discord",
+    "currentHead": "5f6a212646f6fbe95b99135a2f918f9edc54eb90",
+    "clean": true,
+    "process": {
+      "state": "active",
+      "substate": "running",
+      "pid": 3633052,
+      "invocationId": "ebc9b9014c2240278c58abebca9d18c6",
+      "restarts": 0
+    },
+    "currentProcessPreservedByRollout": true,
+    "health": {
+      "processRunning": true,
+      "discordLoginObservedForCurrentInvocation": true,
+      "discordLoginObservedAt": "2026-09-09T22:16:12.732Z",
+      "discordConnectionVerified": false,
+      "voiceRecordingAndProviderBehaviorVerified": false
+    },
+    "operationalLogs": {
+      "available": true,
+      "redaction": "operational-event-allowlist",
+      "eventsReturned": 10
+    },
+    "existingDeploymentHistory": [
+      {
+        "operationId": "a6911d92-93c2-42a7-9b85-acda6c7df217",
+        "targetCommit": "5f6a212646f6fbe95b99135a2f918f9edc54eb90",
+        "phase": "completed",
+        "completedAt": "2026-09-09T22:16:14.245832+00:00"
+      }
+    ],
+    "newBotRestartPerformed": false,
+    "newBotRollbackPerformed": false,
+    "limitation": "An active process and historical login event do not establish present Discord connectivity, live voice recording, or provider behavior. Restart/rollback behavior remains separately covered by fixtures."
+  },
+  "apiDiscovery": {
+    "observedAt": "2026-09-10T00:20:31.546Z",
+    "advertisedToolCount": 50,
+    "limitation": "Authenticated API discovery is separate from refreshing the existing ChatGPT web connection."
+  },
+  "selfUpdate": {
+    "status": "completed",
+    "evidenceKind": "owner-authenticated-API-self-update",
+    "orchestration": "Owner-operated authenticated API client; source edits, sandbox commands, Git publication and application activation were performed through Praxis tools.",
+    "successfulActivationEstablished": true,
+    "nativePhoneRun": false,
+    "selfRollbackPerformed": false,
+    "baseCommit": "b8975385bc4f2325291d984a742b8bb52ba1b591",
+    "sourceCommit": "5c1b8996c7e252c82b4a001c2b37f72051698729",
+    "workspaceId": "c935d113-7932-4309-b13a-4f9be440bf6d",
+    "validatedRevision": "5386449bd53129a30344885627e8a180468cf78d5fb2afa4d1a62c06d08dc569",
+    "change": "Add source freshness guidance to capabilities, explaining project_sync and immutable workspace bases.",
+    "sourceReview": {
+      "changedPaths": [
+        "src/code/server.js"
+      ],
+      "sourceFileSha256": "3f33b82217887252b483d64674801411d03003d40d48884b8b926c51c51d96ec",
+      "diffBytes": 1473,
+      "diffSha256": "493e548c3da1435d22c662e116316684e0de76568931fd85419510315ed61a40",
+      "completePinnedDiffRead": true,
+      "protectedSourceChanged": false
+    },
+    "initialSync": {
+      "operationId": "1c1628f9-56af-4339-8263-19a0e1869a39",
+      "status": "completed",
+      "phase": "completed",
+      "createdAt": "2026-09-10T00:34:52.379Z",
+      "completedAt": "2026-09-10T00:34:57.429Z",
+      "result": {
+        "exportId": "1c1628f9-56af-4339-8263-19a0e1869a39",
+        "commit": "b8975385bc4f2325291d984a742b8bb52ba1b591",
+        "revision": "052629ff23341b36518613f02d1e7318d938e3ecd7013aba7952d9eab4d8b102",
+        "branch": "main"
+      }
+    },
+    "workspaceCreation": {
+      "operationId": "6e8eed1e-56da-479c-9f02-3545fc13821f",
+      "status": "completed"
+    },
+    "sourceEdit": {
+      "operationId": "e98a67d5-7f04-44fb-8bd7-13f0207f57bf",
+      "status": "completed"
+    },
+    "dependencyInstall": {
+      "jobId": "955e64d9-f04c-4fbc-8881-613a3df8a4c8",
+      "status": "completed",
+      "exitCode": 0,
+      "network": "registries"
+    },
+    "firstValidation": {
+      "jobId": "43bd1aae-42af-498f-9d97-93aecc9c3bdb",
+      "status": "failed",
+      "exitCode": 1,
+      "network": "none",
+      "tests": 169,
+      "passed": 168,
+      "failed": 1,
+      "skipped": 0,
+      "cause": "The development executor image omitted ssh-keygen, causing a Git provisioning fixture failure.",
+      "originalFailedJobPreserved": true
+    },
+    "executorRepair": {
+      "kind": "Separate owner-controlled immutable image qualification and activation",
+      "oldImage": "sha256:a807793c27f53bf93480fc3dcfe73b2ab1b6bdf8b3aa1aca820118fd43767170",
+      "newImage": "sha256:22195be39c8e4c9301004271f1699c1e7f1b975f593e159ba6bc6fd25c12e96b",
+      "addedPackage": "openssh-client",
+      "ordinaryJobNetworkPolicyChanged": false,
+      "details": "docs/evidence/autonomy-v05-executor-ssh.json"
+    },
+    "successfulValidation": {
+      "jobId": "38b774bb-879d-4328-9a02-183797fde2f5",
+      "status": "completed",
+      "exitCode": 0,
+      "network": "none",
+      "imageDigest": "sha256:22195be39c8e4c9301004271f1699c1e7f1b975f593e159ba6bc6fd25c12e96b",
+      "expectedRevision": "5386449bd53129a30344885627e8a180468cf78d5fb2afa4d1a62c06d08dc569",
+      "revisionAfter": "5386449bd53129a30344885627e8a180468cf78d5fb2afa4d1a62c06d08dc569",
+      "revisionVerified": true,
+      "tests": 169,
+      "passed": 169,
+      "failed": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "durationMilliseconds": 46186.237196,
+      "completedAt": "2026-09-09T17:56:19.738423017-07:00",
+      "outputBytes": 46274,
+      "completeOriginalOutput": true,
+      "explicitNewJobAfterImageRepair": true,
+      "originalFailedJobRerun": false
+    },
+    "publication": {
+      "branch": "main",
+      "commit": {
+        "operationId": "a35367e5-773e-415a-a477-c103997299fd",
+        "status": "completed",
+        "phase": "completed",
+        "createdAt": "2026-09-10T00:56:53.013Z",
+        "completedAt": "2026-09-10T00:56:57.582Z",
+        "result": {
+          "commit": "5c1b8996c7e252c82b4a001c2b37f72051698729",
+          "parentCommit": "b8975385bc4f2325291d984a742b8bb52ba1b591",
+          "revision": "5386449bd53129a30344885627e8a180468cf78d5fb2afa4d1a62c06d08dc569",
+          "branch": "main",
+          "expectedRemoteHead": "b8975385bc4f2325291d984a742b8bb52ba1b591"
+        }
+      },
+      "push": {
+        "operationId": "68f32cad-bea9-4252-a612-3e2046249bdb",
+        "status": "completed",
+        "phase": "completed",
+        "createdAt": "2026-09-10T00:56:57.977Z",
+        "completedAt": "2026-09-10T00:57:02.779Z",
+        "result": {
+          "commit": "5c1b8996c7e252c82b4a001c2b37f72051698729",
+          "parentCommit": "b8975385bc4f2325291d984a742b8bb52ba1b591",
+          "revision": "5386449bd53129a30344885627e8a180468cf78d5fb2afa4d1a62c06d08dc569",
+          "branch": "main",
+          "expectedRemoteHead": "b8975385bc4f2325291d984a742b8bb52ba1b591",
+          "publishedCommit": "5c1b8996c7e252c82b4a001c2b37f72051698729",
+          "observedRemoteHead": "5c1b8996c7e252c82b4a001c2b37f72051698729",
+          "alreadyPublished": false
+        }
+      },
+      "freshSync": {
+        "operationId": "6ca36375-7044-4e4d-826d-4ea7bc4f6fc3",
+        "status": "completed",
+        "phase": "completed",
+        "createdAt": "2026-09-10T00:57:16.375Z",
+        "completedAt": "2026-09-10T00:57:21.083Z",
+        "result": {
+          "exportId": "6ca36375-7044-4e4d-826d-4ea7bc4f6fc3",
+          "commit": "5c1b8996c7e252c82b4a001c2b37f72051698729",
+          "revision": "5386449bd53129a30344885627e8a180468cf78d5fb2afa4d1a62c06d08dc569",
+          "branch": "main"
+        }
+      }
+    },
+    "readyPlan": {
+      "operationId": "fb3fad80-f361-5b96-b249-6d1894398923",
+      "status": "ready",
+      "phase": "tested",
+      "createdAt": "2026-09-10T00:57:21.740662+00:00",
+      "readyAt": "2026-09-10T00:58:10.915514+00:00",
+      "sourceCommit": "5c1b8996c7e252c82b4a001c2b37f72051698729",
+      "sourceDigest": "5386449bd53129a30344885627e8a180468cf78d5fb2afa4d1a62c06d08dc569",
+      "artifactSha256": "6dc5e8dc3fa4f4b26666565a1d5cb52cea6644663369d3c21a88407d54e53ab3",
+      "planDigest": "d4098f62ab1bb8748b1d3a444f870a06fd7b71dc10bb8a207d8199f4ab11a2eb",
+      "expectedRelease": "app-bootstrap-ceaefce00923",
+      "preparedRelease": "app-5c1b8996c7e2-fb3fad80",
+      "testEvidence": {
+        "npmTestPassed": true,
+        "authenticatedMcpPassed": true,
+        "operationalDataPreservedInCopy": true,
+        "stagingPrivateNetwork": true,
+        "liveAuthorityAvailable": false
+      },
+      "scope": "Coding application and data-only tool manifest; protected gateway/adapters/updater unchanged."
+    },
+    "activation": {
+      "operationId": "17f420c5-32fe-5c60-8ddf-4fc3083dbfbd",
+      "status": "completed",
+      "phase": "completed",
+      "createdAt": "2026-09-10T00:58:43.755855+00:00",
+      "completedAt": "2026-09-10T00:58:47.321041+00:00",
+      "previousRelease": "app-bootstrap-ceaefce00923",
+      "applicationRelease": "app-5c1b8996c7e2-fb3fad80",
+      "sourceCommit": "5c1b8996c7e252c82b4a001c2b37f72051698729",
+      "databaseRestorePerformed": false,
+      "authenticatedHealth": {
+        "ok": true,
+        "release": "app-5c1b8996c7e2-fb3fad80",
+        "authenticatedMcpPassed": true,
+        "recoveryToolsPresent": true,
+        "sourceRead": true,
+        "jobStatusRead": true,
+        "invalidAuthorizationRejected": true
+      },
+      "protectedControlRelease": "b8975385bc4f",
+      "protectedControlUnchanged": true
+    },
+    "freshClientRecovery": {
+      "status": "completed",
+      "completedAt": "2026-09-10T00:59:07.933Z",
+      "separateOAuthClient": true,
+      "recovered": [
+        "activeRelease",
+        "release-plan",
+        "release-apply",
+        "workspace",
+        "install",
+        "validate",
+        "validate-with-ssh-client",
+        "sync-base",
+        "commit",
+        "push",
+        "sync-published",
+        "workspace-receipt",
+        "edit-receipt",
+        "capabilities"
+      ],
+      "unavailable": [],
+      "readOnly": true,
+      "mutationJobsRecreated": false,
+      "observedApplicationRelease": "app-5c1b8996c7e2-fb3fad80",
+      "observedSourceFreshness": "Run project_sync before creating a workspace when you need current GitHub main, and inspect its completed sync receipt. Existing workspaces retain their immutable base and cannot be rebased in place; create a new workspace from the fresh snapshot to reconcile newer source.",
+      "originalFailedValidationStillReportedFailed": true,
+      "newValidationStillReportedCompleted": true
+    },
+    "ownerPreservationCheck": {
+      "passed": true,
+      "baseline": "Immediately before independent application activation",
+      "databasesCompared": [
+        "coding",
+        "Git",
+        "updater"
+      ],
+      "existingOperationalDataPreserved": true,
+      "changedProtectedServices": [],
+      "changedProtectedPointers": [],
+      "changedProtectedMetadata": [],
+      "expectedChangesAllowed": [
+        "Coding application release pointer",
+        "Coding release configuration",
+        "Coding backend service identity"
+      ],
+      "protectedScope": "Gateway, Git/deployment authority, updater policy, credentials and unrelated services remained unchanged. The application and coding-service changes were expected.",
+      "provenance": "Owner-run before/after preservation comparison; private paths and database row values are omitted."
+    },
+    "localOperatorClientRegression": {
+      "kind": "Local Windows regression suite, separate from candidate Linux execution",
+      "parentCommit": "b8975385bc4f2325291d984a742b8bb52ba1b591",
+      "sourceContext": "Parent source plus guarded explicit validation-retry client changes",
+      "tests": 173,
+      "passed": 171,
+      "failed": 0,
+      "skipped": 2,
+      "skipPlatform": "Windows",
+      "limitation": "These 173 local tests are not the candidate Linux job count; the actual candidate job passed 169 tests with no skips."
+    },
+    "remainingAcceptance": [
+      "Native iPhone use of the expanded 0.5 workflow",
+      "Actual independent self-rollback"
+    ],
+    "limitation": "One successful owner API self-update and fresh-client recovery are established. This does not establish a native iPhone run, host-loss recovery, arbitrary privileged self-modification, or a performed self-rollback."
+  },
+  "relatedEvidence": [
+    {
+      "file": "docs/evidence/autonomy-v05-chatgpt-refresh.json",
+      "scope": "Existing ChatGPT web connection metadata refresh; separate from API-client execution"
+    },
+    {
+      "file": "docs/evidence/autonomy-v05-qualification.json",
+      "scope": "Earlier isolated qualification, including its original source revisions and limitations"
+    },
+    {
+      "file": "docs/evidence/autonomy-v05-dependency-executor.json",
+      "scope": "Separate real rootless executor npm/PyPI and network-boundary fixture"
+    },
+    {
+      "file": "docs/evidence/autonomy-v05-executor-ssh.json",
+      "scope": "Separate owner image repair and activation; successful subsequent self-validation and self-update are recorded here."
+    }
+  ]
+}

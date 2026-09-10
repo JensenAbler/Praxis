@@ -137,9 +137,19 @@ export class SelfUpdateQualification {
     this.state.observations.diff = pages; this.state.diffSha256 = sha256(text); this.save();
   }
   async prepare() {
+    const validationStep = this.state.validationStep || 'validate';
+    const validationRetry = validationStep !== 'validate';
+    if (validationRetry) {
+      assert.match(validationStep, /^validate-[a-z0-9]+(?:-[a-z0-9]+)*$/, 'An explicit validation retry needs a dedicated validate-<suffix> label');
+      assert.ok(validationStep.length <= 96, 'Validation retry label is too long');
+      assert.ok(typeof this.state.validationImage === 'string' && this.state.validationImage.length > 0,
+        'An explicit validation retry must select the corrected executor image');
+    }
     const caps = await this.call('capabilities');
     assert.equal(caps.dependencies?.registryAccessEnabled, true);
     assert.equal(caps.selfImprovement?.enabled, true);
+    if (this.state.validationImage) assert.equal(caps.execution?.imageDigest, this.state.validationImage,
+      'The explicitly selected validation image has not been activated');
     this.state.observations.capabilitiesBefore ??= caps; this.save();
     const synced = await this.operation('sync-base', 'project_sync', async () => ({ projectId: 'praxis', idempotencyKey: this.key('sync-base') }));
     assert.match(synced.result.commit, /^[a-f0-9]{40}$/);
@@ -170,13 +180,45 @@ export class SelfUpdateQualification {
       network: 'registries', env: { CI: 'true', NODE_ENV: 'test' }, timeoutSeconds: 900,
       label: 'Install Praxis test dependencies', idempotencyKey: this.key('install') }));
     assert.equal(installed.revisionAfter, edited.result.revision, 'npm ci unexpectedly changed tracked source');
-    const tested = await this.job('validate', async () => ({ workspaceId: this.state.workspaceId,
+    const validationArgs = { workspaceId: this.state.workspaceId,
       expectedRevision: installed.revisionAfter, argv: ['npm', 'test'], network: 'none', env: { CI: 'true', NODE_ENV: 'test' },
-      timeoutSeconds: 900, label: 'Offline Praxis full suite', idempotencyKey: this.key('validate') }));
+      timeoutSeconds: 900, label: 'Offline Praxis full suite', idempotencyKey: this.key(validationStep) };
+    if (validationRetry) {
+      const original = this.state.steps.validate;
+      assert.equal(original?.name, 'job_start', 'Recover the original validation submission before selecting a retry');
+      assert.ok(original.result?.id, 'Recover the original validation job ID before selecting a retry');
+      assert.equal(original.args.workspaceId, validationArgs.workspaceId, 'Original validation belongs to another workspace');
+      assert.equal(original.args.expectedRevision, validationArgs.expectedRevision, 'Retry must retain the original validation source revision');
+      assert.deepEqual(original.args.argv, ['npm', 'test'], 'Original validation must be the full offline suite');
+      assert.equal(original.args.network, 'none');
+      assert.notEqual(original.args.idempotencyKey, validationArgs.idempotencyKey, 'An explicit retry needs its own job key');
+      for (const [label, saved] of Object.entries(this.state.steps)) {
+        if (label !== validationStep) assert.notEqual(saved.args?.idempotencyKey, validationArgs.idempotencyKey,
+          'Validation retry key collides with another saved operation');
+      }
+      const retry = this.state.steps[validationStep];
+      if (retry) {
+        assert.equal(retry.name, 'job_start', 'Validation retry label collides with another saved operation');
+        assert.deepEqual(retry.args, validationArgs, 'Saved validation retry inputs changed; recover the original retry');
+      }
+      const failed = await this.call('job_status', { jobId: original.result.id });
+      assert.equal(failed.id, original.result.id);
+      assert.equal(failed.status, 'failed', 'Only a confirmed failed validation may receive an explicit new job');
+      assert.ok(Number.isInteger(failed.exitCode) && failed.exitCode !== 0, 'Original validation must have an explicit nonzero exit');
+      assert.equal(failed.workspaceId, validationArgs.workspaceId);
+      assert.equal(failed.expectedRevision, validationArgs.expectedRevision);
+      assert.equal(failed.revisionVerified, true, 'Original failed validation source must be recoverable');
+      assert.equal(failed.revisionAfter, validationArgs.expectedRevision, 'Original failed validation changed tracked source');
+      this.state.observations.validationRetry = { originalJob: failed, validationStep,
+        expectedRevision: validationArgs.expectedRevision, imageDigest: caps.execution.imageDigest, observedAt: timestamp() };
+      this.save();
+    }
+    const tested = await this.job(validationStep, async () => validationArgs);
     assert.equal(tested.revisionAfter, edited.result.revision, 'Tests unexpectedly changed tracked source');
     const source = await this.source(this.state.workspaceId);
     assert.equal(source.sha256, this.state.expectedSourceSha256);
     this.state.validatedRevision = tested.revisionAfter; this.save();
+    this.state.validatedJobId = tested.id; this.save();
     await this.readDiff(this.state.validatedRevision);
     this.state.prepared = true; this.save();
   }
@@ -231,7 +273,7 @@ export class SelfUpdateQualification {
       if (id) await read(label, 'praxis_release_status', { operationId: id });
     }
     if (this.state.workspaceId) await read('workspace', 'workspace_inspect', { workspaceId: this.state.workspaceId });
-    for (const label of ['install', 'validate']) {
+    for (const label of new Set(['install', 'validate', this.state.validationStep || 'validate'])) {
       const id = this.state.steps[label]?.result?.id;
       if (id) await read(label, 'job_status', { jobId: id });
     }
