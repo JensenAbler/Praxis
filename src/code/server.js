@@ -66,6 +66,7 @@ export async function createCodingService(config) {
         workflow: ['projects_list', 'project_inspect', 'workspace_create', 'file_read/code_search', 'workspace_apply', 'job_start', 'job_status/job_logs', 'workspace_diff'],
         recovery: 'Use workspaces_list, jobs_list, and operations_list in a fresh conversation. Keep the same idempotency key and inputs after uncertain responses. A terminal or ambiguous command is never automatically rerun.',
         usage: {
+          sourceFreshness: "Run project_sync before creating a workspace when you need current GitHub main, and inspect its completed sync receipt. Existing workspaces retain their immutable base and cannot be rebased in place; create a new workspace from the fresh snapshot to reconcile newer source.",
           pagination: 'Omit optional page sizes initially. Copy nextCursor exactly; cursors are opaque and may not equal the number of returned rows. Diff maxBytes is a byte budget, while list/log limits count records.',
           edits: 'Use exact-text patches for large files. Multiple patches to a file run in order with the original file hash; a rejected batch does not partially apply.',
           jobRecovery: 'Read job_status first for actual exit status, recent output, and retention facts. Use job_logs view=tail for recent output or query/stream for targeted retained records; complete log scans are optional.',
