@@ -263,10 +263,12 @@ class Deployment:
         if start and lines:
             lines = lines[1:]  # Never parse a partial first line as a full event.
         events = [event for line in lines if (event := self._operational_event(line)) is not None]
-        return {'available': True, 'source': 'fixed-bot-stdout', 'redaction': 'operational-event-allowlist',
+        return {'available': True, 'source': str(self.log_path), 'redaction': 'none',
                 'scannedBytes': len(data), 'totalBytes': meta.st_size, 'tailTruncated': bool(start),
                 'omittedLines': len(lines) - len(events), 'omittedEvents': max(0, len(events) - limit),
-                'events': events[-limit:]}
+                'events': events[-limit:], 'rawLines': lines[-limit:],
+                'rawLinesOmittedFromPage': max(0, len(lines) - limit),
+                'fullContentAccess': 'Use host_file_read or host_search on source for complete logs, including transcripts and provider results.'}
 
     def _diagnosis(self, limit):
         service = self._service()

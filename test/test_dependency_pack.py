@@ -23,8 +23,8 @@ class DependencyPack(unittest.TestCase):
         (root / 'node_modules' / 'fixture' / 'index.js').write_text('module.exports = 42;')
         return root
 
-    def run_pack(self, root):
-        return subprocess.run([sys.executable, str(PACKER), IMAGE], cwd=root, capture_output=True, text=True)
+    def run_pack(self, root, image=IMAGE):
+        return subprocess.run([sys.executable, str(PACKER), image], cwd=root, capture_output=True, text=True)
 
     def test_package_tree_and_exact_manifest_provenance(self):
         root = self.fixture()
@@ -44,13 +44,39 @@ class DependencyPack(unittest.TestCase):
         self.assertEqual(self.run_pack(root).returncode, 0)
         self.assertNotEqual(first, (root / '.cache' / 'praxis-dependencies.tar').read_bytes())
 
-    def test_missing_lock_and_hardlinked_package_refused(self):
+    def test_missing_lock_refused_but_hardlinked_packages_are_independent_archive_files(self):
         root = self.fixture()
         (root / 'package-lock.json').unlink()
         self.assertNotEqual(self.run_pack(root).returncode, 0)
         (root / 'package-lock.json').write_text('{}')
         os.link(root / 'node_modules' / 'fixture' / 'index.js', root / 'node_modules' / 'fixture' / 'copy.js')
+        for image in (IMAGE, 'native-root:linux:x64:fixture'):
+            result = self.run_pack(root, image)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            with tarfile.open(root / '.cache' / 'praxis-dependencies.tar') as archive:
+                for name in ('index.js', 'copy.js'):
+                    member = archive.getmember('node_modules/fixture/' + name)
+                    self.assertTrue(member.isfile())
+                    self.assertFalse(member.islnk())
+                    self.assertEqual(archive.extractfile(member).read(), b'module.exports = 42;')
+
+    def test_native_large_manifest_and_long_package_paths_keep_exact_provenance(self):
+        root = self.fixture()
+        (root / 'package-lock.json').write_text(json.dumps({'padding': 'x' * (3 * 1024 * 1024)}))
+        nested = root / 'node_modules' / 'fixture'
+        for number in range(5):
+            nested /= ('long-package-component-' + str(number)) * 2
+        nested.mkdir(parents=True)
+        (nested / 'data.json').write_text('{}')
         self.assertNotEqual(self.run_pack(root).returncode, 0)
+        identity = 'native-root:linux:x64:fixture'
+        result = self.run_pack(root, identity)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        metadata = json.loads((root / '.cache' / 'praxis-dependencies.json').read_text())
+        self.assertEqual(metadata['executionMode'], 'native')
+        self.assertEqual(metadata['executionIdentity'], identity)
+        with tarfile.open(root / '.cache' / 'praxis-dependencies.tar') as archive:
+            self.assertEqual(archive.extractfile((nested / 'data.json').relative_to(root).as_posix()).read(), b'{}')
 
     def test_symlink_escape_refused_and_confined_bin_preserved(self):
         root = self.fixture()

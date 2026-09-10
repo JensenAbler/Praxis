@@ -10,6 +10,7 @@ import tarfile
 
 MAX_BYTES = 1024 * 1024 * 1024
 MAX_FILES = 100000
+NATIVE = sys.argv[1].startswith('native-root:')
 MANIFESTS = {'packageJsonSha256': 'package.json', 'packageLockSha256': 'package-lock.json', 'shrinkwrapSha256': 'npm-shrinkwrap.json'}
 
 def hashes():
@@ -18,8 +19,8 @@ def hashes():
         if not os.path.lexists(path):
             result[key] = None
             continue
-        value = os.lstat(path)
-        if not stat.S_ISREG(value.st_mode) or value.st_nlink != 1 or value.st_size > 2 * 1024 * 1024:
+        value = os.stat(path) if NATIVE else os.lstat(path)
+        if not stat.S_ISREG(value.st_mode) or (not NATIVE and (value.st_nlink != 1 or value.st_size > 2 * 1024 * 1024)):
             raise ValueError('Unsafe dependency manifest')
         with open(path, 'rb') as handle:
             result[key] = hashlib.file_digest(handle, 'sha256').hexdigest()
@@ -46,19 +47,19 @@ for path in (archive, metadata):
 
 total = 0
 count = 0
-with tarfile.open(archive, 'x', format=tarfile.USTAR_FORMAT, dereference=False) as output:
+with tarfile.open(archive, 'x', format=tarfile.PAX_FORMAT if NATIVE else tarfile.USTAR_FORMAT, dereference=False) as output:
     def add(path):
         global total, count
         value = os.lstat(path)
         if path == 'node_modules/.praxis-preparation.json':
             raise ValueError('Reserved dependency provenance path already exists')
         count += 1
-        if count > MAX_FILES or len(path.encode()) > 240 or '\\' in path or any(ord(char) < 32 for char in path):
+        if not NATIVE and (count > MAX_FILES or len(path.encode()) > 240 or '\\' in path or any(ord(char) < 32 for char in path)):
             raise ValueError('Dependency entry limit or invalid name')
         if stat.S_ISREG(value.st_mode):
             total += value.st_size
-            if value.st_nlink != 1 or value.st_size > 256 * 1024 * 1024 or total > MAX_BYTES:
-                raise ValueError('Dependency size or hardlink limit')
+            if not NATIVE and (value.st_size > 256 * 1024 * 1024 or total > MAX_BYTES):
+                raise ValueError('Dependency size limit')
         elif stat.S_ISLNK(value.st_mode):
             target = os.readlink(path)
             normalized = posixpath.normpath(posixpath.join(posixpath.dirname(path), target))
@@ -69,6 +70,13 @@ with tarfile.open(archive, 'x', format=tarfile.USTAR_FORMAT, dereference=False) 
         elif not stat.S_ISDIR(value.st_mode):
             raise ValueError('Special dependency files are not allowed')
         info = output.gettarinfo(path, arcname=path)
+        if stat.S_ISREG(value.st_mode):
+            # npm may hardlink legitimate binary entries. Copy each name's bytes
+            # as a regular tar member, so existing deployment extractors need no
+            # hardlink support and no inode-rewriting repair job is necessary.
+            info.type = tarfile.REGTYPE
+            info.linkname = ''
+            info.size = value.st_size
         info.uid = info.gid = 0
         info.uname = info.gname = ''
         info.mtime = 0
@@ -86,10 +94,11 @@ with tarfile.open(archive, 'x', format=tarfile.USTAR_FORMAT, dereference=False) 
     info.size = len(provenance)
     info.mode = 0o644
     output.addfile(info, io.BytesIO(provenance))
-if os.path.getsize(archive) > 512 * 1024 * 1024:
+if not NATIVE and os.path.getsize(archive) > 512 * 1024 * 1024:
     raise ValueError('Dependency archive exceeds 512 MiB')
 if hashes() != before:
     raise ValueError('Dependency manifests changed during preparation')
 with open(metadata, 'x') as handle:
-    json.dump({**before, **runtime, 'files': count, 'expandedBytes': total}, handle)
+    json.dump({**before, **runtime, 'files': count, 'expandedBytes': total,
+               'executionMode': 'native' if NATIVE else 'container', 'executionIdentity': sys.argv[1]}, handle)
 print(json.dumps({'event': 'DEPENDENCIES_PREPARED', 'files': count, 'expandedBytes': total, **before, **runtime}))

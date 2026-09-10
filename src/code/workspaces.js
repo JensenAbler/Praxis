@@ -10,7 +10,8 @@ const ACTIVE = "('queued','starting','running','canceling')";
 const ownerCheck = owner => requireValue(typeof owner === 'string' && owner.length > 0 && owner.length <= 100, 'A valid owner is required.');
 const now = () => new Date().toISOString();
 const publicWorkspace = row => ({ workspaceId: row.id, projectId: row.project_id, label: row.label,
-  baseRevision: row.base_revision, revision: row.revision, status: row.status, createdAt: row.created_at, updatedAt: row.updated_at });
+  baseRevision: row.base_revision, revision: row.revision, status: row.status, createdAt: row.created_at, updatedAt: row.updated_at,
+  hostPath: row.path });
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const parseEntries = json => Object.assign(Object.create(null), JSON.parse(json));
 const textOf = buffer => {
@@ -41,11 +42,13 @@ function writeDurable(root, path, content, mode) {
 }
 
 export class WorkspaceManager {
-  constructor({ store, dataDirectory, workspaceDirectory, projects = [] }) {
+  constructor({ store, dataDirectory, workspaceDirectory, legacyWorkspaceDirectories = [], native = false, projects = [] }) {
     this.store = store;
     this.db = store.db;
     this.dataDirectory = resolve(dataDirectory);
     this.workspaceDirectory = resolve(workspaceDirectory);
+    this.workspaceDirectories = [this.workspaceDirectory, ...legacyWorkspaceDirectories.map(path => resolve(path))];
+    this.native = native;
     const privateRelative = relative(this.workspaceDirectory, this.dataDirectory);
     requireValue(privateRelative && (isAbsolute(privateRelative) || privateRelative === '..' || privateRelative.startsWith(`..${sep}`)), 'Private state must be outside workspaces.');
     mkdirSync(this.workspaceDirectory, { recursive: true, mode: 0o700 });
@@ -116,7 +119,7 @@ export class WorkspaceManager {
     ownerCheck(owner);
     const row = this.db.prepare('SELECT * FROM workspaces WHERE owner = ? AND id = ?').get(owner, workspaceId);
     requireValue(row && (removed || row.status !== 'removed'), 'Workspace not found.', 'NOT_FOUND');
-    requireValue(row.path === join(this.workspaceDirectory, row.id), 'Stored workspace path is invalid.', 'UNSAFE_PATH');
+    requireValue(this.workspaceDirectories.some(root => row.path === join(root, row.id)), 'Stored workspace path is invalid.', 'UNSAFE_PATH');
     return row;
   }
   _idle(row) {
@@ -156,10 +159,10 @@ export class WorkspaceManager {
     return this._operation(row);
   }
   _prepare({ owner, workspaceId, idempotencyKey, kind, request, plan }) {
-    requireValue(this.db.prepare('SELECT COUNT(*) AS count FROM operations').get().count < LIMITS.operations, 'Operation receipt quota reached.', 'LIMIT_EXCEEDED');
+    requireValue(this.native || this.db.prepare('SELECT COUNT(*) AS count FROM operations').get().count < LIMITS.operations, 'Operation receipt quota reached.', 'LIMIT_EXCEEDED');
     const requestJson = JSON.stringify(request), planJson = JSON.stringify(plan);
     const journalBytes = this.db.prepare('SELECT COALESCE(SUM(length(CAST(request_json AS BLOB)) + length(CAST(plan_json AS BLOB))), 0) AS bytes FROM operations').get().bytes;
-    requireValue(journalBytes + Buffer.byteLength(requestJson) + Buffer.byteLength(planJson) <= LIMITS.operationJournalBytes,
+    requireValue(this.native || journalBytes + Buffer.byteLength(requestJson) + Buffer.byteLength(planJson) <= LIMITS.operationJournalBytes,
       'Operation journal storage quota reached; owner maintenance is required.', 'LIMIT_EXCEEDED');
     const id = randomUUID(), timestamp = now();
     this.db.prepare(`INSERT INTO operations (id,owner,workspace_id,idempotency_key,kind,request_json,plan_json,status,created_at,updated_at)
@@ -195,16 +198,17 @@ export class WorkspaceManager {
           return this._finish(operation, { ...publicWorkspace(row), status: 'ready', revision: state.revision });
         }
         if (operation.kind === 'remove') {
-          const trash = join(this.workspaceDirectory, `.removed-${row.id}`);
+          const workspaceRoot = dirname(row.path);
+          const trash = join(workspaceRoot, `.removed-${row.id}`);
           if (existsSync(row.path)) {
             safePath(row.path, '', { directory: true });
             renameSync(row.path, trash);
-            syncDirectory(this.workspaceDirectory);
+            syncDirectory(workspaceRoot);
           }
           if (existsSync(trash)) {
             requireValue(lstatSync(trash).isDirectory() && !lstatSync(trash).isSymbolicLink(), 'Removal journal path is unsafe.', 'UNSAFE_PATH');
             rmSync(trash, { recursive: true });
-            syncDirectory(this.workspaceDirectory);
+            syncDirectory(workspaceRoot);
           }
           return this._finish(operation, { workspaceId: row.id, revision: row.revision, removed: true }, 'removed');
         }
@@ -248,7 +252,7 @@ export class WorkspaceManager {
       const existing = this._existing(owner, idempotencyKey, request); if (existing) return existing;
       const project = this._project(projectId, owner);
       requireValue(baseRevision === project.revision, 'baseRevision must match the registered project revision.', 'REVISION_CONFLICT');
-      requireValue(this.db.prepare("SELECT COUNT(*) AS count FROM workspaces WHERE status != 'removed'").get().count < LIMITS.workspaces, 'Workspace quota reached.', 'LIMIT_EXCEEDED');
+      requireValue(this.native || this.db.prepare("SELECT COUNT(*) AS count FROM workspaces WHERE status != 'removed'").get().count < LIMITS.workspaces, 'Workspace quota reached.', 'LIMIT_EXCEEDED');
       const state = manifest(project.snapshotPath);
       requireValue(Object.values(state.entries).every(entry => entry.kind === 'file'), 'Source snapshot contains unsafe entries.', 'UNSAFE_PATH');
       const id = randomUUID(), timestamp = now();

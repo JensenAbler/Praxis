@@ -1,5 +1,5 @@
 import { randomUUID, createHash } from 'node:crypto';
-import { mkdirSync, lstatSync, openSync, readSync, closeSync, writeFileSync, fsyncSync, renameSync, constants, realpathSync } from 'node:fs';
+import { mkdirSync, lstatSync, statSync, openSync, readSync, writeSync, closeSync, writeFileSync, fsyncSync, renameSync, constants, realpathSync } from 'node:fs';
 import { join, resolve, relative, isAbsolute } from 'node:path';
 import { containerName } from './runner.js';
 import { dependencyPackCommand, sealDependencies } from './dependencies.js';
@@ -60,6 +60,25 @@ function safeRelative(value, allowDot = false) {
   requireValue(allowDot && value === '.' || value.split('/').every(part => part && part !== '.' && part !== '..' && part.toLowerCase() !== '.git'), 'Path traversal and protected Git internals are not allowed.');
   return value;
 }
+function nativeInputValue(input) {
+  const { owner, idempotencyKey, workspaceId, expectedRevision, hostProjectId, dataRoot, label = '', argv, cwd = '.', env = {}, timeoutSeconds = 0, artifactPaths = [] } = input;
+  ownerValue(owner);
+  requireValue(typeof idempotencyKey === 'string' && /^[a-zA-Z0-9._:-]{8,128}$/.test(idempotencyKey), 'idempotencyKey must contain 8–128 letters, numbers, dots, underscores, colons, or hyphens.');
+  requireValue(!workspaceId || !hostProjectId, 'Choose workspaceId or hostProjectId, or omit both for direct host execution.');
+  requireValue(!workspaceId || typeof expectedRevision === 'string' && expectedRevision.length > 0, 'Workspace commands require expectedRevision. Direct host commands do not.');
+  requireValue(typeof label === 'string' && label.length <= 80 && !/[\0-\x1f]/.test(label), 'label must be at most 80 characters without control characters.');
+  requireValue(Array.isArray(argv) && argv.length > 0 && argv.every(arg => typeof arg === 'string' && !arg.includes('\0')) && argv[0].length > 0, 'argv must contain command strings without NUL characters.');
+  requireValue(typeof cwd === 'string' && cwd.length > 0 && !cwd.includes('\0'), 'cwd must be a path without NUL characters.');
+  requireValue(env && typeof env === 'object' && !Array.isArray(env), 'env must be an object.');
+  for (const [key, value] of Object.entries(env)) requireValue(/^[A-Za-z_][A-Za-z0-9_]*$/.test(key) && typeof value === 'string' && !value.includes('\0'), 'Environment overrides require valid names and strings without NUL characters.');
+  requireValue(Number.isSafeInteger(timeoutSeconds) && timeoutSeconds >= 0, 'timeoutSeconds must be non-negative; 0 means no deadline.');
+  requireValue(Array.isArray(artifactPaths) && artifactPaths.every(path => typeof path === 'string' && path.length > 0 && !path.includes('\0')) && new Set(artifactPaths).size === artifactPaths.length, 'artifactPaths must contain unique paths without NUL characters.');
+  requireValue(input.network === undefined || ['host', 'none', 'registries'].includes(input.network), 'network must be host; legacy none/registries values are accepted as host networking.');
+  return { owner, idempotencyKey, workspaceId: workspaceId ?? null, expectedRevision: expectedRevision ?? null,
+    hostProjectId: hostProjectId ?? null, dataRoot: dataRoot ?? null, label, argv, cwd,
+    env: Object.fromEntries(Object.entries(env).sort(([a], [b]) => a.localeCompare(b))), timeoutSeconds, artifactPaths,
+    network: 'host', executionMode: 'native-root' };
+}
 function inputValue(input) {
   const { owner, idempotencyKey, workspaceId, expectedRevision, label = '', argv, cwd = '.', env = {}, timeoutSeconds = 300, artifactPaths = [], network = 'none' } = input;
   ownerValue(owner);
@@ -87,7 +106,8 @@ function publicJob(row, summary = false) {
   const request = JSON.parse(row.request_json);
   const argv = summary ? request.argv.slice(0, 8).map(arg => arg.slice(0, 256)) : request.argv;
   return {
-    id: row.id, workspaceId: row.workspace_id, label: request.label, status: row.status,
+    id: row.id, workspaceId: request.executionMode === 'native-root' ? request.workspaceId : row.workspace_id, label: request.label, status: row.status,
+    ...(request.executionMode === 'native-root' ? { executionMode: 'native-root', hostProjectId: request.hostProjectId, executionUser: 'root', workingDirectory: request.executionDirectory } : {}),
     argv, argvTruncated: summary && (request.argv.length > argv.length || request.argv.some(arg => arg.length > 256)),
     cwd: request.cwd, timeoutSeconds: request.timeoutSeconds, network: request.network ?? 'none',
     expectedRevision: request.expectedRevision, revisionAfter: row.revision_after,
@@ -103,8 +123,9 @@ function publicJob(row, summary = false) {
 
 /** Durable scheduling only. Enforcement is the real runner and its enclosing OS configuration. */
 export class CodeJobs {
-  constructor({ store, dataDirectory, runner, workspaces, dependencyDirectory, clock = now }) {
+  constructor({ store, dataDirectory, runner, workspaces, host, dependencyDirectory, clock = now }) {
     this.store = store; this.db = store.db; this.runner = runner; this.workspaces = workspaces;
+    this.host = host; this.native = runner.kind === 'native-root'; this.tickCursor = 0;
     this.dataDirectory = resolve(dataDirectory); this.clock = clock; this.busy = false;
     this.dependencyDirectory = dependencyDirectory && resolve(dependencyDirectory);
     mkdirSync(join(this.dataDirectory, 'artifacts'), { recursive: true, mode: 0o700 });
@@ -175,13 +196,15 @@ export class CodeJobs {
 
   prepareDependencies(input) {
     if (!this.dependencyDirectory) throw new CodeJobError('DEPENDENCY_PREPARATION_DISABLED', 'Dependency bundle export is not configured.');
+    const saved = this.db.prepare('SELECT request_json FROM code_jobs WHERE owner=? AND idempotency_key=?').get(input.owner, input.idempotencyKey);
+    const previous = saved && JSON.parse(saved.request_json);
     return this.start({ owner: input.owner, workspaceId: input.workspaceId, expectedRevision: input.expectedRevision,
       idempotencyKey: input.idempotencyKey, label: input.label ?? 'Prepare deployment dependencies',
-      timeoutSeconds: input.timeoutSeconds ?? 300, argv: dependencyPackCommand(this.runner.image) }, { dependencyPreparation: true });
+      timeoutSeconds: input.timeoutSeconds ?? (previous?.dependencyPreparation ? previous.timeoutSeconds : this.native ? 0 : 300), argv: dependencyPackCommand(this.runner.image) }, { dependencyPreparation: true });
   }
 
   start(input, { dependencyPreparation = false } = {}) {
-    const request = inputValue(input);
+    const request = this.native ? nativeInputValue(input) : inputValue(input);
     if (dependencyPreparation) request.dependencyPreparation = true;
     const { owner, idempotencyKey } = request;
     const requestJson = JSON.stringify(request);
@@ -189,29 +212,42 @@ export class CodeJobs {
       const existing = this.db.prepare('SELECT * FROM code_jobs WHERE owner=? AND idempotency_key=?').get(owner, idempotencyKey);
       if (existing) {
         const previous = JSON.parse(existing.request_json);
+        const { executionDirectory, ...previousInput } = previous;
+        const incoming = previous.executionMode === 'native-root' ? request : inputValue(input);
+        if (dependencyPreparation) incoming.dependencyPreparation = true;
         // Preparation is a fixed service operation. Its implementation/image can
         // change between releases; retries still recover the original operation.
         const samePreparation = dependencyPreparation && previous.dependencyPreparation
-          && JSON.stringify({ ...previous, argv: null }) === JSON.stringify({ ...request, argv: null });
-        if (existing.request_json !== requestJson && !samePreparation) throw new CodeJobError('IDEMPOTENCY_CONFLICT', 'This idempotency key belongs to a different command. Use a new key only for intentionally new work.');
+          && JSON.stringify({ ...previousInput, argv: null }) === JSON.stringify({ ...incoming, argv: null });
+        if (JSON.stringify(previousInput) !== JSON.stringify(incoming) && !samePreparation) throw new CodeJobError('IDEMPOTENCY_CONFLICT', 'This idempotency key belongs to a different command. Use a new key only for intentionally new work.');
         return publicJob(existing);
       }
-      if (request.network === 'registries' && !this.runner.registryAccessEnabled) throw new CodeJobError('DEPENDENCY_NETWORK_DISABLED', 'Registry access is not configured; no job was started.');
+      if (!this.native && request.network === 'registries' && !this.runner.registryAccessEnabled) throw new CodeJobError('DEPENDENCY_NETWORK_DISABLED', 'Registry access is not configured; no job was started.');
       const blocker = this.db.prepare(`SELECT id,owner,workspace_id,status FROM code_jobs WHERE status IN ${ACTIVE_SQL} LIMIT 1`).get();
-      if (blocker) throw new CodeJobError('ACTIVE_JOB_LIMIT', blocker.owner === owner
+      if (!this.native && blocker) throw new CodeJobError('ACTIVE_JOB_LIMIT', blocker.owner === owner
         ? `One command may be active at a time. Existing job ${blocker.id} in workspace ${blocker.workspace_id} is ${blocker.status}. Observe that job; retry this submission with identical inputs and the same idempotency key after it becomes terminal.`
         : 'One command may be active at a time. Execution capacity is occupied. Retry this submission with identical inputs and the same idempotency key later.');
-      if (this.db.prepare('SELECT COUNT(*) AS count FROM code_jobs').get().count >= CODE_JOB_LIMITS.retainedJobs) throw new CodeJobError('JOB_QUOTA_EXCEEDED', 'The retained job quota is full. Owner maintenance is required before starting more work.');
-      const workspace = this.workspaces.getExecutionWorkspace({ owner, workspaceId: request.workspaceId });
+      if (!this.native && this.db.prepare('SELECT COUNT(*) AS count FROM code_jobs').get().count >= CODE_JOB_LIMITS.retainedJobs) throw new CodeJobError('JOB_QUOTA_EXCEEDED', 'The retained job quota is full. Owner maintenance is required before starting more work.');
+      const workspace = this.executionWorkspace(request);
       if (workspace && typeof workspace.then === 'function') throw new Error('getExecutionWorkspace must be synchronous inside the transaction.');
       if (workspace.revision !== request.expectedRevision) throw new CodeJobError('STALE_REVISION', 'The workspace revision changed. Inspect it and submit the command against the current revision.');
+      if (this.native) request.executionDirectory = resolve(workspace.path, request.cwd);
       const id = randomUUID(), time = this.clock();
       this.db.prepare(`INSERT INTO code_jobs(id,owner,workspace_id,idempotency_key,request_json,status,created_at,updated_at)
-        VALUES (?,?,?,?,?,'queued',?,?)`).run(id, owner, request.workspaceId, idempotencyKey, requestJson, time, time);
+        VALUES (?,?,?,?,?,'queued',?,?)`).run(id, owner, request.workspaceId ?? `host:${request.hostProjectId ?? 'alpha'}`, idempotencyKey, JSON.stringify(request), time, time);
       this.db.prepare('INSERT INTO code_output_state(job_id) VALUES (?)').run(id);
       this.record(id, 'system', 'QUEUED', time);
       return publicJob(this.row(owner, id));
     });
+  }
+
+  executionWorkspace(request) {
+    if (request.workspaceId) return this.workspaces.getExecutionWorkspace({ owner: request.owner, workspaceId: request.workspaceId });
+    if (!this.native) throw new CodeJobError('INVALID_ARGUMENT', 'workspaceId is required.');
+    const path = request.executionDirectory ?? (request.hostProjectId
+      ? this.host.resolvePath({ owner: request.owner, hostProjectId: request.hostProjectId, dataRoot: request.dataRoot ?? undefined, path: '.' })
+      : this.runner.homeDirectory);
+    return { path, revision: null };
   }
 
   outputRetention(job) {
@@ -230,6 +266,10 @@ export class CodeJobs {
       explanation: state
         ? 'Head records keep their original sequence. The separate rolling tail contains only observed output fragments; its sequence does not match head sequences. Tail eviction does not itself mean the head lost output. Runner loss or skipped container bytes can mean output was never observed.'
         : 'This job predates rolling-tail capture. Only its original head records are available; previously truncated output cannot be recovered.',
+      ...(JSON.parse(job.request_json).executionMode === 'native-root' ? {
+        mode: 'durable-native-files-with-searchable-excerpts', rawLogs: this.runner.describeLogs(containerName(job.id)),
+        explanation: 'Complete original stdout/stderr and ordered events remain in native job files without a retention-size cap. Use host_file_read or host_search on these paths. This indexed head/tail is an excerpt and may be truncated independently of the raw files.',
+      } : {}),
     };
   }
 
@@ -264,10 +304,10 @@ export class CodeJobs {
     });
   }
 
-  list({ owner, workspaceId, cursor = 0, limit = 20 }) {
+  list({ owner, workspaceId, hostProjectId, cursor = 0, limit = 20 }) {
     ownerValue(owner); page(cursor, limit);
     const rows = this.db.prepare(`SELECT * FROM code_jobs WHERE owner=? AND (? IS NULL OR workspace_id=?)
-      AND (?=0 OR row_id<?) ORDER BY row_id DESC LIMIT ?`).all(owner, workspaceId ?? null, workspaceId ?? null, cursor, cursor, limit + 1);
+      AND (?=0 OR row_id<?) ORDER BY row_id DESC LIMIT ?`).all(owner, workspaceId ?? (hostProjectId ? `host:${hostProjectId}` : null), workspaceId ?? (hostProjectId ? `host:${hostProjectId}` : null), cursor, cursor, limit + 1);
     const selected = [], jobs = [];
     let bytes = 0;
     for (const row of rows.slice(0, limit)) {
@@ -404,6 +444,7 @@ export class CodeJobs {
 
   snapshotArtifacts(job, workspacePath) {
     const request = JSON.parse(job.request_json);
+    if (request.artifactPaths.length === 0) return [];
     const errors = [];
     let total = 0;
     const directory = join(this.dataDirectory, 'artifacts', job.id);
@@ -412,6 +453,29 @@ export class CodeJobs {
     const root = realpathSync(workspacePath);
     for (const name of request.artifactPaths) {
       try {
+        if (request.executionMode === 'native-root') {
+          const source = resolve(workspacePath, name);
+          if (!statSync(source).isFile()) throw new CodeJobError('INVALID_ARTIFACT', 'An artifact must be a regular file.');
+          const id = createHash('sha256').update(`${job.id}:${name}`).digest('hex');
+          const destination = join(directory, id), temporary = `${destination}.pending`;
+          const input = openSync(source, 'r'), output = openSync(temporary, 'w', 0o600), hash = createHash('sha256');
+          let bytes = 0;
+          try {
+            const chunk = Buffer.alloc(1048576);
+            for (;;) {
+              const count = readSync(input, chunk, 0, chunk.length, null);
+              if (!count) break;
+              hash.update(chunk.subarray(0, count));
+              for (let offset = 0; offset < count;) offset += writeSync(output, chunk, offset, count - offset);
+              bytes += count;
+            }
+            fsyncSync(output);
+          } finally { closeSync(input); closeSync(output); }
+          renameSync(temporary, destination); syncDirectory(directory);
+          this.db.prepare('INSERT OR IGNORE INTO code_artifacts(id,job_id,name,path,bytes,sha256,created_at) VALUES(?,?,?,?,?,?,?)')
+            .run(id, job.id, name, destination, bytes, hash.digest('hex'), this.clock());
+          continue;
+        }
         let path = root;
         for (const part of name.split('/')) {
           path = join(path, part);
@@ -459,11 +523,14 @@ export class CodeJobs {
     }
     let revision = null, artifactErrors = [], executionError = job.execution_error;
     try {
-      const workspace = this.workspaces.getExecutionWorkspace({ owner: job.owner, workspaceId: job.workspace_id });
+      const request = JSON.parse(job.request_json);
+      const workspace = this.executionWorkspace(request);
       revision = workspace.revision;
-      artifactErrors = this.snapshotArtifacts(job, workspace.path);
-      const refreshed = await this.workspaces.refreshAfterJob({ owner: job.owner, workspaceId: job.workspace_id });
-      revision = refreshed?.revision ?? this.workspaces.getExecutionWorkspace({ owner: job.owner, workspaceId: job.workspace_id }).revision;
+      artifactErrors = this.snapshotArtifacts(job, request.executionMode === 'native-root' ? request.executionDirectory ?? workspace.path : workspace.path);
+      if (request.workspaceId) {
+        const refreshed = await this.workspaces.refreshAfterJob({ owner: job.owner, workspaceId: job.workspace_id });
+        revision = refreshed?.revision ?? this.workspaces.getExecutionWorkspace({ owner: job.owner, workspaceId: job.workspace_id }).revision;
+      }
       if (JSON.parse(job.request_json).dependencyPreparation && state.exitCode === 0 && !forcedReason && !job.termination_reason && !executionError) {
         const existing = this.db.prepare('SELECT 1 FROM code_dependency_bundles WHERE job_id=?').get(job.id);
         if (!existing) {
@@ -474,7 +541,7 @@ export class CodeJobs {
       }
     } catch (error) { executionError = error.code ?? 'WORKSPACE_REFRESH_FAILED'; }
     const latest = this.row(job.owner, job.id);
-    const reason = forcedReason ?? latest.termination_reason ?? (state.oomKilled ? 'memory_limit' : 'exit');
+    const reason = forcedReason ?? latest.termination_reason ?? state.terminationReason ?? (state.oomKilled ? 'memory_limit' : 'exit');
     const status = reason === 'cancelled' ? 'cancelled' : reason === 'timeout' ? 'timed_out'
       : ['interrupted', 'timeout_inferred', 'exit_unconfirmed'].includes(reason) ? 'interrupted' : state.exitCode === 0 && !executionError ? 'completed' : 'failed';
     this.store.transaction(() => {
@@ -487,7 +554,7 @@ export class CodeJobs {
       this.record(job.id, 'system', `${status.toUpperCase()}${state.exitCode == null ? ' exit=unknown' : ` exit=${state.exitCode}`} reason=${reason}${state.monitorExitCode == null ? '' : ` monitorExit=${state.monitorExitCode}`}`, time);
     });
     // Metadata and copied output are already durable. Cleanup failure leaves diagnostic material.
-    if (status !== 'interrupted' && state.exitCode != null) {
+    if (status !== 'interrupted' && (state.exitCode != null || state.signal != null)) {
       try { await this.runner.remove({ name: containerName(job.id) }); } catch { /* Retain; never erase a running or ambiguous container. */ }
     }
   }
@@ -515,7 +582,7 @@ export class CodeJobs {
     const monitorExitCode = state.monitorExitCode ?? state.exitCode;
     // Conmon can report -1 when its independent timer fires. Timing plus this sentinel supports an inference,
     // not a claimed POSIX exit status or proof that the worker itself requested termination.
-    const reason = job.termination_reason ?? (monitorExitCode === -1 && elapsed >= timeout * 1000 ? 'timeout_inferred'
+    const reason = job.termination_reason ?? state.terminationReason ?? (timeout > 0 && monitorExitCode === -1 && elapsed >= timeout * 1000 ? 'timeout_inferred'
       : state.exitCode == null ? 'exit_unconfirmed' : undefined);
     await this.finish(job, state, reason);
   }
@@ -541,8 +608,12 @@ export class CodeJobs {
     let job;
     try {
       this.acquireRunner();
-      job = this.db.prepare(`SELECT * FROM code_jobs WHERE status IN ${ACTIVE_SQL} ORDER BY row_id LIMIT 1`).get();
+      job = this.native
+        ? this.db.prepare(`SELECT * FROM code_jobs WHERE status IN ${ACTIVE_SQL} AND row_id>? ORDER BY row_id LIMIT 1`).get(this.tickCursor)
+          ?? this.db.prepare(`SELECT * FROM code_jobs WHERE status IN ${ACTIVE_SQL} ORDER BY row_id LIMIT 1`).get()
+        : this.db.prepare(`SELECT * FROM code_jobs WHERE status IN ${ACTIVE_SQL} ORDER BY row_id LIMIT 1`).get();
       if (!job) return;
+      this.tickCursor = job.row_id;
       if (job.status === 'queued') {
         this.store.transaction(() => {
           this.db.prepare("UPDATE code_jobs SET status='starting',updated_at=? WHERE id=? AND status='queued'").run(this.clock(), job.id);
@@ -551,7 +622,7 @@ export class CodeJobs {
         job = this.row(job.owner, job.id);
         const request = JSON.parse(job.request_json);
         let workspace;
-        try { workspace = this.workspaces.getExecutionWorkspace({ owner: job.owner, workspaceId: job.workspace_id }); }
+        try { workspace = this.executionWorkspace(request); }
         catch (error) {
           this.db.prepare('UPDATE code_jobs SET execution_error=? WHERE id=?').run(error.code ?? 'WORKSPACE_UNAVAILABLE', job.id);
           await this.finish(this.row(job.owner, job.id), { exists: false }, 'interrupted'); return;
@@ -564,7 +635,7 @@ export class CodeJobs {
           this.db.prepare("UPDATE code_jobs SET execution_error='RUNNER_IMAGE_CHANGED' WHERE id=?").run(job.id);
           await this.finish(this.row(job.owner, job.id), { exists: false }, 'interrupted'); return;
         }
-        const created = await this.runner.create({ job: { id: job.id, ...request }, workspacePath: workspace.path });
+        const created = await this.runner.create({ job: { id: job.id, ...request, ...(this.native ? { cwd: request.executionDirectory } : {}) }, workspacePath: workspace.path });
         this.db.prepare('UPDATE code_jobs SET container_id=?,launch_intent_at=?,updated_at=?,runner_cursor=?,log_fingerprint=? WHERE id=?')
           .run(created.id, this.clock(), this.clock(), created.logCursor ?? 0, created.logFingerprint ?? null, job.id);
         // Cancellation can arrive while create awaits. A created-but-unstarted container is safe to retain/finish.
@@ -586,7 +657,7 @@ export class CodeJobs {
       const timeout = JSON.parse(job.request_json).timeoutSeconds;
       // Enforce the runtime's actual deadline even when its start preceded our acknowledgement.
       const runtimeStartedAt = state.startedAt ?? job.started_at;
-      const expired = runtimeStartedAt && Date.parse(this.clock()) >= Date.parse(runtimeStartedAt) + timeout * 1000;
+      const expired = timeout > 0 && runtimeStartedAt && Date.parse(this.clock()) >= Date.parse(runtimeStartedAt) + timeout * 1000;
       const latest = this.row(job.owner, job.id);
       if (latest.cancel_requested || expired) {
         const reason = latest.cancel_requested ? 'cancelled' : 'timeout';

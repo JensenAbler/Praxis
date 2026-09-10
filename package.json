@@ -1,9 +1,9 @@
 {
   "name": "praxis-probe",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "private": true,
   "type": "module",
-  "description": "Source access, isolated coding workspaces, and durable MCP jobs for conversational models.",
+  "description": "Native root development, project access, and durable MCP jobs for conversational models.",
   "engines": {
     "node": ">=22.22.0"
   },

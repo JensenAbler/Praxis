@@ -37,7 +37,7 @@ class FixtureRunner {
   async remove({ name }) { this.containers.delete(name); }
 }
 
-async function fixture(t, { dependencies = false } = {}) {
+async function fixture(t, { dependencies = false, native = false } = {}) {
   const directory = mkdtempSync(join(tmpdir(), 'praxis-code-mcp-'));
   const snapshot = join(directory, 'snapshot'); mkdirSync(snapshot);
   writeFileSync(join(snapshot, 'answer.js'), 'export const answer = 41;\n');
@@ -47,6 +47,11 @@ async function fixture(t, { dependencies = false } = {}) {
   const salt = randomBytes(16);
   const passwordHash = `scrypt$${salt.toString('base64url')}$${scryptSync('fixture-password', salt, 64).toString('base64url')}`;
   const runner = new FixtureRunner();
+  if (native) {
+    runner.kind = 'native-root'; runner.homeDirectory = snapshot; runner.jobsDirectory = join(directory, 'native-jobs');
+    runner.executionIdentity = 'native-root:fixture';
+    runner.describeLogs = name => ({ stdout: join(runner.jobsDirectory, name, 'stdout.raw'), stderr: join(runner.jobsDirectory, name, 'stderr.raw'), events: join(runner.jobsDirectory, name, 'output.log') });
+  }
   runner.registryAccessEnabled = dependencies;
   let gateway, backend;
   const http = createServer((req, res) => gateway.app(req, res));
@@ -77,7 +82,7 @@ async function fixture(t, { dependencies = false } = {}) {
     for (const server of [http, backendHttp]) await new Promise(resolve => server.close(resolve));
     await gateway.close(); await backend.close(); rmSync(directory, { recursive: true, force: true });
   });
-  return { connect, token, backendUrl, baseUrl, runner, backend, gateway, async restartGateway() { await gateway.close(); gateway = await createApp(gatewayConfig); } };
+  return { directory, snapshot, connect, token, backendUrl, baseUrl, runner, backend, gateway, async restartGateway() { await gateway.close(); gateway = await createApp(gatewayConfig); } };
 }
 
 async function call(client, name, args = {}) {
@@ -193,8 +198,8 @@ test('authenticated dependency workflow advertises registry policy and recovers 
   assert.equal(capabilities.dependencies.preparationEnabled, true);
   assert.deepEqual(capabilities.dependencies.registries, ['registry.npmjs.org', 'pypi.org', 'files.pythonhosted.org']);
   const catalog = (await client.listTools()).tools;
-  assert.deepEqual(catalog.find(tool => tool.name === 'job_start').inputSchema.properties.network.enum, ['none', 'registries']);
-  assert.equal(catalog.find(tool => tool.name === 'job_start').inputSchema.properties.network.default, 'none');
+  assert.deepEqual(catalog.find(tool => tool.name === 'job_start').inputSchema.properties.network.enum, ['host', 'none', 'registries']);
+  assert.equal(catalog.find(tool => tool.name === 'job_start').inputSchema.properties.network.default, undefined);
   assert.ok(catalog.find(tool => tool.name === 'dependency_prepare'));
   const oldScope = await f.connect('praxis:probe');
   const denied = await oldScope.callTool({ name: 'dependency_prepare', arguments: { workspaceId: '550e8400-e29b-41d4-a716-446655440000', expectedRevision: 'nope', idempotencyKey: 'denied-dependency-fixture' } });
@@ -402,4 +407,40 @@ test('explicit stale job and unmatched patch rejections direct callers to refres
   assert.equal(patch.structuredContent.error.code, 'PATCH_CONFLICT');
   assert.equal(patch.structuredContent.error.retry.strategy, 'refresh_state');
   assert.equal((await call(client, 'file_read', { workspaceId: created.workspaceId, path: 'answer.js' })).sha256, file.sha256);
+});
+
+test('authenticated native host workflow exposes live project files and root jobs across fresh clients', async t => {
+  const f = await fixture(t, { native: true });
+  const client = await f.connect();
+  const cap = await call(client, 'capabilities');
+  assert.equal(cap.execution.user, 'root');
+  assert.equal(cap.execution.containers, false);
+  assert.equal(cap.execution.defaultTimeoutSeconds, 0);
+  assert.equal(cap.execution.maxActiveJobs, null);
+  assert.deepEqual(cap.disabled, []);
+  const attached = await call(client, 'host_project_attach', { name: 'live fixture', path: f.snapshot, dataRoots: { logs: f.directory } });
+  const oldScope = await f.connect('praxis:probe');
+  const denied = await oldScope.callTool({ name: 'host_file_read', arguments: { path: join(f.snapshot, 'answer.js') } });
+  assert.equal(denied.structuredContent.error.code, 'AUTHORIZATION_REQUIRED');
+  await call(client, 'host_file_write', { hostProjectId: attached.hostProjectId, path: '.env', content: 'FIXTURE=private-runtime-data\n', expectedSha256: null });
+  const content = await call(client, 'host_file_read', { hostProjectId: attached.hostProjectId, path: '.env', includeSha256: true });
+  assert.equal(content.content, 'FIXTURE=private-runtime-data\n');
+  await call(client, 'host_file_patch', { hostProjectId: attached.hostProjectId, path: 'answer.js', oldText: '41', newText: '42' });
+  const request = { hostProjectId: attached.hostProjectId, argv: ['fixture-check'], env: { CUSTOM_RUNTIME_SETTING: 'anything' }, idempotencyKey: 'native-mcp-durable-job' };
+  const job = await call(client, 'job_start', request);
+  assert.equal(job.workspaceId, null);
+  assert.equal(job.network, 'host');
+  assert.equal(job.timeoutSeconds, 0);
+  await status(client, job.id, 'running');
+  // Live reads do not require an idle workspace, and include runtime files.
+  assert.equal((await call(client, 'host_file_read', { hostProjectId: attached.hostProjectId, path: '.env' })).content, content.content);
+  f.runner.complete();
+  const completed = await status(client, job.id, 'completed');
+  assert.equal(completed.exitCode, 0);
+  assert.equal(completed.revisionVerified, false);
+  assert.ok(completed.outputRetention.rawLogs.stdout.endsWith('stdout.raw'));
+  const fresh = await f.connect();
+  assert.equal((await call(fresh, 'job_start', request)).id, job.id);
+  assert.equal((await call(fresh, 'host_projects_list')).projects[0].hostProjectId, attached.hostProjectId);
+  assert.equal((await call(fresh, 'jobs_list', { hostProjectId: attached.hostProjectId })).jobs[0].id, job.id);
 });

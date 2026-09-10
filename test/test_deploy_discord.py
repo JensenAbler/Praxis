@@ -431,7 +431,7 @@ class DeploymentTests(unittest.TestCase):
         self.assertIsNone(last['nextCursor'])
         self.assertNotIn('request', page['operations'][0])
 
-    def test_diagnosis_exports_only_operational_events_and_safe_error_codes(self):
+    def test_diagnosis_returns_raw_owner_logs_alongside_health_classifications(self):
         now = datetime.datetime.now(datetime.timezone.utc).isoformat()
         self.worker.log_path.write_text('\n'.join([
             f'[{now}] [INFO] [Bot] Logged in as private-user#1234',
@@ -443,7 +443,9 @@ class DeploymentTests(unittest.TestCase):
         result = self.worker.handle({'action': 'diagnosis', 'limit': 10})
         serialized = json.dumps(result)
         for secret in ('private-user', 'private conversation', 'never-echo-this', 'token='):
-            self.assertNotIn(secret, serialized)
+            self.assertIn(secret, serialized)
+        self.assertEqual(result['logs']['redaction'], 'none')
+        self.assertEqual(len(result['logs']['rawLines']), 5)
         self.assertIn('ECONNREFUSED', serialized)
         self.assertEqual(result['logs']['omittedLines'], 1)
         self.assertTrue(result['health']['processRunning'])

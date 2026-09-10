@@ -6,7 +6,9 @@ import { createTokenVerifier, createHealthVerifier } from '../token-verifier.js'
 import { CodeStore } from './store.js';
 import { WorkspaceManager, WorkspaceError, LIMITS as WORKSPACE_LIMITS } from './workspaces.js';
 import { CodeJobs, CodeJobError, CODE_JOB_LIMITS } from './jobs.js';
-import { PodmanRunner, RunnerError } from './runner.js';
+import { RunnerError } from './runner.js';
+import { NativeRunner } from './native-runner.js';
+import { HostAccess } from './host.js';
 import { DEPENDENCY_LIMITS } from './dependencies.js';
 import { codeTools, parseCodeCall } from './schema.js';
 import { CodeGit } from './git.js';
@@ -16,9 +18,11 @@ import { correlationId, diagnosticRecord, errorRecovery, requestContext } from '
 export async function createCodingService(config) {
   for (const path of [config.dataDirectory, config.workspaceDirectory]) mkdirSync(path, { recursive: true, mode: 0o700 });
   const store = new CodeStore(config.dataDirectory);
-  const runner = config.runner || new PodmanRunner(config.runnerConfig);
-  const jobs = new CodeJobs({ store, dataDirectory: config.dataDirectory, runner, dependencyDirectory: config.dependencyDirectory });
-  const workspaces = new WorkspaceManager({ store, dataDirectory: config.dataDirectory, workspaceDirectory: config.workspaceDirectory, projects: config.projects });
+  const runner = config.runner || new NativeRunner(config.runnerConfig);
+  const native = runner.kind === 'native-root';
+  const host = new HostAccess({ dataDirectory: config.dataDirectory });
+  const jobs = new CodeJobs({ store, dataDirectory: config.dataDirectory, runner, host, dependencyDirectory: config.dependencyDirectory });
+  const workspaces = new WorkspaceManager({ store, dataDirectory: config.dataDirectory, workspaceDirectory: config.workspaceDirectory, legacyWorkspaceDirectories: config.legacyWorkspaceDirectories, native, projects: config.projects });
   jobs.workspaces = workspaces;
   const git = config.git ? new CodeGit({ store, workspaces, ...config.git, broker: config.git.broker || createGitClient(config.git) }) : null;
   // Staging is additionally isolated by a different OS identity, private
@@ -61,7 +65,7 @@ export async function createCodingService(config) {
       const owner = req.principal.extra.subject;
       requestContext.getStore().token = req.principal.token;
       const data = req.body.action === 'capabilities' ? {
-        name: 'Praxis', apiVersion: '0.5.0', schemaVersion: 5, release: config.release, bootId,
+        name: 'Praxis', apiVersion: '0.6.0', schemaVersion: 6, release: config.release, bootId,
         scope: 'Registered immutable source snapshots and isolated coding workspaces. ChatGPT or Claude supplies reasoning.',
         workflow: ['projects_list', 'project_inspect', 'workspace_create', 'file_read/code_search', 'workspace_apply', 'job_start', 'job_status/job_logs', 'workspace_diff'],
         recovery: 'Use workspaces_list, jobs_list, and operations_list in a fresh conversation. Keep the same idempotency key and inputs after uncertain responses. A terminal or ambiguous command is never automatically rerun.',
@@ -100,10 +104,34 @@ export async function createCodingService(config) {
           { operation: 'unrestricted network access and private package registries', reason: 'Development egress is limited to configured public package registry hosts.' },
           { operation: 'Unregistered production services, arbitrary host administration and browser operation', reason: 'Only configured adapters and typed actions are exposed.' },
           { operation: 'Persistent storage and third-party Python dependencies in new deployed apps', reason: 'The first new-project deployment adapter is stateless; Python package installation is available in development workspaces.' }
-        ]
+        ],
+        ...(native ? {
+          scope: 'Owner-authenticated native root access to Alpha. No containers, filesystem allowlists, registry proxy, command allowlist, or production-content redaction in host tools.',
+          workflow: ['host_projects_list', 'host_files_list/host_file_read/host_search', 'host_file_patch or job_start', 'job_status/job_logs', 'review with native git diff', 'native git commit/push and deployment commands'],
+          hostAccess: { user: 'root', filesystem: 'All host paths; projects and named data roots are discovery shortcuts, not access boundaries.',
+            commands: 'Use job_start with hostProjectId or any absolute cwd. Shells, Git, SSH, systemctl, database tools, browser automation and normal package managers may run as native host programs.',
+            content: 'Logs, transcripts, recordings, images and generated results are accessible through generic host tools, including hidden files and symlinks. No content is redacted.',
+            projects: 'Use host_project_attach for any existing directory or create one using a native command. No project templates or registration are required for host execution.' },
+          execution: { runtime: runner.executionIdentity, user: 'root', network: 'ordinary host networking', containers: false,
+            home: runner.homeDirectory, jobsDirectory: runner.jobsDirectory, defaultTimeoutSeconds: 0, maxTimeoutSeconds: null, maxActiveJobs: null,
+            resourceLimits: 'No Praxis CPU, memory, process-count or storage quota. Host capacity and explicitly requested job deadlines apply.',
+            persistence: 'Independent systemd units supervise each native worker. Persistent homes/caches and job files survive client/backend restarts. Ambiguous executions are never relaunched automatically.',
+            output: 'Complete stdout/stderr and ordered event files remain on disk without retention-size truncation. job_status/job_logs provide bounded indexed excerpts; use rawLogs paths with host tools for full output.' },
+          dependencies: { registryAccessEnabled: true, preparationEnabled: Boolean(config.dependencyDirectory),
+            workflow: 'Use ordinary npm, pip, apt, Git or other installers with host networking and persistent caches. Private registries and Git dependencies are available with installed owner credentials. Existing dependency_prepare is an optional provenance/publishing convenience.',
+            persistentHome: runner.homeDirectory },
+          selfImprovement: { enabled: true, boundary: 'Native root jobs can maintain every Praxis component, including gateway, coding tools, configuration, authentication, deployment helpers and updater.',
+            recovery: 'Preserve a working release and durable job records when changing the service. The existing release tools remain a convenient staged activation path; they are not an authority boundary.' },
+          limits: { requestBytes: 524288, resultPages: 'Bounded pages keep tool responses usable; they do not limit file size, total raw logs or host access.',
+            indexedJobExcerpts: { headBytes: CODE_JOB_LIMITS.logBytes, tailBytes: CODE_JOB_LIMITS.tailBytes },
+            compatibilityWorkspaces: 'Immutable workspace/export tools retain their source-snapshot semantics. Direct host tools and commands are unrestricted and support live files of any size.' },
+          disabled: [],
+          recovery: 'Use host_projects_list and jobs_list in a fresh conversation. Inspect job_status before repeating work; preserve the original key and inputs after uncertainty. Native raw logs remain on disk. Root jobs can diagnose and maintain the control services directly.'
+        } : {})
       } : await (() => {
+        if (tool.target === 'host' && !native) throw new WorkspaceError('NATIVE_EXECUTION_REQUIRED', 'Host access requires the native-root service. This compatibility instance only serves workspace tools.');
         if (tool.target === 'git' && !git) throw new WorkspaceError('PUBLICATION_DISABLED', 'Publishing is not configured on this service.');
-        return (tool.target === 'git' ? git : tool.target === 'jobs' ? jobs : workspaces)[tool.method]({ ...args, owner });
+        return (tool.target === 'host' ? host : tool.target === 'git' ? git : tool.target === 'jobs' ? jobs : workspaces)[tool.method]({ ...args, owner });
       })();
       res.json({ ok: true, requestId: requestContext.getStore().requestId, data });
     } catch (error) {
@@ -129,7 +157,7 @@ export async function createCodingService(config) {
     pending = Promise.resolve().then(() => jobs.tick()).catch(error => console.error(JSON.stringify(diagnosticRecord('coding_tick_failed', error)))).finally(() => { pending = undefined; });
   }, config.pollIntervalMs || 500);
   timer?.unref();
-  return { app, jobs, workspaces, git, store, async close() { stopped = true; clearInterval(timer); await pending; store.close(); } };
+  return { app, jobs, workspaces, git, host, store, async close() { stopped = true; clearInterval(timer); await pending; host.close(); store.close(); } };
 }
 
 function isEntrypoint() {

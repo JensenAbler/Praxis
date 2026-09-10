@@ -11,10 +11,19 @@ export const dependencyPackCommand = image => ['python3', '-c', PACK_SCRIPT, ima
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 function failure(message) { return Object.assign(new Error(message), { code: 'DEPENDENCY_BUNDLE_FAILED' }); }
 
-export function dependencyManifestHashes(workspacePath) {
+function hashPath(path) {
+  const fd = openSync(path, constants.O_RDONLY), hash = createHash('sha256'), chunk = Buffer.alloc(1024 * 1024);
+  try {
+    if (!fstatSync(fd).isFile()) throw failure('Dependency manifest is not a regular file.');
+    while (true) { const count = readSync(fd, chunk, 0, chunk.length, null); if (!count) break; hash.update(chunk.subarray(0, count)); }
+    return hash.digest('hex');
+  } finally { closeSync(fd); }
+}
+
+export function dependencyManifestHashes(workspacePath, { native = false } = {}) {
   const result = {};
   for (const [key, name] of [['packageJsonSha256', 'package.json'], ['packageLockSha256', 'package-lock.json'], ['shrinkwrapSha256', 'npm-shrinkwrap.json']]) {
-    try { result[key] = digest(readSafe(workspacePath, name)); }
+    try { result[key] = native ? hashPath(join(workspacePath, name)) : digest(readSafe(workspacePath, name)); }
     catch (error) { if (error.code === 'ENOENT') result[key] = null; else throw error; }
   }
   return result;
@@ -26,23 +35,26 @@ function syncDirectory(path) {
   try { fsyncSync(fd); } finally { closeSync(fd); }
 }
 
-/** Copy only after the container is terminal. Sandbox bytes are untrusted;
+/** Copy only after the preparation job is terminal. Prepared bytes are untrusted;
  * deployment independently validates archive entries and exact Git manifests. */
 export function sealDependencies({ workspacePath, directory, workspaceId, revision, jobId, image }) {
+  const native = typeof image === 'string' && image.startsWith('native-root:');
   const root = resolve(directory);
   mkdirSync(root, { recursive: true, mode: 0o700 });
   if (!lstatSync(root).isDirectory() || lstatSync(root).isSymbolicLink() || realpathSync(root) !== root) throw failure('Unsafe dependency storage.');
-  const hashes = dependencyManifestHashes(workspacePath);
+  const hashes = dependencyManifestHashes(workspacePath, { native });
   if (!hashes.packageJsonSha256 || !(hashes.packageLockSha256 || hashes.shrinkwrapSha256)) throw failure('A package manifest and lockfile are required.');
   const metadata = JSON.parse(readSafe(workspacePath, '.cache/praxis-dependencies.json', 16384));
   if (Object.entries(hashes).some(([key, value]) => metadata[key] !== value)) throw failure('Dependency manifests changed during preparation.');
-  if (metadata.platform !== 'linux' || !['x64', 'arm64'].includes(metadata.arch) || !Number.isInteger(metadata.nodeMajor) || metadata.nodeMajor < 22) throw failure('Unsupported dependency runtime.');
+  if (!Number.isInteger(metadata.nodeMajor) || metadata.nodeMajor < 1 || typeof metadata.platform !== 'string' || typeof metadata.arch !== 'string'
+    || (!native && (metadata.platform !== 'linux' || !['x64', 'arm64'].includes(metadata.arch) || metadata.nodeMajor < 22))) throw failure('Unsupported dependency runtime.');
+  if (metadata.executionIdentity !== undefined && metadata.executionIdentity !== image) throw failure('Dependency execution identity changed.');
   // readSafe's small source limit does not apply to this bounded generated archive.
   const cache = join(workspacePath, '.cache');
   if (!lstatSync(cache).isDirectory() || lstatSync(cache).isSymbolicLink()) throw failure('Unsafe dependency cache.');
   const source = join(cache, 'praxis-dependencies.tar');
   const sourceStat = lstatSync(source);
-  if (!sourceStat.isFile() || sourceStat.isSymbolicLink() || sourceStat.nlink !== 1 || sourceStat.size > DEPENDENCY_LIMITS.archiveBytes || sourceStat.size < 1024) throw failure('Invalid dependency archive.');
+  if (!sourceStat.isFile() || sourceStat.isSymbolicLink() || sourceStat.nlink !== 1 || (!native && sourceStat.size > DEPENDENCY_LIMITS.archiveBytes) || sourceStat.size < 1024) throw failure('Invalid dependency archive.');
   for (const name of readdirSync(root).filter(name => /^[a-f0-9]{64}\.json$/.test(name))) {
     const saved = JSON.parse(readSafe(root, name, 16384));
     if (saved.jobId !== jobId) continue;
@@ -60,7 +72,7 @@ export function sealDependencies({ workspacePath, directory, workspaceId, revisi
   // Reserve the incoming copy before any writes outside hard-capped workspaces.
   // Full retention needs explicit maintenance; old published bundles are never
   // silently removed while a deployment or recovery may still reference them.
-  if (retained.length >= DEPENDENCY_LIMITS.retainedBundles || retained.reduce((total, file) => total + file.size, 0) + sourceStat.size > DEPENDENCY_LIMITS.totalArchiveBytes) {
+  if (!native && (retained.length >= DEPENDENCY_LIMITS.retainedBundles || retained.reduce((total, file) => total + file.size, 0) + sourceStat.size > DEPENDENCY_LIMITS.totalArchiveBytes)) {
     throw failure('Dependency bundle retention is full; recover published references before owner maintenance.');
   }
   const temporary = join(root, `${jobId}.pending`);
@@ -109,6 +121,7 @@ export function sealDependencies({ workspacePath, directory, workspaceId, revisi
   }
   const manifest = { version: 1, archiveSha256, archiveBytes: sourceStat.size, ...hashes,
     workspaceId, revision, jobId, image, platform: metadata.platform, arch: metadata.arch, nodeMajor: metadata.nodeMajor,
+    ...(native ? { executionMode: 'native', executionIdentity: image } : {}),
     nodeVersion: metadata.nodeVersion, createdAt: new Date().toISOString(), validation: 'Prepared bytes only; run application tests separately.' };
   const manifestPath = join(root, `${archiveSha256}.json.pending`);
   const manifestFd = openSync(manifestPath, constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | (constants.O_NOFOLLOW ?? 0), 0o600);
