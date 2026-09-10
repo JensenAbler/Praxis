@@ -1,0 +1,92 @@
+{
+  "version": 1,
+  "kind": "isolated-linux-autonomy-qualification",
+  "milestone": "Praxis 0.5 autonomy",
+  "qualifiedRelease": {
+    "sourceCommit": "3c9dd86433ee41f4941add780c18a09c1f1e741e",
+    "qualificationId": "autonomy-3c9dd86433ee-e93ee01bd4e8",
+    "qualificationScript": "deploy/qualify-autonomy.sh",
+    "artifactSha256": "66bffed2fd2c1dd8961271d77241a8aae2977051b977789f64a18461a99a44f4",
+    "sourceArchiveSha256": "3cb7d66ac01ef595d51889f19015567a044e8ca945436391f8e56ab214202332",
+    "sourceTreeSha256": "cd647a3124c6250d01a00384fba20520a6cf178780163de1bfd80ed78026f2e9",
+    "acceptanceReceiptSha256": "ae32b376912f642d130ef96b6f1dbd9d7d0feff1754a20971695088e6f051e2c",
+    "npmTestPassed": true,
+    "authenticatedMcpPassed": true,
+    "productionCredentialsAvailable": false,
+    "nativePhoneRun": false
+  },
+  "nodeTests": {
+    "sourceCommit": "3c9dd86433ee41f4941add780c18a09c1f1e741e",
+    "kind": "isolated Linux automated test suite",
+    "command": "npm test",
+    "tests": 164,
+    "passed": 164,
+    "failed": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0,
+    "durationMilliseconds": 49703.082071,
+    "exitCode": 0,
+    "privateNetwork": true,
+    "logSha256": "0cf6dfa976a40c1ebecbbfa76844772ba8309075f17741dbb6601f3252805139"
+  },
+  "authenticatedMcp": {
+    "sourceCommit": "3c9dd86433ee41f4941add780c18a09c1f1e741e",
+    "kind": "isolated API-client readiness fixture",
+    "passed": true,
+    "exitCode": 0,
+    "privateNetwork": true,
+    "executor": "Inert; accidental command execution fails closed.",
+    "checks": [
+      "Authenticated MCP initialization",
+      "Tool discovery",
+      "Fixture source read",
+      "Job listing",
+      "Invalid authentication rejected with HTTP 401"
+    ],
+    "existingJobInspected": false,
+    "limitation": "No existing job was returned, so this fixture did not exercise job-status recovery or start a real coding command.",
+    "logSha256": "17ad38ecb0b1b4e8bf3cc389f4871a79aaa768827b8f2442edb46d8cf4eaefb2"
+  },
+  "pythonTests": {
+    "sourceCommit": "c9081a44ae02ec21dfdaa327e55f199a4f854676",
+    "kind": "isolated Linux root helper fixtures with simulated production effects",
+    "command": "python3 -m unittest discover -s test -p test_*.py",
+    "tests": 134,
+    "passed": 134,
+    "failed": 0,
+    "durationSeconds": 22.765,
+    "result": "OK; systemd recorded successful deactivation.",
+    "completedAt": "2026-09-10T00:02:42Z",
+    "privateNetwork": true,
+    "filesystem": "Read-only source and strict filesystem protection; production data and service sockets masked; private temporary filesystems.",
+    "temporaryFilesystemCapacityBytes": 3221225472,
+    "memoryLimitBytes": 536870912,
+    "capabilities": [
+      "CAP_CHOWN",
+      "CAP_DAC_OVERRIDE",
+      "CAP_FOWNER",
+      "CAP_FSETID"
+    ],
+    "logSha256": "f02cd419939bceb2ff4ba0b0213acc7cf863be72b2a8d3189bd2612cd645c8e1",
+    "sourceRevisionRelationship": "Only scripts/release-candidate-check.js changed between this tested commit and the qualified release. Python helper and fixture files were unchanged; the Python suite was not rerun under the later commit identifier.",
+    "earlierAttempt": "A 2 GiB temporary filesystem yielded 133 passes and one dependency-staging free-space admission failure. The passing rerun used 3 GiB capacity with the same 512 MiB memory limit; no application code changed."
+  },
+  "relatedEvidence": [
+    {
+      "file": "docs/evidence/autonomy-v05-dependency-executor.json",
+      "kind": "real Linux rootless executor fixture",
+      "authenticatedMcp": false,
+      "scope": "Actual container jobs covered npm and Python package installation, offline persistence, restricted registry networking, unprivileged package scripts, and dependency archive preparation.",
+      "sourceCommit": null,
+      "sourceRevisionLimitation": "The referenced fixture records its executor image and job evidence, but does not record an exact Praxis source commit. It is separate from the qualified release acceptance and inert MCP readiness fixture."
+    }
+  ],
+  "notEstablishedByThisEvidence": [
+    "A native iPhone run of Praxis 0.5",
+    "An actual deployment of a newly created project",
+    "An actual Praxis self-update or rollback",
+    "An actual production diagnosis or recovery operation",
+    "End-to-end dependency installation through authenticated MCP on the qualified release"
+  ]
+}
