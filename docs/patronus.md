@@ -23,3 +23,22 @@ Validation checkpoint: 209 automated tests passed with no failures or skips. A t
 Deployment prerequisite on Alpha: approve and configure a version-specific AppArmor rule granting userns to Patronus's exact root-owned Chromium executable paths. Do not disable Chromium sandboxing or change the global user-namespace restriction. The installer does not currently provision this rule. Retain the current Praxis release until Patronus passes its operational checks.
 
 Owner approved the scoped persistent AppArmor exception on 2026-09-13. The installer now provisions exact executable-path grants for its versioned, root-owned browser build. Global user-namespace policy and Chromium sandboxing remain enabled. Deployment and live acceptance checks follow this checkpoint.
+
+## Live acceptance — 2026-09-13
+
+Installed runtime commit: 9867100348215b0c940d2fe1301ac3b7f0f67e42.
+Praxis release: app-986710034821-ba406c7d. Deployment completed with authenticated MCP health and invalid-auth rejection. All 209 automated tests passed in the release build.
+
+- Real podcast transcript: episode-05-v009 read successfully through Chromium.
+- Transcript with images: episode-08-v005 retrieved both inline PNGs and a screenshot; job a60a416b-c425-43a9-8dd3-6dc78c9b765e succeeded.
+- JavaScript fixture: text inserted by JavaScript appeared in extracted Markdown.
+- Session fixture: the same resource returned AUTH_REQUIRED without its cookie and succeeded with a preconfigured cookie. This verifies cookie-based authentication, not a real third-party account. No personal account credentials were supplied.
+- Download fixture: cancelled and resumed 8,388,588 bytes, independently matched the final SHA-256. Completed job a7983242-f622-42be-88d5-1bf95c702e30.
+- X post 2099200669744066585: HTTP 403, recorded as ACCESS_DENIED; no content claimed.
+- Authenticated MCP fixture gateway using published backend code successfully read Patronus capabilities, saved jobs, status, and artifact bytes from the installed service. This is API-client evidence, not an iPhone tool invocation.
+- Temporary nginx fixture routes and synthetic browser profile were removed; nginx configuration validated before and after.
+- Exact-path AppArmor grants installed for the root-owned versioned browser executables. Chromium sandbox stays enabled. Patronus runs unprivileged with its private Unix socket.
+
+Reproduce owned-origin fixtures with scripts/patronus-acceptance.py on Alpha. The script temporarily adds exact routes to the podcast nginx server and briefly stops Patronus to provision/remove a synthetic cookie profile, after waiting for existing jobs. Run only during an appropriate test window. scripts/patronus-mcp-check.js accepts the published application directory and an empty temporary state directory, matching the existing candidate-check interface.
+
+Tool discovery may need refreshing in an already-open client connection. Mega downloads requiring its decryption protocol, local-storage login imports, purchases, and challenge solving are not implemented in v1.
