@@ -126,7 +126,7 @@ export class Patronus {
   let observedBytes=0,context;
   const proxy=await startProxy({signal,maxBytes:args.maxBytes-d.bytes,onBytes:n=>{d.bytes+=n-observedBytes;observedBytes=n;}});
   try{
-   context=await this.launch({path:profile,config:{headless:true,chromiumSandbox:true,proxy:{server:proxy.url,bypass:'<-loopback>'},serviceWorkers:'block',acceptDownloads:false,permissions:[],userAgent:agent,
+   context=await this.launch({path:profile,config:{channel:'chromium',headless:true,chromiumSandbox:true,proxy:{server:proxy.url,bypass:'<-loopback>'},serviceWorkers:'block',acceptDownloads:false,permissions:[],userAgent:agent,
     args:['--disable-quic','--force-webrtc-ip-handling-policy=disable_non_proxied_udp','--disable-background-networking']}});
    if(signal.aborted)throw signal.reason;
    signal.addEventListener('abort',()=>context.close().catch(()=>{}),{once:true});
@@ -191,7 +191,7 @@ export class Patronus {
        const profile=join(this.root,'profiles',args.profile);
        if(!existsSync(profile))throw fault('PROFILE_MISSING');
        const proxy=await startProxy({signal:controller.signal,maxBytes:0});let context;
-       try{context=await this.launch({path:profile,config:{headless:true,chromiumSandbox:true,proxy:{server:proxy.url,bypass:'<-loopback>'},serviceWorkers:'block',acceptDownloads:false,args:['--disable-quic','--force-webrtc-ip-handling-policy=disable_non_proxied_udp','--disable-background-networking']}});
+       try{context=await this.launch({path:profile,config:{channel:'chromium',headless:true,chromiumSandbox:true,proxy:{server:proxy.url,bypass:'<-loopback>'},serviceWorkers:'block',acceptDownloads:false,args:['--disable-quic','--force-webrtc-ip-handling-policy=disable_non_proxied_udp','--disable-background-networking']}});
         if(controller.signal.aborted)throw controller.signal.reason;
         await context.route('**/*',route=>route.abort());const imported=join(profile,'access.json');if(existsSync(imported))await context.addCookies(JSON.parse(readFileSync(imported,'utf8')).cookies||[]);
         const cookies=await context.cookies(raw);headers={cookie:cookies.map(c=>c.name+'='+c.value).join('; ')};

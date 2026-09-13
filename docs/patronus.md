@@ -44,3 +44,32 @@ Reproduce owned-origin fixtures with scripts/patronus-acceptance.py on Alpha. Th
 Tool discovery may need refreshing in an already-open client connection. Mega downloads requiring its decryption protocol, local-storage login imports, purchases, and challenge solving are not implemented in v1.
 
 Browser HTTP errors and detected challenge pages now save bounded diagnostic headers, rendered HTML as inert text, visible text, and a viewport screenshot. Header values use an allowlist; omitted header names are recorded without cookie/token values. Diagnostics remain untrusted, authenticated artifacts and never turn a failed retrieval into success. Capture failures are recorded independently. HTTP-only errors do not yet capture page artifacts.
+
+
+## X browser compatibility investigation (2026-09-13)
+
+Alpha comparisons with fresh profiles and the same declared Patronus User-Agent
+returned HTTP 403 / 200 / 200 / 403 when alternating Chromium Headless Shell /
+full Chromium / full Chromium / Headless Shell. All four ran headlessly with the
+existing sandbox and public-network proxy, using HTTP/2 and the same X upstream IP.
+Full Chromium retrieved the public post and parent post text without account login:
+https://x.com/jensenabler/status/2099200669744066585
+Results were partial because some subrequests exceeded reader policy and image
+coverage was incomplete. The original persistent service still returned 403.
+
+An owned-endpoint header comparison found Headless Shell advertised HeadlessChrome
+in client hints and omitted Accept-Language. Full Chromium advertised Chromium and
+sent Accept-Language: en-US,en;q=0.9. Both exposed navigator.webdriver=true.
+These observations do not isolate an individual detection signal or reveal X's
+denial rule. A separate full Chromium headless run with its default User-Agent
+returned 403, so success applies to the tested Patronus configuration.
+
+Persistent browser contexts and the smoke check now explicitly select
+channel: 'chromium', Playwright's supported full Chromium headless implementation:
+https://playwright.dev/docs/browsers#chromium-new-headless-mode
+The declared Patronus identity, sandbox and retrieval policies remain in place.
+
+Durable evidence:
+- alternating build comparison: 430cff60-4d4a-48f3-823c-d5ef2edda4c6
+- owned-endpoint headers: 6db69f67-560c-4902-b75b-a6174b77e816
+- persistent-service failed retrieval: b6081af6-9bd8-49d9-97cd-c23f9142de00
