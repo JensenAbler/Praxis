@@ -23,6 +23,15 @@ for root,dirs,files in os.walk(target):
  for name in files:
   p=pathlib.Path(root)/name
   if not p.is_symlink(): os.chmod(p,0o755 if p.stat().st_mode&0o111 else 0o644)
+# Owner-approved, version-specific user namespace permission for Chromium.
+if pathlib.Path('/sys/module/apparmor/parameters/enabled').exists():
+ binaries=list((target/'browsers').glob('chromium_headless_shell-*/chrome-headless-shell-linux64/chrome-headless-shell'))+list((target/'browsers').glob('chromium-*/chrome-linux64/chrome'))
+ if not binaries: raise SystemExit('Installed browser executable missing')
+ policy='abi <abi/4.0>,\ninclude <tunables/global>\n'
+ for i,binary in enumerate(binaries):
+  policy+=f'profile patronus-{revision}-{i} {binary} flags=(unconfined) {{\n userns,\n}}\n'
+ policy_path=pathlib.Path('/etc/apparmor.d')/('patronus-'+revision)
+ policy_path.write_text(policy);run('apparmor_parser','-r',str(policy_path))
 for p in ['/var/lib/patronus','/run/patronus']:
  pathlib.Path(p).mkdir(parents=True,exist_ok=True);run('chown','patronus:patronus',p);os.chmod(p,0o700)
 unit=f"""[Unit]
@@ -56,7 +65,9 @@ InaccessiblePaths=-/opt -/root -/var/lib/praxis-root -/srv/praxis-code -/srv/pra
 [Install]
 WantedBy=multi-user.target
 """
-pathlib.Path('/etc/systemd/system/patronus.service').write_text(unit)
+unit_path=pathlib.Path('/etc/systemd/system/patronus.service')
+if unit_path.exists(): (target/'previous-service.unit').write_text(unit_path.read_text())
+unit_path.write_text(unit)
 run('systemctl','daemon-reload');run('systemctl','enable','--now','patronus.service');run('systemctl','restart','patronus.service')
 run('systemctl','is-active','patronus.service')
 print(json.dumps({'revision':revision,'service':'patronus','source':str(target)}))
