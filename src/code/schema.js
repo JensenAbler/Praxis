@@ -1,3 +1,4 @@
+import { patronusTools } from '../patronus/schema.js';
 import { z } from 'zod';
 import { hostTools } from './host-schema.js';
 
@@ -58,6 +59,7 @@ export const codeTools = {
   job_cancel: { target: 'jobs', method: 'cancel', write: true, destructive: true, title: 'Cancel a coding job', description: 'Request cancellation of an existing command. The worker records its actual outcome; terminal jobs stay terminal.', schema: object({ jobId: id }) },
   artifact_list: { target: 'jobs', method: 'artifactList', title: 'List preserved job artifacts', description: 'List files copied into protected result storage after the job ended, including sizes and hashes.', schema: object({ jobId: id }) },
   artifact_read: { target: 'jobs', method: 'artifactRead', title: 'Read a preserved artifact', description: 'Read a bounded page of a preserved artifact by its identifier. Source access is authenticated and independent of the original chat. Omit limit for 16384 bytes; copy returned nextCursor.', schema: object({ jobId: id, artifactId: z.string().min(1).max(128).describe('Exact artifact identifier returned by artifact_list; this identifier is not necessarily the content hash.'), cursor, limit: pageSize('artifact bytes', 32768, 16384) }) },
+  ...patronusTools,
   ...hostTools
 };
 

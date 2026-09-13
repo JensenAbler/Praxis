@@ -1,3 +1,4 @@
+import { patronusCall } from '../patronus/client.js';
 import express from 'express';
 import { SOURCE_WORKFLOW, SOURCE_WORKFLOW_STEPS } from '../workflow-policy.js';
 import { mkdirSync, readFileSync, realpathSync } from 'node:fs';
@@ -131,6 +132,7 @@ export async function createCodingService(config) {
           recovery: 'Use projects_list, workspaces_list and jobs_list to recover source work; use host_projects_list for operational data. Inspect job_status before repeating work and preserve keys after uncertainty. Native raw logs remain on disk.'
         } : {})
       } : await (() => {
+        if (tool.target === 'patronus') return patronusCall(req.body.action, args).catch(error => { throw new WorkspaceError(error.code || 'BACKEND_UNAVAILABLE', error.message); });
         if (tool.target === 'host' && !native) throw new WorkspaceError('NATIVE_EXECUTION_REQUIRED', 'Host access requires the native-root service. This compatibility instance only serves workspace tools.');
         if (tool.target === 'git' && !git) throw new WorkspaceError('PUBLICATION_DISABLED', 'Publishing is not configured on this service.');
         return (tool.target === 'host' ? host : tool.target === 'git' ? git : tool.target === 'jobs' ? jobs : workspaces)[tool.method]({ ...args, owner });
