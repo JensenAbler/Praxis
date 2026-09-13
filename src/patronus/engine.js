@@ -87,6 +87,38 @@ export class Patronus {
   await pipeline(response,meter,new Transform({transform:(b,_e,cb)=>{chunks.push(b);cb();}}),{signal});
   return {body:Buffer.concat(chunks),mime,url,status:code};
  }
+ diagnosticArtifact(d,args,name,mimeType,body){
+  const b=Buffer.isBuffer(body)?body:Buffer.from(body);
+  this.budget(d,args,b.length);d.bytes+=b.length;
+  const artifactId=randomUUID();writeFileSync(join(this.root,'jobs',d.jobId,artifactId),b,{mode:0o600});
+  d.artifacts.push({artifactId,name,mimeType,bytes:b.length,sha256:digest(b),complete:true,untrustedContent:true,diagnostic:true});this.save(d);return artifactId;
+ }
+ async browserFailure(page,response,d,args,reason){
+  const item={at:now(),url:displayURL(page.url()),status:response?.status()||null,reason,route:'browser',artifacts:{},captureErrors:[]};
+  (d.diagnostics??=[]).push(item);this.save(d);
+  const attempt=async(name,fn)=>{try{await fn();}catch(e){item.captureErrors.push({part:name,code:/^[A-Z_]+$/.test(e.code||'')?e.code:'CAPTURE_FAILED'});}this.save(d);};
+  await attempt('headers',async()=>{
+   const raw=await response?.allHeaders()||{},headers={},redactedHeaders=[];
+   const allowed=/^(content-type|content-length|content-encoding|server|date|via|retry-after|cache-control|cf-ray|cf-mitigated|x-cache|x-served-by|x-request-id|x-transaction-id|x-response-time|x-amz-cf-id|x-amz-cf-pop|x-powered-by|strict-transport-security)$/i;
+   for(const [key,value] of Object.entries(raw)){if(allowed.test(key))headers[key]=String(value).slice(0,4096);else if(key.toLowerCase()==='location')headers[key]=displayURL(new URL(value,page.url()).href);else redactedHeaders.push(key);}
+   item.artifacts.headers=this.diagnosticArtifact(d,args,'denial-headers.json','application/json',JSON.stringify({status:item.status,url:item.url,headers,redactedHeaders}));
+  });
+  await attempt('content',async()=>{
+   const html=Buffer.from(await page.content()),max=262144;
+   item.contentTruncated=html.length>max;
+   item.artifacts.content=this.diagnosticArtifact(d,args,'denial-page.html.txt','text/plain',html.subarray(0,max));
+  });
+  await attempt('text',async()=>{
+   const text=await page.locator('body').innerText({timeout:2000});
+   item.artifacts.text=this.diagnosticArtifact(d,args,'denial-page.txt','text/plain',Buffer.from(text).subarray(0,65536));
+  });
+  await attempt('screenshot',async()=>{
+   const b=await page.screenshot({fullPage:false,timeout:3000});
+   if(b.length>2097152)throw fault('DIAGNOSTIC_LIMIT');
+   item.artifacts.screenshot=this.diagnosticArtifact(d,args,'denial-page.png','image/png',b);
+  });
+  return item;
+ }
  async browser(url,d,args,signal){
   const profile=join(this.root,'profiles',args.profile);
   if(args.profile!=='public'&&!existsSync(profile))throw fault('PROFILE_MISSING');
@@ -120,9 +152,9 @@ export class Patronus {
    await page.waitForLoadState('networkidle',{timeout:5000}).catch(()=>{});
    for(let n=0;n<3;n++){await page.evaluate(()=>window.scrollBy(0,window.innerHeight));await page.waitForTimeout(200);}
    const code=response?.status()||0;
-   if(code>=400)throw fault(code===401?'AUTH_REQUIRED':code===403?'ACCESS_DENIED':code===402?'PAYMENT_REQUIRED':'HTTP_ERROR','HTTP '+code);
+   if(code>=400){await this.browserFailure(page,response,d,args,'HTTP_ERROR');throw fault(code===401?'AUTH_REQUIRED':code===403?'ACCESS_DENIED':code===402?'PAYMENT_REQUIRED':code===429?'RATE_LIMIT':'HTTP_ERROR','HTTP '+code);}
    const html=await page.content(),final=page.url(),out=extract(html,final);
-   if(/^(just a moment|access denied|verify you are human)/i.test(out.title.trim()))throw fault('CHALLENGE','The page requires a challenge; no human-input loop is available.');
+   if(/^(just a moment|access denied|verify you are human)/i.test(out.title.trim())){await this.browserFailure(page,response,d,args,'CHALLENGE');throw fault('CHALLENGE','The page requires a challenge; no human-input loop is available.');}
    if(await page.locator('input[type=password]').count())out.coverage.possibleLoginPage=true;
    out.url=displayURL(final);out.route='browser';
    if(args.screenshot){

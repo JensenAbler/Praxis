@@ -52,3 +52,19 @@ test('Patronus resumes unchanged files and rejects changed validators',async()=>
   await assert.rejects(e.bytes(args.urls[0],d,args,new AbortController().signal,{file:true,resume:{etag:'"same"',bytes:3,path:original}}),{code:'RESUME_UNAVAILABLE'});
  }finally{await e.close();rmSync(root,{recursive:true,force:true});}
 });
+
+test('Browser denial evidence survives independently and redacts credential headers',async()=>{
+ const root=mkdtempSync(join(tmpdir(),'patronus-denial-'));const e=new Patronus(root);
+ try{
+  const args=patronusTools.patronus_start.schema.parse({urls:['https://example.com'],idempotencyKey:'denial-evidence-test'});
+  const d=e.start(args);
+  const page={url:()=> 'https://example.com/?secret=hidden',content:async()=>'<html><body>Blocked</body></html>',locator:()=>({innerText:async()=> 'Blocked'}),screenshot:async()=>{throw new Error('renderer closed');}};
+  const response={status:()=>403,allHeaders:async()=>({'server':'edge','set-cookie':'secret=value','x-token':'hidden','location':'/login?token=secret'})};
+  const info=await e.browserFailure(page,response,d,args,'HTTP_ERROR');
+  assert.equal(d.state,'queued');assert.equal(info.status,403);assert.equal(info.captureErrors[0].part,'screenshot');
+  const headers=JSON.parse(Buffer.from(e.artifact({jobId:d.jobId,artifactId:info.artifacts.headers}).content,'base64').toString());
+  assert.equal(headers.headers.server,'edge');assert.ok(headers.redactedHeaders.includes('set-cookie'));
+  assert.doesNotMatch(JSON.stringify(headers.headers),/secret=value|hidden|token=secret/);
+  assert.equal(e.status({jobId:d.jobId}).diagnostics[0].artifacts.content,info.artifacts.content);
+ }finally{await e.close();rmSync(root,{recursive:true,force:true});}
+});
