@@ -1,0 +1,34 @@
+{
+  "date": "2026-09-16",
+  "sourceCommit": "466471e929b306f32ecd30b791a09c973bde7494",
+  "kind": "Production authentication deployment, real OAuth API client, and restored Codex connector",
+  "deployment": {
+    "gatewayRelease": "control-466471e929b3",
+    "previousControl": "277f256f4d37",
+    "strategy": "Immutable control release preserving installed control bytes except the reviewed auth source, tests, migration utility and documentation; atomic current-pointer switch. Coding application remains app-a6fc58da9b05-8000f33d.",
+    "candidateTests": 208,
+    "candidatePassed": 208,
+    "candidateFailed": 0,
+    "candidateSkipped": 0,
+    "migratedTokenRecords": 4034,
+    "migrationIncludesConsumedReplayEvidence": true,
+    "credentialsPreserved": true,
+    "unrelatedServicePidsPreserved": true,
+    "codingBackendAndApplicationPointerPreserved": true,
+    "databasesRestored": false,
+    "previousReleaseRetained": true,
+    "updaterAuthenticationHashUpdated": true
+  },
+  "verification": {
+    "preDeploymentRealOAuthAndMcp": true,
+    "toolCount": 65,
+    "fixtureBrowserSessionDeleted": true,
+    "postMigrationRefreshAndMcp": true,
+    "postRestartRefreshAndMcp": true,
+    "observedRefreshLifetimeDays": 90,
+    "grantDeadlineAtLeastRefreshDeadline": true,
+    "existingCodexConnectorRecoveredWithoutPassword": true,
+    "nativePhoneRun": false,
+    "transientDuringRestart": "A verification request reached the gateway before startup was ready and received an HTML error; after health readiness, renewal and connector calls passed."
+  }
+}
