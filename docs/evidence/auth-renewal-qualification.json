@@ -1,0 +1,26 @@
+{
+  "date": "2026-09-16",
+  "kind": "Linux managed-workspace and authenticated API fixtures",
+  "baseCommit": "a6fc58da9b054e547d8021307f23462a1d54b5b6",
+  "workspaceId": "762c6e19-2816-46d3-8799-9db36878381c",
+  "regressionBefore": {
+    "test": "active authorization survives browser session expiry",
+    "expectedStatus": 200,
+    "actualStatus": 400,
+    "passed": false
+  },
+  "qualification": {
+    "jobId": "df15fc9c-917c-473d-abd4-ac49e6f60435",
+    "command": "npm test",
+    "exitCode": 0,
+    "tests": 208,
+    "passed": 208,
+    "failed": 0,
+    "skipped": 0,
+    "authenticatedMcpAfterSessionDeletion": true,
+    "simulatedDaysBeforePostRestartRenewal": 31,
+    "migrationAndReplayRevocation": true
+  },
+  "productionDeployment": "Pending at this commit",
+  "nativePhoneRun": false
+}

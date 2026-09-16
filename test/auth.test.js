@@ -5,8 +5,10 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import express from 'express';
+import { DatabaseSync } from 'node:sqlite';
 import { generateKeyPair, exportJWK, importJWK, SignJWT } from 'jose';
 import { createAuth } from '../src/auth.js';
+import { migrateAuthSessions } from '../deploy/migrate-auth-sessions.js';
 import { createApp } from '../src/server.js';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 
@@ -87,7 +89,7 @@ async function fixture(t, { integrated = false, codingEnabled = false } = {}) {
     const body = { grant_type: 'authorization_code', client_id: client.client_id, code: grant.code, code_verifier: grant.verifier, redirect_uri: client.redirect_uris[0], resource, ...extra };
     return request(`${prefix}/oauth/token`, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(body) });
   }
-  return { origin, issuer, resource, jwk, request, register, flow, exchange, get auth() { return auth; }, async restart() { auth.close(); auth = await createAuth(options); } };
+  return { directory, origin, issuer, resource, jwk, request, register, flow, exchange, get auth() { return auth; }, async restart() { auth.close(); auth = await createAuth(options); } };
 }
 
 test('OAuth discovery, owner login, PKCE, JWT verification and persistent rotating refresh', async (t) => {
@@ -195,10 +197,17 @@ test('Praxis endpoint publishes discovery aliases and serves MCP only after real
   assert.equal(rejected.status, 401);
   assert.match(rejected.headers.get('www-authenticate'), /invalid_token/);
   const registration = await f.register();
-  const grant = await f.flow(registration, { scope: 'praxis:probe offline_access' });
+  const grant = await f.flow(registration, { scope: 'praxis:probe' });
   const response = await f.exchange(registration, grant);
-  const token = await response.json();
-  assert.equal(response.status, 200, JSON.stringify(token));
+  const original = await response.json();
+  assert.equal(response.status, 200, JSON.stringify(original));
+  const db = new DatabaseSync(join(f.directory, 'oauth', 'auth.sqlite'));
+  db.exec("DELETE FROM records WHERE model='Session'");
+  db.close();
+  const renewal = await f.request('/praxis/oauth/token', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ grant_type: 'refresh_token', client_id: registration.client_id, refresh_token: original.refresh_token, resource: f.resource }) });
+  assert.equal(renewal.status, 200);
+  const token = await renewal.json();
   const client = new Client({ name: 'authenticated-probe-test', version: '1.0.0' });
   const transport = new StreamableHTTPClientTransport(new URL(f.resource), { requestInit: { headers: { Authorization: `Bearer ${token.access_token}` } } });
   try {
@@ -211,4 +220,95 @@ test('Praxis endpoint publishes discovery aliases and serves MCP only after real
     assert.equal(capabilities.structuredContent.resourceUrl, f.resource);
   } finally { await client.close(); }
   assert.equal(metadata.authorization_endpoint, `${f.issuer}/auth`);
+});
+
+test('active authorization survives browser session expiry and renews the grant beyond its original deadline', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: Date.now() });
+  const f = await fixture(t);
+  const client = await f.register();
+  // Native ChatGPT's observed authorization omitted offline_access.
+  const grant = await f.flow(client, { scope: 'praxis:probe' });
+  const token = await (await f.exchange(client, grant)).json();
+  assert.ok(token.refresh_token);
+  const db = new DatabaseSync(join(f.directory, 'auth.sqlite'));
+  t.after(() => { try { db.close(); } catch {} });
+  db.exec("DELETE FROM records WHERE model='Session'");
+  const deadline = Math.floor(Date.now() / 1000) + 60;
+  db.prepare("UPDATE records SET expires=?, payload=json_set(payload,'$.exp',?) WHERE model='Grant'").run(deadline, deadline);
+  const refresh = (value) => f.request('/oauth/token', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ grant_type: 'refresh_token', client_id: client.client_id, refresh_token: value, resource: f.resource }) });
+  const response = await refresh(token.refresh_token);
+  assert.equal(response.status, 200);
+  const renewed = await response.json();
+  assert.notEqual(renewed.refresh_token, token.refresh_token);
+  assert.deepEqual((await f.auth.verifyAccessToken(renewed.access_token)).scopes, ['praxis:probe']);
+  const storedGrant = db.prepare("SELECT expires, payload FROM records WHERE model='Grant'").get();
+  assert.ok(storedGrant.expires > deadline + 80 * 86400);
+  assert.equal(JSON.parse(storedGrant.payload).exp, storedGrant.expires);
+  t.mock.timers.tick(31 * 86400 * 1000);
+  await f.restart();
+  const afterRestart = await refresh(renewed.refresh_token);
+  assert.equal(afterRestart.status, 200);
+  const latest = await afterRestart.json();
+  const replay = await refresh(token.refresh_token);
+  assert.equal(replay.status, 400);
+  assert.equal((await replay.json()).error, 'invalid_grant');
+  assert.equal((await refresh(latest.refresh_token)).status, 400, 'replay must still revoke the token family');
+});
+
+test('owner migration preserves old credentials and replay detection without reviving expired or revoked grants', async (t) => {
+  const f = await fixture(t);
+  const client = await f.register();
+  const db = new DatabaseSync(join(f.directory, 'auth.sqlite'));
+  t.after(() => { try { db.close(); } catch {} });
+  const token = await (await f.exchange(client, await f.flow(client, { scope: 'praxis:probe' }))).json();
+  db.exec("UPDATE records SET payload=json_set(payload,'$.expiresWithSession',json('true')) WHERE model='RefreshToken'");
+  const before = db.prepare("SELECT id,payload,expires FROM records WHERE model='RefreshToken'").get();
+  db.exec("DELETE FROM records WHERE model='Session'");
+  assert.deepEqual(migrateAuthSessions(db, f.resource), { eligible: 1, updated: 0, dryRun: true });
+  assert.equal(db.prepare("SELECT payload FROM records WHERE model='RefreshToken'").get().payload, before.payload);
+  assert.equal(migrateAuthSessions(db, f.resource, { apply: true }).updated, 1);
+  assert.equal(migrateAuthSessions(db, f.resource, { apply: true }).updated, 0, 'safe to resume');
+  const after = db.prepare("SELECT id,payload,expires FROM records WHERE model='RefreshToken'").get();
+  assert.equal(after.id, before.id);
+  assert.equal(after.expires, before.expires);
+  assert.deepEqual(JSON.parse(after.payload), { ...JSON.parse(before.payload), expiresWithSession: false });
+  const refresh = (value) => f.request('/oauth/token', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ grant_type: 'refresh_token', client_id: client.client_id, refresh_token: value, resource: f.resource }) });
+  const renewedResponse = await refresh(token.refresh_token);
+  assert.equal(renewedResponse.status, 200);
+  const renewed = await renewedResponse.json();
+  // A consumed historical token still participates in replay revocation after migration.
+  db.exec("UPDATE records SET payload=json_set(payload,'$.expiresWithSession',json('true')) WHERE model='RefreshToken'");
+  assert.equal(migrateAuthSessions(db, f.resource, { apply: true }).updated, 2);
+  assert.equal((await refresh(token.refresh_token)).status, 400);
+  assert.equal((await refresh(renewed.refresh_token)).status, 400);
+  assert.equal(db.prepare("SELECT count(*) n FROM records WHERE model='Grant'").get().n, 0);
+
+  for (const invalidate of [
+    "UPDATE records SET expires=1, payload=json_set(payload,'$.exp',1) WHERE model='Grant'",
+    "DELETE FROM records WHERE model='Grant'",
+    "UPDATE records SET expires=1, payload=json_set(payload,'$.exp',1) WHERE model='RefreshToken'",
+  ]) {
+    const issued = await (await f.exchange(client, await f.flow(client, { scope: 'praxis:probe' }))).json();
+    db.exec("UPDATE records SET payload=json_set(payload,'$.expiresWithSession',json('true')) WHERE model='RefreshToken'");
+    db.exec(invalidate);
+    assert.equal(migrateAuthSessions(db, f.resource, { apply: true }).updated, 0);
+    assert.equal((await refresh(issued.refresh_token)).status, 400);
+    db.exec("DELETE FROM records WHERE model IN ('Grant','RefreshToken','Session')");
+  }
+});
+
+test('persistent refresh does not add permissions or renew an expired authorization', async (t) => {
+  const f = await fixture(t, { codingEnabled: true });
+  const client = await f.register();
+  const token = await (await f.exchange(client, await f.flow(client, { scope: 'praxis:probe' }))).json();
+  const refresh = (scope) => f.request('/oauth/token', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ grant_type: 'refresh_token', client_id: client.client_id, refresh_token: token.refresh_token, resource: f.resource, ...(scope ? { scope } : {}) }) });
+  assert.equal((await (await refresh('praxis:code')).json()).error, 'invalid_scope');
+  const db = new DatabaseSync(join(f.directory, 'auth.sqlite'));
+  db.exec("UPDATE records SET expires=1, payload=json_set(payload,'$.exp',1) WHERE model='Grant'");
+  assert.equal((await refresh()).status, 400);
+  assert.equal(db.prepare("SELECT expires FROM records WHERE model='Grant'").get().expires, 1);
+  db.close();
 });

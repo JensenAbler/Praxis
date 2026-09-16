@@ -10,6 +10,7 @@ import { createTokenVerifier, createHealthVerifier } from './token-verifier.js';
 const scrypt = promisify(scryptCallback);
 const OWNER = 'jensen';
 const SCOPE = 'praxis:probe';
+const AUTHORIZATION_IDLE_SECONDS = 90 * 24 * 3600;
 const now = () => Math.floor(Date.now() / 1000);
 const digest = (value) => createHash('sha256').update(value).digest('hex');
 const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
@@ -46,8 +47,22 @@ function adapterClass(db) {
   return class SqliteAdapter {
     constructor(model) { this.model = model; }
     async upsert(id, payload, expiresIn) {
-      put.run(this.model, id, JSON.stringify(payload), expiresIn ? now() + expiresIn : null,
-        payload.grantId ?? null, payload.uid ?? null, payload.userCode ?? null);
+      const timestamp = now();
+      const expires = expiresIn ? timestamp + expiresIn : null;
+      // A rotated refresh token must not outlive a fixed original grant deadline.
+      // Only issuance extends an existing, unexpired grant; reads and failed refreshes do not.
+      db.exec('BEGIN IMMEDIATE');
+      try {
+        put.run(this.model, id, JSON.stringify(payload), expires,
+          payload.grantId ?? null, payload.uid ?? null, payload.userCode ?? null);
+        if (this.model === 'RefreshToken' && expires && !payload.consumed) {
+          db.prepare(`UPDATE records SET expires=?, payload=json_set(payload,'$.exp',?)
+            WHERE model='Grant' AND id=? AND expires>? AND expires<?
+              AND json_extract(payload,'$.accountId')=? AND json_extract(payload,'$.clientId')=?`)
+            .run(expires, expires, payload.grantId, timestamp, expires, payload.accountId, payload.clientId);
+        }
+        db.exec('COMMIT');
+      } catch (error) { db.exec('ROLLBACK'); throw error; }
     }
     async find(id) { return unpack(db.prepare('SELECT payload,expires FROM records WHERE model=? AND id=?').get(this.model, id)); }
     async findByUid(uid) { return unpack(db.prepare('SELECT payload,expires FROM records WHERE model=? AND uid=?').get(this.model, uid)); }
@@ -136,8 +151,11 @@ export async function createAuth({ issuer, resourceUrl, passwordHash, jwks, cook
     interactions: { url: (_ctx, interaction) => `${issuer}/interaction/${interaction.uid}` },
     findAccount: (_ctx, id) => id === OWNER ? { accountId: OWNER, claims: async () => ({ sub: OWNER }) } : undefined,
     issueRefreshToken: (_ctx, client) => client.grantTypeAllowed('refresh_token'),
+    // Every owner-approved Praxis connection is persistent, including clients that
+    // omit offline_access. Browser cookies govern sign-in only, not API renewal.
+    expiresWithSession: () => false,
     rotateRefreshToken: true,
-    ttl: { AccessToken: 600, IdToken: 600, AuthorizationCode: 60, Interaction: 600, RefreshToken: 30 * 24 * 3600, Session: 7 * 24 * 3600, Grant: 30 * 24 * 3600 },
+    ttl: { AccessToken: 600, IdToken: 600, AuthorizationCode: 60, Interaction: 600, RefreshToken: AUTHORIZATION_IDLE_SECONDS, Session: 7 * 24 * 3600, Grant: AUTHORIZATION_IDLE_SECONDS },
     renderError: (_ctx, _out, _error) => { _ctx.type = 'html'; _ctx.body = '<!doctype html><title>Praxis sign-in</title><p>Authorization could not be completed. Return to your app and reconnect.</p>'; },
   });
   // The reverse proxy is trusted by the root application and supplies HTTPS forwarding headers.
@@ -177,7 +195,7 @@ export async function createAuth({ issuer, resourceUrl, passwordHash, jwks, cook
       ${error ? `<p class="error">${escapeHtml(error)}</p>` : ''}
       <form method="post" action="${escapeHtml(issuer)}/interaction/${escapeHtml(detail.uid)}">
       <input type="hidden" name="csrf" value="${csrf}">
-      ${login ? '<label>Praxis password<input name="password" type="password" required maxlength="1024" autocomplete="current-password" autofocus></label>' : '<p>Allow the permissions described above?</p>'}
+      ${login ? '<label>Praxis password<input name="password" type="password" required maxlength="1024" autocomplete="current-password" autofocus></label>' : '<p>Allow the permissions described above?</p><p>This connection stays authorized independently of browser sign-in. Successful renewal extends access for 90 days; after 90 days without renewal, sign in again. Revoke the connection to end access sooner.</p>'}
       <button name="action" value="allow">${login ? 'Sign in' : 'Allow connection'}</button><button name="action" value="deny" formnovalidate>Cancel</button></form></html>`);
   }
   router.get('/interaction/:uid', async (req, res, next) => {
