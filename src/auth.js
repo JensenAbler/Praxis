@@ -202,6 +202,18 @@ export async function createAuth({ issuer, resourceUrl, passwordHash, jwks, cook
   provider.proxy = issuerUrl.protocol === 'https:';
   const router = express.Router();
   router.use((_req, res, next) => {
+    // Match clients such as Apocrypha that use the conventional 302 for the final
+    // cross-origin OAuth callback, while leaving internal interaction redirects alone.
+    const end = res.end;
+    res.end = function (...args) {
+      const location = res.getHeader('location');
+      if (res.statusCode === 303 && typeof location === 'string') {
+        try {
+          if (new URL(location, issuer).origin !== issuerUrl.origin) res.statusCode = 302;
+        } catch {}
+      }
+      return end.apply(this, args);
+    };
     // Native form POSTs under no-referrer send Origin: null, defeating our exact-origin
     // CSRF check. strict-origin preserves the origin without leaking paths or queries.
     res.set({ 'Cache-Control': 'no-store', 'Referrer-Policy': 'strict-origin', 'X-Content-Type-Options': 'nosniff',

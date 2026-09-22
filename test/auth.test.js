@@ -61,6 +61,7 @@ async function fixture(t, { integrated = false, codingEnabled = false } = {}) {
       if (response.status >= 300 && response.status < 400) {
         const target = new URL(response.headers.get('location'), issuer);
         if (target.origin !== origin) {
+          assert.equal(response.status, 302);
           assert.equal(target.searchParams.get('error'), null, target.href);
           assert.equal(target.searchParams.get('iss'), null);
           assert.equal(target.searchParams.get('state'), 'test-state');
