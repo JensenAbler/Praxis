@@ -39,7 +39,7 @@ function createDatabase(dataDirectory) {
   return db;
 }
 
-function adapterClass(db) {
+function adapterClass(db, trace) {
   const put = db.prepare(`INSERT INTO records(model,id,payload,expires,grant_id,uid,user_code) VALUES(?,?,?,?,?,?,?)
     ON CONFLICT(model,id) DO UPDATE SET payload=excluded.payload, expires=excluded.expires,
     grant_id=excluded.grant_id,uid=excluded.uid,user_code=excluded.user_code`);
@@ -47,6 +47,7 @@ function adapterClass(db) {
   return class SqliteAdapter {
     constructor(model) { this.model = model; }
     async upsert(id, payload, expiresIn) {
+      trace?.('store_upsert', this.model, payload);
       const timestamp = now();
       const expires = expiresIn ? timestamp + expiresIn : null;
       // A rotated refresh token must not outlive a fixed original grant deadline.
@@ -99,8 +100,34 @@ export async function createAuth({ issuer, resourceUrl, passwordHash, jwks, cook
     try { return await verifyOwner(token); }
     catch (error) { if (!verifyHealth) throw error; return verifyHealth(token); }
   };
+  const clientFingerprint = value => typeof value === 'string' ? digest(value).slice(0, 12) : undefined;
+  const redirectHost = value => { try { return new URL(value).host; } catch { return undefined; } };
+  const trace = (event, model, payload = {}) => {
+    const base = { event: 'oauth_trace', phase: event, ...(model ? { model } : {}) };
+    if (model === 'Client') Object.assign(base, {
+      client: clientFingerprint(payload.clientId ?? payload.client_id), clientName: typeof payload.client_name === 'string' ? payload.client_name.slice(0, 80) : undefined,
+      redirectHosts: Array.isArray(payload.redirect_uris) ? payload.redirect_uris.map(redirectHost).filter(Boolean) : [],
+      tokenAuthMethod: payload.token_endpoint_auth_method, grantTypes: payload.grant_types, responseTypes: payload.response_types,
+      scope: typeof payload.scope === 'string' ? payload.scope.split(' ').filter(Boolean) : undefined,
+    });
+    else if (model === 'AuthorizationCode') Object.assign(base, {
+      client: clientFingerprint(payload.clientId), redirectHost: redirectHost(payload.redirectUri), resourceMatches: payload.resource === resource,
+      scope: typeof payload.scope === 'string' ? payload.scope.split(' ').filter(Boolean) : undefined,
+      hasCodeChallenge: typeof payload.codeChallenge === 'string', codeChallengeMethod: payload.codeChallengeMethod,
+    });
+    else if (['Grant', 'RefreshToken', 'AccessToken'].includes(model)) Object.assign(base, {
+      client: clientFingerprint(payload.clientId), scope: typeof payload.scope === 'string' ? payload.scope.split(' ').filter(Boolean) : undefined,
+      resourceMatches: payload.resource === undefined ? undefined : payload.resource === resource,
+    });
+    else if (!model) Object.assign(base, {
+      route: payload.route, responseMode: payload.responseMode, outputKeys: payload.outputKeys,
+      hasCode: payload.hasCode, hasState: payload.hasState, hasIssuer: payload.hasIssuer,
+      grantType: payload.grantType, client: payload.client, errorType: payload.errorType, systemCode: payload.systemCode,
+    });
+    console.error(JSON.stringify(Object.fromEntries(Object.entries(base).filter(([, value]) => value !== undefined))));
+  };
   const provider = new Provider(issuer, {
-    adapter: adapterClass(db), jwks,
+    adapter: adapterClass(db, trace), jwks,
     clients: [],
     clientAuthMethods: ['none', 'client_secret_basic', 'client_secret_post'],
     clientDefaults: { token_endpoint_auth_method: 'none', grant_types: ['authorization_code', 'refresh_token'], response_types: ['code'] },
@@ -158,6 +185,16 @@ export async function createAuth({ issuer, resourceUrl, passwordHash, jwks, cook
     ttl: { AccessToken: 600, IdToken: 600, AuthorizationCode: 60, Interaction: 600, RefreshToken: AUTHORIZATION_IDLE_SECONDS, Session: 7 * 24 * 3600, Grant: AUTHORIZATION_IDLE_SECONDS },
     renderError: (_ctx, _out, _error) => { _ctx.type = 'html'; _ctx.body = '<!doctype html><title>Praxis sign-in</title><p>Authorization could not be completed. Return to your app and reconnect.</p>'; },
   });
+  provider.on('authorization.success', (ctx, out = {}) => trace('authorization_success', undefined, {
+    route: ctx?.oidc?.route, responseMode: ctx?.oidc?.params?.response_mode ?? 'query',
+    outputKeys: Object.keys(out).sort(), hasCode: typeof out.code === 'string', hasState: typeof out.state === 'string', hasIssuer: typeof out.iss === 'string',
+  }));
+  provider.on('grant.success', ctx => trace('grant_success', undefined, {
+    route: ctx?.oidc?.route, grantType: ctx?.oidc?.params?.grant_type, client: clientFingerprint(ctx?.oidc?.client?.clientId),
+  }));
+  provider.on('authorization.error', (_ctx, error) => trace('authorization_error', undefined, { errorType: error?.name }));
+  provider.on('grant.error', (_ctx, error) => trace('grant_error', undefined, { errorType: error?.name }));
+  provider.on('server_error', (_ctx, error) => trace('server_error', undefined, { errorType: error?.name, systemCode: error?.code }));
   // The reverse proxy is trusted by the root application and supplies HTTPS forwarding headers.
   provider.proxy = issuerUrl.protocol === 'https:';
   const router = express.Router();
