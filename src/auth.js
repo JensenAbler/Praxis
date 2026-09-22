@@ -185,10 +185,13 @@ export async function createAuth({ issuer, resourceUrl, passwordHash, jwks, cook
     ttl: { AccessToken: 600, IdToken: 600, AuthorizationCode: 60, Interaction: 600, RefreshToken: AUTHORIZATION_IDLE_SECONDS, Session: 7 * 24 * 3600, Grant: AUTHORIZATION_IDLE_SECONDS },
     renderError: (_ctx, _out, _error) => { _ctx.type = 'html'; _ctx.body = '<!doctype html><title>Praxis sign-in</title><p>Authorization could not be completed. Return to your app and reconnect.</p>'; },
   });
-  provider.on('authorization.success', (ctx, out = {}) => trace('authorization_success', undefined, {
-    route: ctx?.oidc?.route, responseMode: ctx?.oidc?.params?.response_mode ?? 'query',
-    outputKeys: Object.keys(out).sort(), hasCode: typeof out.code === 'string', hasState: typeof out.state === 'string', hasIssuer: typeof out.iss === 'string',
-  }));
+  provider.on('authorization.success', (ctx, out = {}) => {
+    if (out.iss === issuer) delete out.iss;
+    trace('authorization_success', undefined, {
+      route: ctx?.oidc?.route, responseMode: ctx?.oidc?.params?.response_mode ?? 'query',
+      outputKeys: Object.keys(out).sort(), hasCode: typeof out.code === 'string', hasState: typeof out.state === 'string', hasIssuer: typeof out.iss === 'string',
+    });
+  });
   provider.on('grant.success', ctx => trace('grant_success', undefined, {
     route: ctx?.oidc?.route, grantType: ctx?.oidc?.params?.grant_type, client: clientFingerprint(ctx?.oidc?.client?.clientId),
   }));
