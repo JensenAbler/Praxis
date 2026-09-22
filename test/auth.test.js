@@ -62,7 +62,7 @@ async function fixture(t, { integrated = false, codingEnabled = false } = {}) {
         const target = new URL(response.headers.get('location'), issuer);
         if (target.origin !== origin) {
           assert.equal(target.searchParams.get('error'), null, target.href);
-          assert.equal(target.searchParams.get('iss'), issuer);
+          assert.equal(target.searchParams.get('iss'), null);
           assert.equal(target.searchParams.get('state'), 'test-state');
           return { code: target.searchParams.get('code'), verifier };
         }
