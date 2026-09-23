@@ -89,7 +89,7 @@ Native root jobs can maintain all of Praxis: its application, tool schemas, gate
 
 Record the job ID returned by `job_start`. In a fresh conversation, use `host_projects_list`, `jobs_list`, and `job_status` to recover existing work. After an uncertain submission, preserve the original idempotency key and arguments. Existing terminal or ambiguous executions are not automatically launched again.
 
-`job_status` reports lifecycle timestamps, actual exit status, recent output, and raw log paths. `job_logs` provides indexed head/tail excerpts and literal filtering. These indexed excerpts retain bounded sizes so routine inspection stays usable.
+`job_wait` returns the same compact status once the job is terminal, or after at most 15 seconds with `wait.terminal: false`; call it again rather than polling `job_status`. The bound stays inside the gateway's 20-second backend timeout. `job_status` reports lifecycle timestamps, actual exit status, recent output, and raw log paths. `job_logs` provides indexed head/tail excerpts and literal filtering. These indexed excerpts retain bounded sizes so routine inspection stays usable.
 
 Native workers also persist complete stdout, stderr, and ordered event files without a retention-size cap. Use the `rawLogs` paths returned by status with `host_file_read` or `host_search` when excerpts are insufficient. Raw files and jobs survive phone disconnects and backend restarts. Missing or ambiguous execution evidence remains an uncertain outcome; it is not proof that rerunning a command is harmless.
 

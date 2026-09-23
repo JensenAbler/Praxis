@@ -191,6 +191,35 @@ test('authenticated coding tools edit, run, survive gateway restart, and recover
   assert.equal(receipt.status, 'completed');
 });
 
+test('job_wait blocks until a job is terminal and times out without touching the job', async t => {
+  const f = await fixture(t), client = await f.connect();
+  const created = await call(client, 'workspace_create', { projectId: 'fixture', baseRevision: 'fixture-base', idempotencyKey: 'wait-create-fixture' });
+  const { revision } = await call(client, 'file_read', { workspaceId: created.workspaceId, path: 'answer.js' });
+  const job = await call(client, 'job_start', { workspaceId: created.workspaceId, expectedRevision: revision, idempotencyKey: 'wait-run-fixture', argv: ['fixture-check'] });
+  await status(client, job.id, 'running');
+  const pending = await call(client, 'job_wait', { jobId: job.id, waitSeconds: 1 });
+  assert.equal(pending.status, 'running');
+  assert.equal(pending.wait.terminal, false);
+  assert.ok(pending.wait.waitedMs >= 900, `waited ${pending.wait.waitedMs}ms`);
+  assert.match(pending.wait.next, /job_wait again/);
+  const started = Date.now();
+  setTimeout(() => f.runner.complete(), 300);
+  const done = await call(client, 'job_wait', { jobId: job.id });
+  assert.ok(Date.now() - started < 5000, 'returns once terminal, not at the wait bound');
+  assert.equal(done.status, 'failed');
+  assert.equal(done.wait.terminal, true);
+  assert.equal(done.wait.next, undefined);
+  assert.ok(done.recentOutput.records.some(record => record.text.includes('FAIL')));
+  const again = await call(client, 'job_wait', { jobId: job.id, waitSeconds: 15 });
+  assert.equal(again.wait.terminal, true);
+  assert.ok(again.wait.waitedMs < 1000);
+  const tooLong = await client.callTool({ name: 'job_wait', arguments: { jobId: job.id, waitSeconds: 16 } });
+  assert.equal(tooLong.structuredContent.error.code, 'INVALID_ARGUMENT');
+  const catalog = (await client.listTools()).tools.find(tool => tool.name === 'job_wait');
+  assert.equal(catalog.annotations.readOnlyHint, true);
+  assert.equal(catalog.inputSchema.properties.waitSeconds.maximum, 15);
+});
+
 test('authenticated dependency workflow advertises registry policy and recovers prepared bundle from a fresh client', async t => {
   const f = await fixture(t, { dependencies: true }), client = await f.connect();
   const capabilities = await call(client, 'capabilities');

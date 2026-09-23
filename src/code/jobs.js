@@ -3,6 +3,7 @@ import { mkdirSync, lstatSync, statSync, openSync, readSync, writeSync, closeSyn
 import { join, resolve, relative, isAbsolute } from 'node:path';
 import { containerName } from './runner.js';
 import { dependencyPackCommand, sealDependencies } from './dependencies.js';
+import { JOB_WAIT } from './schema.js';
 
 export const CODE_JOB_LIMITS = Object.freeze({
   timeoutSeconds: 900, preparationTimeoutSeconds: 120, activeJobs: 1, retainedJobs: 200, logBytes: 1048576, logRecords: 8192,
@@ -302,6 +303,22 @@ export class CodeJobs {
         recentOutput: { view: hasTail ? 'tail' : 'head', records: records.reverse(),
           excerpt: true, explanation: 'A bounded recent-output excerpt, not a parsed test result. Inspect the recorded exit code and output; use job_logs for more.' } };
     });
+  }
+
+  // Block until the job is terminal or waitSeconds elapse, then return the same
+  // compact status as get(). The bound keeps each call inside the nginx and
+  // gateway request timeouts; a timed-out wait changes nothing and may repeat.
+  async wait({ owner, jobId, waitSeconds = JOB_WAIT.defaultSeconds, includeCommand = false }) {
+    requireValue(Number.isInteger(waitSeconds) && waitSeconds >= 1 && waitSeconds <= JOB_WAIT.maxSeconds, `waitSeconds must be between 1 and ${JOB_WAIT.maxSeconds}.`);
+    const started = Date.now(), deadline = started + waitSeconds * 1000;
+    let terminal = !ACTIVE.includes(this.row(owner, jobId).status);
+    while (!terminal && Date.now() < deadline) {
+      await new Promise(resolve => setTimeout(resolve, Math.min(JOB_WAIT.pollMs, Math.max(0, deadline - Date.now()))));
+      terminal = !ACTIVE.includes(this.row(owner, jobId).status);
+    }
+    const job = this.get({ owner, jobId, includeCommand });
+    return { ...job, wait: { terminal: !ACTIVE.includes(job.status), waitedMs: Date.now() - started, waitSeconds,
+      ...(ACTIVE.includes(job.status) ? { next: 'Still active. Call job_wait again with the same jobId; waiting never restarts or repeats the job.' } : {}) } };
   }
 
   list({ owner, workspaceId, hostProjectId, cursor = 0, limit = 20 }) {
