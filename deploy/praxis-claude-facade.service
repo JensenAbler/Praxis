@@ -1,0 +1,48 @@
+# Claude OAuth compatibility facade for Praxis (praxis-apps.jensenabler.com).
+# Runs from the active control release so its Praxis modules and npm
+# dependencies come from the same qualified commit as the rest of Praxis.
+# Install: cp to /etc/systemd/system/, daemon-reload, restart after each
+# control activation. OAuth state lives in /var/lib/praxis-claude-facade.
+[Unit]
+Description=Praxis Claude OAuth compatibility facade
+After=network.target praxis-probe.service
+
+[Service]
+Type=simple
+User=praxis-probe
+Group=praxis-probe
+WorkingDirectory=/srv/praxis-control/current
+Environment=NODE_ENV=production
+LoadCredential=password-hash:/etc/praxis-probe/credentials/password-hash
+LoadCredential=jwks.json:/etc/praxis-probe/credentials/jwks.json
+LoadCredential=cookie-keys.json:/etc/praxis-probe/credentials/cookie-keys.json
+ExecStart=/usr/bin/node /srv/praxis-control/current/src/claude-facade/server.js
+Restart=on-failure
+RestartSec=2
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectProc=invisible
+ProcSubset=pid
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+LockPersonality=true
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+IPAddressDeny=any
+IPAddressAllow=localhost
+ReadWritePaths=/var/lib/praxis-claude-facade
+MemoryMax=192M
+CPUQuota=20%
+TasksMax=48
+
+[Install]
+WantedBy=multi-user.target
