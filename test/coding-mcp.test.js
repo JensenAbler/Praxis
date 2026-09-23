@@ -191,7 +191,7 @@ test('authenticated coding tools edit, run, survive gateway restart, and recover
   assert.equal(receipt.status, 'completed');
 });
 
-test('job_wait blocks until a job is terminal and times out without touching the job', async t => {
+test('job_wait and job_start waitSeconds block until terminal; patches may omit the file hash', async t => {
   const f = await fixture(t), client = await f.connect();
   const created = await call(client, 'workspace_create', { projectId: 'fixture', baseRevision: 'fixture-base', idempotencyKey: 'wait-create-fixture' });
   const { revision } = await call(client, 'file_read', { workspaceId: created.workspaceId, path: 'answer.js' });
@@ -215,6 +215,22 @@ test('job_wait blocks until a job is terminal and times out without touching the
   assert.ok(again.wait.waitedMs < 1000);
   const tooLong = await client.callTool({ name: 'job_wait', arguments: { jobId: job.id, waitSeconds: 16 } });
   assert.equal(tooLong.structuredContent.error.code, 'INVALID_ARGUMENT');
+  // Patches may skip the hash (and the file_read before it); a missing match still fails.
+  const current = (await call(client, 'workspace_inspect', { workspaceId: created.workspaceId })).revision;
+  const edit = await call(client, 'workspace_apply', { workspaceId: created.workspaceId, expectedRevision: current, idempotencyKey: 'wait-edit-fixture',
+    changes: [{ action: 'patch', path: 'answer.js', oldText: '= 41', newText: '= 42' }] });
+  assert.equal(edit.status, 'completed');
+  const missed = await client.callTool({ name: 'workspace_apply', arguments: { workspaceId: created.workspaceId, expectedRevision: edit.result.revision,
+    idempotencyKey: 'wait-miss-fixture', changes: [{ action: 'patch', path: 'answer.js', oldText: '= 41', newText: '= 43' }] } });
+  assert.equal(missed.structuredContent.error.code, 'PATCH_CONFLICT');
+  // job_start can wait in the same call.
+  setTimeout(() => f.runner.complete(), 300);
+  const oneCall = await call(client, 'job_start', { workspaceId: created.workspaceId, expectedRevision: edit.result.revision, idempotencyKey: 'wait-start-fixture', argv: ['fixture-check'], waitSeconds: 10 });
+  assert.equal(oneCall.status, 'completed');
+  assert.equal(oneCall.exitCode, 0);
+  assert.equal(oneCall.wait.terminal, true);
+  const retried = await call(client, 'job_start', { workspaceId: created.workspaceId, expectedRevision: edit.result.revision, idempotencyKey: 'wait-start-fixture', argv: ['fixture-check'] });
+  assert.equal(retried.id, oneCall.id);
   const catalog = (await client.listTools()).tools.find(tool => tool.name === 'job_wait');
   assert.equal(catalog.annotations.readOnlyHint, true);
   assert.equal(catalog.inputSchema.properties.waitSeconds.maximum, 15);

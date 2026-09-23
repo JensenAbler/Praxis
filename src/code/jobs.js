@@ -305,6 +305,13 @@ export class CodeJobs {
     });
   }
 
+  // job_start with an optional wait. waitSeconds is not part of the job request,
+  // so a retry with a different wait still finds the original job.
+  async startAndWait({ waitSeconds = 0, ...input }) {
+    const job = this.start(input);
+    return waitSeconds ? this.wait({ owner: input.owner, jobId: job.id, waitSeconds }) : job;
+  }
+
   // Block until the job is terminal or waitSeconds elapse, then return the same
   // compact status as get(). The bound keeps each call inside the nginx and
   // gateway request timeouts; a timed-out wait changes nothing and may repeat.
