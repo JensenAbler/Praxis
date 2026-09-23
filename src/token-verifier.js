@@ -16,7 +16,8 @@ export function createTokenVerifier({ issuer, resourceUrl, jwks, allowedScopes =
           !scopes.some(scope => allowedScopes.includes(scope)) || (requiredScope && !scopes.includes(requiredScope))) {
         throw new Error('Invalid access claims');
       }
-      return { token, clientId: payload.client_id, scopes, expiresAt: payload.exp, extra: { subject: 'jensen' } };
+      const clientHost = typeof payload.praxis_client_host === 'string' ? payload.praxis_client_host : undefined;
+      return { token, clientId: payload.client_id, scopes, expiresAt: payload.exp, extra: { subject: 'jensen', ...(clientHost ? { clientHost } : {}) } };
     } catch {
       throw new OAuthError(OAuthErrorCode.InvalidToken, 'Invalid, expired, or insufficiently scoped Praxis access token');
     }

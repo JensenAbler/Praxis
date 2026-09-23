@@ -12,6 +12,7 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 import express from 'express';
 import { SignJWT, importJWK } from 'jose';
+import { clientHostFromRedirects } from '../client-host.js';
 import {
   InvalidClientMetadataError,
   InvalidGrantError,
@@ -86,7 +87,8 @@ export class PraxisSdkOAuthProvider {
   async challengeForAuthorizationCode(client,code){const r=this.codes.get(code);if(!r||r.clientId!==client.client_id||r.expiresAt<Date.now())throw new InvalidGrantError('Invalid or expired authorization code.');return r.params.codeChallenge;}
   async makeBackendToken(clientId){
     const now=Math.floor(Date.now()/1000), key=await importJWK(this.signingJwk,'RS256');
-    return new SignJWT({client_id:clientId,scope:'praxis:probe praxis:code'})
+    const host=clientHostFromRedirects(this.state.data.clients[clientId]?.redirect_uris);
+    return new SignJWT({client_id:clientId,scope:'praxis:probe praxis:code',...(host?{praxis_client_host:host}:{})})
       .setProtectedHeader({alg:'RS256',kid:this.signingJwk.kid,typ:'at+jwt'})
       .setIssuer('https://mcp.jensenabler.com/praxis/oauth').setSubject('jensen')
       .setAudience('https://mcp.jensenabler.com/praxis/mcp').setIssuedAt(now)

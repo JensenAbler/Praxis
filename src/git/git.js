@@ -187,7 +187,7 @@ export class TrustedGit {
     return result.stdout;
   }
 
-  async createCommit(projectId, { parent, changes, message, timestamp }) {
+  async createCommit(projectId, { parent, changes, message, timestamp, author: requestedAuthor }) {
     const repository = this.repository(projectId);
     if (parent !== null) oid(parent);
     requireValue(Array.isArray(changes) && changes.length > 0 && changes.length <= 20000, 'A bounded changed-file set is required.');
@@ -195,7 +195,13 @@ export class TrustedGit {
       && !message.includes('\0'), 'Commit message must contain 1 to 16384 bytes.');
     requireValue(typeof timestamp === 'string' && /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{3})?Z$/.test(timestamp)
       && Number.isFinite(Date.parse(timestamp)), 'A fixed UTC timestamp is required for deterministic commits.');
-    const author = repository.author, committer = repository.author;
+    if (requestedAuthor !== undefined) {
+      requireValue(requestedAuthor && typeof requestedAuthor.name === 'string' && typeof requestedAuthor.email === 'string'
+        && /^[^<>\n\r\0]{1,120}$/.test(requestedAuthor.name) && /^[^<>\s\0]{3,200}$/.test(requestedAuthor.email),
+        'Commit author must be a plain name and email.');
+    }
+    // Author records which client originated the change; committer stays the owner identity.
+    const author = requestedAuthor ?? repository.author, committer = repository.author;
     let changedBytes = 0;
     const paths = new Set();
     for (const change of changes) {

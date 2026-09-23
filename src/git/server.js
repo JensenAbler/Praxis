@@ -3,6 +3,7 @@ import { readFileSync, realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { createTokenVerifier } from '../token-verifier.js';
+import { commitAuthorFor } from '../client-host.js';
 import { diagnosticRecord } from '../diagnostics.js';
 import { TrustedGit } from './git.js';
 import { GitBroker, BrokerError, brokerSchemas, fixedDeploymentClient } from './broker.js';
@@ -30,7 +31,9 @@ export function createGitService(config) {
       const { action, args } = req.body || {}, schema = Object.hasOwn(brokerSchemas, action || '') && brokerSchemas[action];
       const parsed = schema?.safeParse(args);
       if (!parsed?.success || Object.keys(req.body).some(key => !['action', 'args'].includes(key))) throw new BrokerError('INVALID_ARGUMENT', 'Invalid publishing action or arguments.');
-      const input = { ...parsed.data, owner: req.principal.extra.subject };
+      // Commit authorship always comes from the verified token, never from the request body.
+      const input = { ...parsed.data, owner: req.principal.extra.subject,
+        ...(action === 'commit' ? { author: commitAuthorFor(req.principal.extra.clientHost) } : {}) };
       const data = action.startsWith('release') ? await broker.release(action, input) : action === 'get' ? await broker.observe(input)
         : ['list', 'deploymentStatus', 'diagnosis', 'deploymentHistory'].includes(action) ? await broker[action](input) : broker.submit(action, input);
       res.json({ ok: true, data });

@@ -1,5 +1,9 @@
 # Praxis
 
+## Multiple agents
+
+Multiple AI agents work on this codebase, and on the Alpha server at large, through Praxis. Each connects through its own OAuth client: ChatGPT through the canonical endpoint, Claude through the praxis-apps facade. Commit authorship is recorded from the client's registered redirect host, which both issuers sign into access tokens as `praxis_client_host` (see `src/client-host.js`). The committer is the repository owner identity.
+
 ## Required source workflow
 
 Required source workflow: recover the registered project and existing Praxis workspaces; sync main and create a managed workspace only when a fresh base is needed. Make source changes and run checks inside that Praxis workspace, review the diff, then commit and push from that workspace. Fast-forward the registered deployment on Alpha to the published commit and verify it. Do not edit deployed source in place or create ad hoc clones, repositories, or worktrees under /opt or elsewhere. Create a new repository only when the user explicitly requests one; a request to fix or improve an existing project is not that authorization. This workflow applies to Praxis itself. Native root access remains available for read-only diagnosis and authorized operations; it does not waive the source workflow.

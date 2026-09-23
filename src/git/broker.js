@@ -16,7 +16,8 @@ export const brokerSchemas = {
   ...releaseBrokerSchemas,
   sync: z.object({ ...base, projectId: project }).strict(),
   commit: z.object({ ...base, workspaceId: id, projectId: project, baseCommit: oid, parentCommit: oid,
-    revision: digest, stageId: id, message: z.string().min(1).max(2000).refine(x => x.trim() && !x.includes('\0')) }).strict(),
+    revision: digest, stageId: id, message: z.string().min(1).max(2000).refine(x => x.trim() && !x.includes('\0')),
+    author: z.object({ name: z.string().min(1).max(120).regex(/^[^<>\n\r\0]+$/), email: z.string().min(3).max(200).regex(/^[^<>\s\0]+$/) }).strict().optional() }).strict(),
   push: z.object({ ...base, commitOperationId: id }).strict(),
   deploy: z.object({ ...base, pushOperationId: id, expectedHead: oid, preparedDependenciesId: digest.optional() }).strict(),
   projectDeploy: z.object({ ...base, publicationOperationId: id, expectedHead: oid.nullable(), preparedDependenciesId: digest.optional(), recoverOperationId: id.optional() }).strict(),
@@ -309,7 +310,7 @@ export class GitBroker {
     }
     check(Object.keys(entries).length <= LIMITS.files && Object.values(entries).reduce((sum, entry) => sum + entry.size, 0) <= LIMITS.sourceBytes, 'LIMIT_EXCEEDED', 'Resulting source exceeds the workspace limit.');
     check(total === stage.totalBytes && sha256(JSON.stringify(canonical(entries))) === args.revision, 'STAGE_MISMATCH', 'Resulting source manifest differs from the captured revision.');
-    const result = await this.git.createCommit(row.project_id, { parent: args.parentCommit, changes, message: args.message, timestamp: row.created_at });
+    const result = await this.git.createCommit(row.project_id, { parent: args.parentCommit, changes, message: args.message, timestamp: row.created_at, author: args.author });
     return { commit: result.commit, parentCommit: args.parentCommit, revision: args.revision, branch: 'main', expectedRemoteHead: remote.commit };
   }
   async run_push(row, args) {

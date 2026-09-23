@@ -10,6 +10,7 @@ import { createTokenVerifier, createHealthVerifier } from './token-verifier.js';
 const scrypt = promisify(scryptCallback);
 const OWNER = 'jensen';
 const SCOPE = 'praxis:probe';
+import { clientHostFromRedirects } from './client-host.js';
 const AUTHORIZATION_IDLE_SECONDS = 90 * 24 * 3600;
 const now = () => Math.floor(Date.now() / 1000);
 const digest = (value) => createHash('sha256').update(value).digest('hex');
@@ -181,6 +182,16 @@ export async function createAuth({ issuer, resourceUrl, passwordHash, jwks, cook
     // Every owner-approved Praxis connection is persistent, including clients that
     // omit offline_access. Browser cookies govern sign-in only, not API renewal.
     expiresWithSession: () => false,
+    // Sign the client's redirect host into access tokens for commit authorship.
+    // Failure to resolve it must never block token issuance.
+    extraTokenClaims: async (ctx, token) => {
+      try {
+        if (!token?.clientId) return undefined;
+        const client = ctx?.oidc?.client?.clientId === token.clientId ? ctx.oidc.client : await ctx?.oidc?.provider?.Client.find(token.clientId);
+        const host = clientHostFromRedirects(client?.redirectUris);
+        return host ? { praxis_client_host: host } : undefined;
+      } catch { return undefined; }
+    },
     rotateRefreshToken: true,
     ttl: { AccessToken: 600, IdToken: 600, AuthorizationCode: 60, Interaction: 600, RefreshToken: AUTHORIZATION_IDLE_SECONDS, Session: 7 * 24 * 3600, Grant: AUTHORIZATION_IDLE_SECONDS },
     renderError: (_ctx, _out, _error) => { _ctx.type = 'html'; _ctx.body = '<!doctype html><title>Praxis sign-in</title><p>Authorization could not be completed. Return to your app and reconnect.</p>'; },
