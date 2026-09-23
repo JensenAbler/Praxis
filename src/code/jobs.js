@@ -325,7 +325,17 @@ export class CodeJobs {
     }
     const job = this.get({ owner, jobId, includeCommand });
     return { ...job, wait: { terminal: !ACTIVE.includes(job.status), waitedMs: Date.now() - started, waitSeconds,
-      ...(ACTIVE.includes(job.status) ? { next: 'Still active. Call job_wait again with the same jobId; waiting never restarts or repeats the job.' } : {}) } };
+      ...(ACTIVE.includes(job.status) ? { next: 'Still active. Call job_wait again with the same jobId; waiting never restarts or repeats the job.' } : this.nextRevision(owner, job)) } };
+  }
+
+  // A workspace job changes the workspace revision. Hand back the current one so
+  // the next edit or job can chain on without a workspace_inspect round trip.
+  nextRevision(owner, job) {
+    if (!job.workspaceId || !this.workspaces) return {};
+    try {
+      const { revision } = this.workspaces.getExecutionWorkspace({ owner, workspaceId: job.workspaceId });
+      return { workspaceRevision: revision, next: 'Use workspaceRevision as expectedRevision for the next workspace_apply or job_start in this workspace.' };
+    } catch { return {}; }
   }
 
   list({ owner, workspaceId, hostProjectId, cursor = 0, limit = 20 }) {

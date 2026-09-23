@@ -208,7 +208,6 @@ test('job_wait and job_start waitSeconds block until terminal; patches may omit 
   assert.ok(Date.now() - started < 5000, 'returns once terminal, not at the wait bound');
   assert.equal(done.status, 'failed');
   assert.equal(done.wait.terminal, true);
-  assert.equal(done.wait.next, undefined);
   assert.ok(done.recentOutput.records.some(record => record.text.includes('FAIL')));
   const again = await call(client, 'job_wait', { jobId: job.id, waitSeconds: 15 });
   assert.equal(again.wait.terminal, true);
@@ -216,8 +215,10 @@ test('job_wait and job_start waitSeconds block until terminal; patches may omit 
   const tooLong = await client.callTool({ name: 'job_wait', arguments: { jobId: job.id, waitSeconds: 16 } });
   assert.equal(tooLong.structuredContent.error.code, 'INVALID_ARGUMENT');
   // Patches may skip the hash (and the file_read before it); a missing match still fails.
-  const current = (await call(client, 'workspace_inspect', { workspaceId: created.workspaceId })).revision;
-  const edit = await call(client, 'workspace_apply', { workspaceId: created.workspaceId, expectedRevision: current, idempotencyKey: 'wait-edit-fixture',
+  // The finished wait hands back the workspace's current revision, so the next edit needs no workspace_inspect.
+  assert.equal(done.wait.workspaceRevision, (await call(client, 'workspace_inspect', { workspaceId: created.workspaceId })).revision);
+  assert.match(done.wait.next, /expectedRevision/);
+  const edit = await call(client, 'workspace_apply', { workspaceId: created.workspaceId, expectedRevision: done.wait.workspaceRevision, idempotencyKey: 'wait-edit-fixture',
     changes: [{ action: 'patch', path: 'answer.js', oldText: '= 41', newText: '= 42' }] });
   assert.equal(edit.status, 'completed');
   const missed = await client.callTool({ name: 'workspace_apply', arguments: { workspaceId: created.workspaceId, expectedRevision: edit.result.revision,
