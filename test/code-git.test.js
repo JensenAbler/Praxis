@@ -281,3 +281,33 @@ test('late running observations never overwrite an already completed commit rece
   assert.deepEqual(await operation, recovered);
   assert.equal((await git.get({ owner, operationId })).status, 'completed');
 });
+
+test('operation and release waits return once settled, or at their bound without changing anything', async t => {
+  const f = fixture(t), { owner, git } = f;
+  let submissions = 0;
+  f.broker.sync = async args => {
+    submissions++;
+    const receipt = { operationId: args.operationId, kind: 'sync', status: 'running', phase: 'fetching', projectId: args.projectId, result: null };
+    f.receipts.set(args.operationId, receipt); return receipt;
+  };
+  const sync = await git.sync({ owner, projectId: 'podcast-discord', idempotencyKey: 'wait-for-sync' });
+  const pending = await git.wait({ owner, operationId: sync.operationId, waitSeconds: 1 });
+  assert.equal(pending.status, 'running');
+  assert.equal(pending.wait.settled, false);
+  assert.match(pending.wait.next, /again/);
+  assert.ok(pending.wait.waitedMs < 1000, 'answers before its bound');
+  setTimeout(() => f.receipts.set(sync.operationId, { ...f.receipts.get(sync.operationId), status: 'failed', phase: 'fetch_failed',
+    error: { code: 'FETCH_FAILED', message: 'fixture' } }), 300);
+  const settled = await git.wait({ owner, operationId: sync.operationId });
+  assert.equal(settled.status, 'failed');
+  assert.equal(settled.wait.settled, true);
+  assert.ok(settled.wait.waitedMs < 5000);
+  assert.equal(submissions, 1, 'waiting never resubmits');
+
+  const states = ['queued', 'running', 'waiting', 'ready'];
+  f.broker.releaseStatus = async args => ({ active: { release: 'app-old' }, operation: { operationId: args.operationId, kind: 'plan', status: states.shift() ?? 'ready' } });
+  const release = await git.releaseWait({ owner, operationId: sync.operationId });
+  assert.equal(release.operation.status, 'ready');
+  assert.equal(release.wait.settled, true);
+  assert.equal(states.length, 0);
+});

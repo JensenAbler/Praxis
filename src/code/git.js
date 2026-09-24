@@ -3,6 +3,7 @@ import { join, resolve, dirname, relative, isAbsolute, sep } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { requireValue, readSafe, safePath, sha256, manifest, LIMITS, WorkspaceError } from './paths.js';
 import { CodeProjects } from './projects.js';
+import { JOB_WAIT } from './schema.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const COMMIT = /^[0-9a-f]{40}$/;
@@ -53,6 +54,18 @@ function directoryBytes(root) {
 }
 
 /** Captures source only. Credentials, Git execution, and deployment belong to the separate broker. */
+async function settle(waitSeconds, read, done) {
+  const started = Date.now(), deadline = started + waitSeconds * 1000;
+  let value = await read();
+  // Stop a poll interval early so a slow final read still answers in time.
+  while (!done(value) && Date.now() + JOB_WAIT.pollMs * 4 < deadline) {
+    await new Promise(resolve => setTimeout(resolve, JOB_WAIT.pollMs * 4));
+    value = await read();
+  }
+  return { ...value, wait: { settled: done(value), waitedMs: Date.now() - started, waitSeconds,
+    ...(done(value) ? {} : { next: 'Still in progress. Call the same wait tool again; waiting never repeats or changes the operation.' }) } };
+}
+
 export class CodeGit {
   constructor({ store, workspaces, broker, outboxDirectory, exportDirectory }) {
     this.store = store; this.db = store.db; this.workspaces = workspaces; this.broker = broker;
@@ -328,6 +341,14 @@ export class CodeGit {
       if (error instanceof WorkspaceError) throw error;
       return this._uncertain(row);
     }
+  }
+  // Waits re-read the same status an agent would poll for, inside one bounded
+  // call that fits the gateway's 20s backend timeout.
+  async wait({ owner, operationId, waitSeconds = JOB_WAIT.defaultSeconds }) {
+    return settle(waitSeconds, () => this.get({ owner, operationId }), receipt => !['queued', 'running'].includes(receipt.status));
+  }
+  async releaseWait({ owner, operationId, waitSeconds = JOB_WAIT.defaultSeconds }) {
+    return settle(waitSeconds, () => this.broker.releaseStatus({ owner, operationId }), value => !['queued', 'running', 'waiting'].includes(value.operation?.status));
   }
   async list({ owner, workspaceId, cursor = 0, limit = 20 }) {
     ownerValue(owner);

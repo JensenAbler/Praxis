@@ -110,7 +110,9 @@ test('authenticated MCP independently syncs, commits, pushes main, and recovers 
   const tools = await client.listTools();
   for (const name of ['project_sync', 'git_commit', 'git_push', 'git_operation_status', 'git_operations_list', 'deployment_status', 'deployment_fast_forward']) assert.ok(tools.tools.some(tool => tool.name === name));
   const sync = await call(client, 'project_sync', { projectId: 'fixture', idempotencyKey: 'mcp-sync-main' });
-  const synced = await terminal(client, sync.operationId);
+  const synced = await call(client, 'git_operation_wait', { operationId: sync.operationId });
+  assert.equal(synced.status, 'completed');
+  assert.equal(synced.wait.settled, true);
   assert.equal(synced.result.commit, f.base);
   const project = await call(client, 'project_inspect', { projectId: 'fixture' });
   const workspace = await call(client, 'workspace_create', { projectId: 'fixture', baseRevision: project.revision, idempotencyKey: 'mcp-create-real-workspace', label: 'Real workflow' });

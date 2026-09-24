@@ -13,7 +13,8 @@
     "test": "node --test",
     "test:mcp": "node scripts/probe-client.js",
     "coding": "node src/code/server.js",
-    "git-service": "node src/git/server.js"
+    "git-service": "node src/git/server.js",
+    "check:manifest": "node scripts/check-manifest-compat.js"
   },
   "dependencies": {
     "@modelcontextprotocol/express": "2.0.0",
