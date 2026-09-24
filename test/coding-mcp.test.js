@@ -191,7 +191,7 @@ test('authenticated coding tools edit, run, survive gateway restart, and recover
   assert.equal(receipt.status, 'completed');
 });
 
-test('job_wait and job_start waitSeconds block until terminal; patches may omit the file hash', async t => {
+test('job_wait and job_start waitSeconds block until terminal and hand back the next workspace revision', async t => {
   const f = await fixture(t), client = await f.connect();
   const created = await call(client, 'workspace_create', { projectId: 'fixture', baseRevision: 'fixture-base', idempotencyKey: 'wait-create-fixture' });
   const { revision } = await call(client, 'file_read', { workspaceId: created.workspaceId, path: 'answer.js' });
@@ -214,16 +214,13 @@ test('job_wait and job_start waitSeconds block until terminal; patches may omit 
   assert.ok(again.wait.waitedMs < 1000);
   const tooLong = await client.callTool({ name: 'job_wait', arguments: { jobId: job.id, waitSeconds: 16 } });
   assert.equal(tooLong.structuredContent.error.code, 'INVALID_ARGUMENT');
-  // Patches may skip the hash (and the file_read before it); a missing match still fails.
   // The finished wait hands back the workspace's current revision, so the next edit needs no workspace_inspect.
   assert.equal(done.wait.workspaceRevision, (await call(client, 'workspace_inspect', { workspaceId: created.workspaceId })).revision);
   assert.match(done.wait.next, /expectedRevision/);
+  const { sha256 } = await call(client, 'file_read', { workspaceId: created.workspaceId, path: 'answer.js' });
   const edit = await call(client, 'workspace_apply', { workspaceId: created.workspaceId, expectedRevision: done.wait.workspaceRevision, idempotencyKey: 'wait-edit-fixture',
-    changes: [{ action: 'patch', path: 'answer.js', oldText: '= 41', newText: '= 42' }] });
+    changes: [{ action: 'patch', path: 'answer.js', expectedSha256: sha256, oldText: '= 41', newText: '= 42' }] });
   assert.equal(edit.status, 'completed');
-  const missed = await client.callTool({ name: 'workspace_apply', arguments: { workspaceId: created.workspaceId, expectedRevision: edit.result.revision,
-    idempotencyKey: 'wait-miss-fixture', changes: [{ action: 'patch', path: 'answer.js', oldText: '= 41', newText: '= 43' }] } });
-  assert.equal(missed.structuredContent.error.code, 'PATCH_CONFLICT');
   // job_start can wait in the same call.
   setTimeout(() => f.runner.complete(), 300);
   const oneCall = await call(client, 'job_start', { workspaceId: created.workspaceId, expectedRevision: edit.result.revision, idempotencyKey: 'wait-start-fixture', argv: ['fixture-check'], waitSeconds: 10 });

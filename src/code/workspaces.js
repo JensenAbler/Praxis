@@ -369,10 +369,7 @@ export class WorkspaceManager {
         touch(change.path, change.action);
         const before = state.entries[change.path];
         requireValue(!before || before.kind === 'file', 'Unsafe entries must be removed by a sandbox command.', 'UNSAFE_PATH');
-        // A patch may omit its hash: its oldText must still match exactly once, so a
-        // stale or mistaken edit fails instead of silently doing nothing.
-        requireValue(change.action === 'patch' && change.expectedSha256 === undefined || change.expectedSha256 === (before?.sha256 ?? null),
-          'File hash changed or file existence precondition failed.', 'HASH_CONFLICT');
+        requireValue(change.expectedSha256 === (before?.sha256 ?? null), 'File hash changed or file existence precondition failed.', 'HASH_CONFLICT');
         requireValue(before || change.action === 'write', 'This operation requires an existing file.', 'NOT_FOUND');
         requireValue(change.executable === undefined || typeof change.executable === 'boolean', 'executable must be boolean.');
         const mode = change.executable === undefined ? stagedFiles.get(change.path)?.mode || before?.mode || '100644' : change.executable ? '100755' : '100644';
