@@ -103,7 +103,8 @@ async function status(client, jobId, expected) {
 test('gateway and coding adapter independently enforce explicit coding permission', async t => {
   const f = await fixture(t);
   const old = await f.connect('praxis:probe');
-  assert.equal((await call(old, 'probe_capabilities')).version, '0.1.0');
+  // Praxis gateways never advertise the probe fixture, even to a probe-scoped client.
+  assert.ok(!(await old.listTools()).tools.some(tool => tool.name.startsWith('probe_')));
   const denied = await old.callTool({ name: 'projects_list', arguments: {} });
   assert.equal(denied.isError, true);
   assert.equal(denied.structuredContent.error.code, 'AUTHORIZATION_REQUIRED');
@@ -116,7 +117,7 @@ test('gateway and coding adapter independently enforce explicit coding permissio
   const missing = await client.callTool({ name: 'file_read', arguments: { projectId: 'fixture', path: 'absent.txt' } });
   assert.equal(missing.structuredContent.error.code, 'NOT_FOUND');
   assert.doesNotMatch(JSON.stringify(missing), /praxis-code-mcp-|ENOENT|open '/);
-  assert.equal((await client.callTool({ name: 'probe_capabilities', arguments: {} })).isError, true);
+  assert.ok(!(await client.listTools()).tools.some(tool => tool.name.startsWith('probe_')));
   const injected = await fetch(`${f.backendUrl}/call`, { method: 'POST', headers: { authorization: `Bearer ${await f.token()}`, 'content-type': 'application/json' }, body: JSON.stringify({ action: 'projects_list', args: { owner: 'someone-else' } }) });
   assert.equal(injected.status, 400);
   const discovery = await (await fetch(`${new URL(f.baseUrl).origin}/.well-known/oauth-protected-resource/praxis/mcp`)).json();
@@ -153,7 +154,12 @@ test('canonical Praxis discovery and authenticated coding use one issuer and res
   const client = await f.connect('praxis:code praxis:probe');
   assert.equal(client.getServerVersion().name, 'Praxis');
   assert.equal((await call(client, 'projects_list')).projects[0].projectId, 'fixture');
-  assert.equal((await call(client, 'probe_capabilities')).resourceUrl, resource);
+  const tools = (await client.listTools()).tools;
+  assert.ok(!tools.some(tool => tool.name.startsWith('probe_')), 'Praxis clients never see probe tools');
+  const activity = tools.find(tool => tool.name === 'observations_list');
+  assert.equal(activity.annotations.readOnlyHint, true);
+  assert.deepEqual(activity._meta.securitySchemes, [{ type: 'oauth2', scopes: ['praxis:code'] }], 'same scope as every other Praxis tool');
+  assert.equal((await call(client, 'observations_list', { limit: 1 })).view, 'tail');
 });
 
 test('authenticated coding tools edit, run, survive gateway restart, and recover diff/artifacts in a fresh client', async t => {
@@ -343,7 +349,7 @@ test('invalid MCP arguments receive structured bounded errors without mutation o
   assert.doesNotMatch(JSON.stringify(invalid), new RegExp(sensitive));
   assert.deepEqual((await call(client, 'workspaces_list')).workspaces, []);
   assert.deepEqual((await call(client, 'operations_list')).operations, []);
-  const observations = await call(client, 'probe_observations', { limit: 100 });
+  const observations = await call(client, 'observations_list', { limit: 100 });
   const receipt = observations.observations.find(row => row.requestId === invalid.structuredContent.requestId);
   assert.equal(receipt.errorCode, 'INVALID_ARGUMENT');
   assert.match(receipt.httpRequestId, /^[a-f0-9-]{36}$/);

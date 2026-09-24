@@ -127,7 +127,7 @@ test('independent health JWT permits only diagnostic reads and cannot grant owne
   assert.equal((await call(health, 'projects_list')).projects.length, 1);
   assert.equal((await call(health, 'file_read', { projectId: 'discord', path: 'main.js' })).lines[0].text, 'export const answer = 41;');
   for (const [name, args] of [['workspace_apply', f.editArgs], ['production_diagnosis', { projectId: 'discord' }], ['praxis_release_status', {}],
-    ['probe_job_start', { idempotencyKey: 'health-cannot-start' }], ['workspaces_list', {}]]) {
+    ['observations_list', {}], ['workspaces_list', {}]]) {
     await call(health, name, args, 'AUTHORIZATION_REQUIRED');
   }
   const deniedBackend = await direct(f.backendUrl, jwt, 'workspace_apply', f.editArgs);
