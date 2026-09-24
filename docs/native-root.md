@@ -102,3 +102,13 @@ Snapshot tooling retains its source-format and revision semantics. Use managed w
 ## Tool compatibility gate
 
 Routine self-update refuses a release whose tool manifest removes a tool, changes a permission annotation, changes an existing argument's schema, or adds a required argument (a zod `.default()` exports as required). `scripts/check-manifest-compat.js` applies the same rule, and `npm test` runs it against `/srv/praxis-app/current/coding-tools.json` whenever that file exists, so checks inside a Praxis workspace and the release-plan build both fail early. Elsewhere, run `npm run check:manifest -- <manifest.json>` against the live release's manifest.
+
+## Control plane activation
+
+The gateway, Claude facade, and Git broker run from `/srv/praxis-control/current`, which routine releases do not replace. Both MCP entry points re-read `/srv/praxis-app/current/coding-tools.json` when it changes, so new application tools reach ChatGPT and Claude without touching the control slot. The facade keeps its last good tool list if a new manifest is unreadable.
+
+To change control code (gateway, facade, broker, probe tools), first activate the commit as an application release through `praxis_release_plan`/`praxis_release_apply`, then run as root:
+
+    /srv/praxis-app/current/deploy/activate-control.py <live app release name>
+
+It promotes only the live application release, which has already passed the updater's tests, authenticated MCP checks, and manifest gate. It refuses while Git operations are in flight, copies the tree to `/srv/praxis-control/releases/<commit12>`, swaps the symlink atomically, relabels `control-<commit12>` in `/etc/praxis-updater/control.env` and `/etc/praxis-git/config.json`, restarts `praxis-git`, `praxis-probe`, and `praxis-claude-facade`, and checks each service's health. A failed check restores the previous release, label, and services. Every attempt is appended to `/var/lib/praxis-control/control-history.jsonl`.

@@ -114,6 +114,8 @@ test('authenticated MCP independently syncs, commits, pushes main, and recovers 
   assert.equal(synced.status, 'completed');
   assert.equal(synced.wait.settled, true);
   assert.equal(synced.result.commit, f.base);
+  assert.equal(synced.result.baseRevision, f.base);
+  assert.equal((await call(client, 'project_inspect', { projectId: 'fixture' })).revision, synced.result.baseRevision);
   const project = await call(client, 'project_inspect', { projectId: 'fixture' });
   const workspace = await call(client, 'workspace_create', { projectId: 'fixture', baseRevision: project.revision, idempotencyKey: 'mcp-create-real-workspace', label: 'Real workflow' });
   const workspaceId = workspace.workspaceId;

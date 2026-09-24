@@ -1,7 +1,23 @@
-import { readFileSync, lstatSync } from 'node:fs';
+import { readFileSync, lstatSync, realpathSync, statSync } from 'node:fs';
 import { z } from 'zod';
 
 const reserved = new Set(['praxis_release_plan', 'praxis_release_apply', 'praxis_release_status', 'praxis_release_history', 'praxis_release_rollback']);
+
+/**
+ * Reload the manifest whenever the file behind `path` changes, e.g. when a
+ * release swaps /srv/praxis-app/current. A broken new manifest keeps the last
+ * good tools, so a bad release cannot remove them from a long-running process.
+ */
+export function watchToolManifest(path, { onError = () => {} } = {}) {
+  let key, tools;
+  return () => {
+    try {
+      const real = realpathSync(path), stat = statSync(real), next = `${real}:${stat.mtimeMs}:${stat.size}`;
+      if (next !== key) { tools = loadToolManifest(path).tools; key = next; }
+    } catch (error) { onError(error); }
+    return tools;
+  };
+}
 
 /** Data only: the protected gateway never imports application candidate code. */
 export function loadToolManifest(path) {

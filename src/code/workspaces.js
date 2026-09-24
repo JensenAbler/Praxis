@@ -251,7 +251,7 @@ export class WorkspaceManager {
     const prepared = this.store.transaction(() => {
       const existing = this._existing(owner, idempotencyKey, request); if (existing) return existing;
       const project = this._project(projectId, owner);
-      requireValue(baseRevision === project.revision, 'baseRevision must match the registered project revision.', 'REVISION_CONFLICT');
+      requireValue(baseRevision === project.revision, `baseRevision must match the registered project revision, currently ${project.revision}.`, 'REVISION_CONFLICT');
       requireValue(this.native || this.db.prepare("SELECT COUNT(*) AS count FROM workspaces WHERE status != 'removed'").get().count < LIMITS.workspaces, 'Workspace quota reached.', 'LIMIT_EXCEEDED');
       const state = manifest(project.snapshotPath);
       requireValue(Object.values(state.entries).every(entry => entry.kind === 'file'), 'Source snapshot contains unsafe entries.', 'UNSAFE_PATH');

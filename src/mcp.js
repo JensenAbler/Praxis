@@ -94,7 +94,7 @@ export function createProbeServer({ jobs, audit, resourceUrl, bootId, release, a
   register('probe_failure', 'Inspect a controlled error', 'Return an intentional FIXTURE_ERROR with a recovery instruction. It makes no job or external changes.', z.object({}), () => {
     throw Object.assign(new Error('Intentional fixture error. Continue by calling probe_capabilities; do not retry this tool to make it succeed.'), { code: 'FIXTURE_ERROR' });
   });
-  register('probe_observations', 'Read server observation receipts', 'Read sanitized server-side tool/HTTP observations in sequence. Includes measured result sizes and durations, never tokens or request bodies.', z.object({ cursor, limit: pageLimit }), ({ cursor, limit }) => audit.list(owner, cursor, limit));
+  register('probe_observations', 'Read server observation receipts', 'Read sanitized server-side tool/HTTP observations in sequence. Includes measured result sizes and durations, never tokens or request bodies.', z.object({ cursor, limit: pageLimit, view: z.enum(['head', 'tail']).default('head').describe('head reads oldest first from cursor. tail starts at the newest records and pages backward; copy nextCursor to continue.') }), ({ cursor, limit, view }) => audit.list(owner, cursor, limit, view));
   if (coding) for (const [name, tool] of Object.entries(applicationTools)) {
     register(name, tool.title, tool.description, tool.schema, args => coding.call(name, args, authInfo.token), !tool.write, !!tool.destructive, 'praxis:code');
   }

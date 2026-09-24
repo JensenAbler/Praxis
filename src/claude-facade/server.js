@@ -18,7 +18,7 @@ import { AuditStore } from '../audit.js';
 import { createProbeServer } from '../mcp.js';
 import { createCodingClient } from '../code/client.js';
 import { createGitClient } from '../code/git-client.js';
-import { loadToolManifest } from '../tool-manifest.js';
+import { loadToolManifest, watchToolManifest } from '../tool-manifest.js';
 
 const env = process.env;
 const host = env.FACADE_HOST ?? '127.0.0.1';
@@ -40,7 +40,9 @@ const metadataUrl=getOAuthProtectedResourceMetadataUrl(resourceUrl);
 const jobs=new JobStore(dataDirectory), audit=new AuditStore(dataDirectory);
 const coding=createCodingClient({url:codingUrl});
 const releaseClient=createGitClient({url:releaseUrl});
-const applicationTools=loadToolManifest(toolManifestPath).tools;
+loadToolManifest(toolManifestPath); // fail fast at startup, as before
+// Releases swap the manifest under a running facade; re-read it when it changes.
+const applicationTools=watchToolManifest(toolManifestPath,{onError:e=>console.error(JSON.stringify({event:'facade_manifest_unavailable',type:e?.name,code:e?.code}))});
 
 app.get('/healthz',(_req,res)=>res.json({ok:true,name:'Praxis SDK OAuth facade'}));
 app.use(createApprovalRouter(provider));
@@ -64,7 +66,7 @@ app.post('/mcp',async(req,res)=>{
   // Claude sees the compatibility token. Praxis backends receive a short-lived
   // owner JWT minted from the same successful owner authorization.
   const authInfo={token:req.auth.backendToken,clientId:req.auth.clientId,scopes:['praxis:probe','praxis:code'],expiresAt:req.auth.expiresAt,resource:req.auth.resource,extra:{subject:'jensen'}};
-  const server=createProbeServer({jobs,audit,resourceUrl:resourceUrl.href,bootId:randomUUID(),release:'claude-sdk-oauth-facade',authInfo,coding,applicationTools,releaseClient});
+  const server=createProbeServer({jobs,audit,resourceUrl:resourceUrl.href,bootId:randomUUID(),release:'claude-sdk-oauth-facade',authInfo,coding,applicationTools:applicationTools(),releaseClient});
   let closed=false;const close=()=>{if(closed)return;closed=true;Promise.allSettled([transport.close(),server.close()]).catch(()=>{})};res.once('close',close);
   try{await server.connect(transport);await transport.handleRequest(req,res,req.body)}catch(e){console.error(JSON.stringify({event:'facade_mcp_error',type:e?.name}));if(!res.headersSent)res.status(500).json({jsonrpc:'2.0',error:{code:-32603,message:'Internal server error'},id:null})}
 });

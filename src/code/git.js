@@ -54,6 +54,14 @@ function directoryBytes(root) {
 }
 
 /** Captures source only. Credentials, Git execution, and deployment belong to the separate broker. */
+// A synced snapshot registers under its commit, which workspace_create takes as
+// baseRevision; result.revision is the source digest. Name the value to copy.
+function withBaseRevision(receipt) {
+  if (receipt?.kind !== 'sync' || receipt.status !== 'completed' || !receipt.result?.commit) return receipt;
+  return { ...receipt, result: { ...receipt.result, baseRevision: receipt.result.commit },
+    next: 'Pass result.baseRevision (the commit, not result.revision) to workspace_create.' };
+}
+
 async function settle(waitSeconds, read, done) {
   const started = Date.now(), deadline = started + waitSeconds * 1000;
   let value = await read();
@@ -335,8 +343,8 @@ export class CodeGit {
   }
   async get({ owner, operationId }) {
     const row = this._row(owner, operationId), receipt = JSON.parse(row.receipt_json);
-    if (TERMINAL.has(receipt.status)) { this._cleanup(row); return receipt; }
-    try { return this._observe(row, await this.broker.get({ owner, operationId })); }
+    if (TERMINAL.has(receipt.status)) { this._cleanup(row); return withBaseRevision(receipt); }
+    try { return withBaseRevision(this._observe(row, await this.broker.get({ owner, operationId }))); }
     catch (error) {
       if (error instanceof WorkspaceError) throw error;
       return this._uncertain(row);
