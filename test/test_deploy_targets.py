@@ -11,7 +11,15 @@ SPEC.loader.exec_module(helper)
 
 APOCRYPHA = {'repository': '/srv/apocrypha', 'repositoryName': 'JensenAbler/apocrypha',
              'origin': 'https://github.com/JensenAbler/apocrypha.git', 'unit': 'apocrypha.service',
-             'protectedPaths': ['/var/lib/apocrypha']}
+             'protectedPaths': ['/var/lib/apocrypha'], 'execStart': ['/usr/bin/node', '/srv/apocrypha/src/server.js'],
+             'user': 'apocrypha'}
+
+
+def systemctl_show(user, exec_start, directory='/srv/apocrypha'):
+    argv = ' '.join(exec_start)
+    return ('LoadState=loaded\nActiveState=active\nSubState=running\nMainPID=42\nInvocationID=abc\n'
+            f'WorkingDirectory={directory}\nUser={user}\nFragmentPath=/etc/systemd/system/x.service\n'
+            f'ExecStart={{ path={exec_start[0]} ; argv[]={argv} ; ignore_errors=no }}\n').encode()
 
 
 class TargetRegistryTests(unittest.TestCase):
@@ -33,6 +41,17 @@ class TargetRegistryTests(unittest.TestCase):
         self.assertEqual(targets['apocrypha']['health'], 'systemd')
         self.assertIsNone(targets['apocrypha']['logPath'])
         self.assertIn('discord', targets)
+
+    def test_malformed_target_blocks_only_itself(self):
+        broken = {key: value for key, value in APOCRYPHA.items() if key != 'execStart'}
+        other = {**APOCRYPHA, 'repository': '/srv/other', 'repositoryName': 'JensenAbler/other', 'unit': 'other.service'}
+        targets = helper.load_targets(self.write({'apocrypha': broken, 'other': other, 'discord': {'bad': True}}), expected_uid=os.geteuid())
+        deployment, _ = helper.deployment_for({'action': 'status'}, targets)
+        self.assertEqual(deployment.repository, helper.REPOSITORY, 'built-in discord survives a malformed override')
+        self.assertEqual(str(helper.deployment_for({'action': 'status', 'projectId': 'other'}, targets)[0].repository), '/srv/other')
+        with self.assertRaises(helper.DeploymentError) as caught:
+            helper.deployment_for({'action': 'status', 'projectId': 'apocrypha'}, targets)
+        self.assertEqual(caught.exception.code, 'INVALID_TARGETS')
 
     def test_writable_registry_is_refused(self):
         with self.assertRaises(helper.DeploymentError) as caught:
@@ -79,6 +98,40 @@ class TargetRegistryTests(unittest.TestCase):
     def test_unconfigured_log_reports_unavailable(self):
         deployment = helper.Deployment(repository='/srv/apocrypha', log_path=None, health='systemd')
         self.assertEqual(deployment._logs(10)['reason'], 'no-log-configured')
+
+    def service(self, spec, show):
+        deployment, _ = helper.deployment_for({'action': 'status', 'projectId': 'apocrypha'},
+                                              {'apocrypha': helper.validate_target('apocrypha', spec)})
+        deployment._run = lambda argv, **kwargs: show
+        deployment._trusted_path = lambda path, **kwargs: None
+        return deployment._service()
+
+    def test_declared_entrypoint_contract_is_enforced(self):
+        exec_start = APOCRYPHA['execStart']
+        self.assertEqual(self.service(APOCRYPHA, systemctl_show('apocrypha', exec_start))['MainPID'], '42')
+        for show in [systemctl_show('root', exec_start),
+                     systemctl_show('apocrypha', ['/usr/bin/node', '/srv/apocrypha/src/other.js']),
+                     systemctl_show('apocrypha', exec_start, directory='/tmp')]:
+            with self.subTest(show=show), self.assertRaises(helper.DeploymentError) as caught:
+                self.service(APOCRYPHA, show)
+            self.assertEqual(caught.exception.code, 'SERVICE_CONFIGURATION_CHANGED')
+
+    def test_discord_default_contract_is_unchanged(self):
+        deployment = helper.Deployment()
+        deployment._trusted_path = lambda path, **kwargs: None
+        for user in ('', 'root'):
+            deployment._run = lambda argv, user=user, **kwargs: systemctl_show(user, ['/usr/bin/node', 'bot.js'], '/opt/podcast-discord')
+            self.assertEqual(deployment._service()['MainPID'], '42')
+        deployment._run = lambda argv, **kwargs: systemctl_show('apocrypha', ['/usr/bin/node', 'bot.js'], '/opt/podcast-discord')
+        with self.assertRaises(helper.DeploymentError):
+            deployment._service()
+
+    def test_entrypoint_contract_is_required_and_validated(self):
+        missing = {key: value for key, value in APOCRYPHA.items() if key != 'execStart'}
+        for spec in [missing, {**APOCRYPHA, 'execStart': ['node', 'x.js']}, {**APOCRYPHA, 'execStart': ['/usr/bin/node', 'a b']},
+                     {**APOCRYPHA, 'execStart': []}, {**APOCRYPHA, 'user': 'Root;'}]:
+            with self.subTest(spec=spec), self.assertRaises(helper.DeploymentError):
+                helper.validate_target('apocrypha', spec)
 
 
 if __name__ == '__main__':

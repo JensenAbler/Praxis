@@ -45,10 +45,11 @@ TARGETS = Path('/etc/praxis-deploy/targets.json')
 STATE_ROOT = STATE.parent
 PROJECT_ID = re.compile(r'^[a-z0-9][a-z0-9_-]{0,63}$')
 HEALTH_KINDS = ('systemd', 'discord-login')
-TARGET_KEYS = {'repository', 'repositoryName', 'origin', 'unit', 'logPath', 'health', 'protectedPaths'}
+TARGET_KEYS = {'repository', 'repositoryName', 'origin', 'unit', 'logPath', 'health', 'protectedPaths', 'execStart', 'user'}
+DISCORD_EXEC_START = ('/usr/bin/node', 'bot.js')
 DEFAULT_TARGETS = {'discord': {'repository': str(REPOSITORY), 'repositoryName': 'JensenAbler/podcast-discord',
                                'origin': ORIGIN, 'unit': UNIT, 'logPath': str(LOG), 'health': 'discord-login',
-                               'protectedPaths': []}}
+                               'protectedPaths': [], 'execStart': list(DISCORD_EXEC_START), 'user': None}}
 
 
 class DeploymentError(Exception):
@@ -113,7 +114,7 @@ def validate_target(project_id, spec):
     checkout or journal state, so a fast-forward cannot touch runtime data."""
     invalid = DeploymentError('INVALID_TARGETS', 'Deployment target ' + repr(project_id) + ' is malformed.')
     if (not isinstance(project_id, str) or not PROJECT_ID.fullmatch(project_id) or not isinstance(spec, dict)
-            or set(spec) - TARGET_KEYS or not {'repository', 'repositoryName', 'origin', 'unit'} <= set(spec)):
+            or set(spec) - TARGET_KEYS or not {'repository', 'repositoryName', 'origin', 'unit', 'execStart'} <= set(spec)):
         raise invalid
     if (not _normal_absolute(spec['repository'])
             or not isinstance(spec['unit'], str) or not re.fullmatch(r'[A-Za-z0-9@_.-]{1,128}\.service', spec['unit'])
@@ -124,6 +125,15 @@ def validate_target(project_id, spec):
     log_path = spec.get('logPath')
     health = spec.get('health', 'systemd')
     protected = spec.get('protectedPaths', [])
+    # The registered entrypoint contract: the unit must run exactly this argv as
+    # this user from the checkout, so a restart can only start the deployed code.
+    exec_start = spec['execStart']
+    user = spec.get('user')
+    if (not isinstance(exec_start, list) or not 1 <= len(exec_start) <= 16
+            or not all(isinstance(part, str) and 0 < len(part) <= 512 and not re.search(r'[\s;\x00]', part) for part in exec_start)
+            or not _normal_absolute(exec_start[0])
+            or (user is not None and (not isinstance(user, str) or not re.fullmatch(r'[a-z_][a-z0-9_-]{0,31}', user)))):
+        raise invalid
     if ((log_path is not None and not _normal_absolute(log_path)) or health not in HEALTH_KINDS
             or not isinstance(protected, list) or len(protected) > 32
             or not all(_normal_absolute(path) for path in protected)):
@@ -134,7 +144,8 @@ def validate_target(project_id, spec):
             raise DeploymentError('PROTECTED_PATH_CONFLICT',
                                   'Deployment target ' + repr(project_id) + ' overlaps a protected data path.')
     return {'repository': spec['repository'], 'repositoryName': spec['repositoryName'], 'origin': spec['origin'],
-            'unit': spec['unit'], 'logPath': log_path, 'health': health, 'protectedPaths': list(protected)}
+            'unit': spec['unit'], 'logPath': log_path, 'health': health, 'protectedPaths': list(protected),
+            'execStart': list(exec_start), 'user': user}
 
 
 def load_targets(path=TARGETS, expected_uid=0):
@@ -160,7 +171,13 @@ def load_targets(path=TARGETS, expected_uid=0):
     if not isinstance(declared, dict):
         raise DeploymentError('INVALID_TARGETS', 'The deployment target registry must be an object keyed by project ID.')
     for project_id, spec in declared.items():
-        targets[project_id] = validate_target(project_id, spec)
+        # Fail closed per target: a malformed entry blocks only its own project,
+        # never the built-in default or other registered targets.
+        try:
+            targets[project_id] = validate_target(project_id, spec)
+        except DeploymentError as error:
+            if isinstance(project_id, str) and project_id not in DEFAULT_TARGETS:
+                targets[project_id] = error
     return targets
 
 
@@ -176,9 +193,12 @@ def deployment_for(request, targets):
     if not isinstance(project_id, str) or project_id not in targets:
         raise DeploymentError('FORBIDDEN', 'No deployment target is registered for this project.')
     spec = targets[project_id]
+    if isinstance(spec, DeploymentError):
+        raise spec
     return Deployment(repository=spec['repository'], state=STATE_ROOT / project_id, origin=spec['origin'],
                       unit=spec['unit'], log_path=spec.get('logPath'), repository_name=spec['repositoryName'],
-                      health=spec.get('health', 'systemd')), request
+                      health=spec.get('health', 'systemd'), exec_start=spec['execStart'],
+                      service_user=spec.get('user')), request
 
 
 class Deployment:
@@ -187,7 +207,8 @@ class Deployment:
     def __init__(self, repository=REPOSITORY, state=STATE, origin=ORIGIN,
                  unit=UNIT, expected_uid=0, grace_seconds=5, log_path=LOG,
                  dependencies=DEPENDENCIES, dependency_uid=None, dependency_state=None,
-                 repository_name='JensenAbler/podcast-discord', health='discord-login'):
+                 repository_name='JensenAbler/podcast-discord', health='discord-login',
+                 exec_start=DISCORD_EXEC_START, service_user=None):
         self.repository = Path(repository)
         self.state = Path(state)
         self.origin = origin
@@ -198,6 +219,9 @@ class Deployment:
         self.log_path = Path(log_path) if log_path is not None else None
         self.repository_name = repository_name
         self.health = health
+        self.exec_start = tuple(exec_start)
+        # None keeps the original podcast-discord contract (unset User or root).
+        self.service_user = service_user
         self.dependencies = Path(dependencies)
         self.dependency_uid = dependency_uid
         # State journals are on a separate systemd bind mount. Every dependency
@@ -281,10 +305,13 @@ class Deployment:
                             '--property=' + ','.join(properties)]).decode()
         values = dict(line.split('=', 1) for line in output.splitlines() if '=' in line)
         if values.get('LoadState') != 'loaded':
-            raise DeploymentError('SERVICE_NOT_MANAGED', 'The fixed podcast-discord service has not been adopted yet.')
-        if (values.get('WorkingDirectory') != str(self.repository)
-                or values.get('User') not in ('', 'root')
-                or not re.search(r'path=/usr/bin/node\s*;\s*argv\[\]=/usr/bin/node bot\.js\s*;', values.get('ExecStart', ''))):
+            raise DeploymentError('SERVICE_NOT_MANAGED', 'The registered service unit is not loaded.')
+        argv = ' '.join(self.exec_start)
+        entrypoint = r'path=' + re.escape(self.exec_start[0]) + r'\s*;\s*argv\[\]=' + re.escape(argv) + r'\s*;'
+        user_ok = (values.get('User') in ('', 'root') if self.service_user is None
+                   else values.get('User') == self.service_user)
+        if (values.get('WorkingDirectory') != str(self.repository) or not user_ok
+                or not re.search(entrypoint, values.get('ExecStart', ''))):
             raise DeploymentError('SERVICE_CONFIGURATION_CHANGED', 'The fixed service entrypoint no longer matches its registered deployment contract.')
         self._trusted_path(values['FragmentPath'])
         return {key: values.get(key, '') for key in properties
