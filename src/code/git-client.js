@@ -12,11 +12,11 @@ export function createGitClient({ url = 'http://127.0.0.1:8793/call' } = {}) {
     const data = await response.json();
     if (!data.ok) {
       const error = new WorkspaceError(data.error?.code || 'BROKER_UNAVAILABLE', data.error?.message || 'Publishing could not confirm this operation.');
-      error.brokerRejected = response.status === 400 && ['sync', 'commit', 'push', 'deploy', 'projectDeploy', 'restart', 'rollback', 'projectCreate', 'projectPublish'].includes(action);
+      error.brokerRejected = response.status === 400 && ['sync', 'commit', 'push', 'deploy', 'projectDeploy', 'restart', 'rollback', 'projectCreate', 'projectPublish', 'projectAdopt'].includes(action);
       throw error;
     }
     return data.data;
   };
-  return Object.fromEntries(['sync', 'commit', 'push', 'deploy', 'projectDeploy', 'restart', 'rollback', 'diagnosis', 'deploymentHistory', 'get', 'list', 'deploymentStatus', 'projectCreate', 'projectPublish',
+  return Object.fromEntries(['sync', 'commit', 'push', 'deploy', 'projectDeploy', 'restart', 'rollback', 'diagnosis', 'deploymentHistory', 'get', 'list', 'deploymentStatus', 'projectCreate', 'projectPublish', 'projectAdopt',
     'releasePlan', 'releaseApply', 'releaseStatus', 'releaseHistory', 'releaseRollback'].map(action => [action, args => call(action, args)]));
 }

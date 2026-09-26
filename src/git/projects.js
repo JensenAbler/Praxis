@@ -13,7 +13,8 @@ const base = { operationId: z.string().uuid(), idempotencyKey: z.string().regex(
 export const projectBrokerSchemas = {
   projectCreate: z.object({ ...base, name, template: z.enum(['node', 'python', 'static']).default('node') }).strict(),
   projectPublish: z.object({ ...base, projectId, visibility: z.enum(['private', 'public']).default('private'),
-    commitOperationId: z.string().uuid().optional() }).strict()
+    commitOperationId: z.string().uuid().optional() }).strict(),
+  projectAdopt: z.object({ ...base, name }).strict()
 };
 export class ProjectError extends GitTransportError {
   constructor(code, message, uncertain = false) { super(code, message); this.uncertain = uncertain; }
@@ -138,14 +139,15 @@ export class ProjectProvisioner {
     check(row, 'NOT_FOUND', 'Project not found.'); return row;
   }
   admit(kind, owner, args) {
-    if (kind === 'projectCreate') {
+    if (kind === 'projectCreate' || kind === 'projectAdopt') {
       const id = ownedProjectId(owner, args.name);
       const existing = this.db.prepare('SELECT * FROM git_created_projects WHERE project_id=?').get(id);
       check(!existing || existing.create_operation_id === args.operationId, 'PROJECT_EXISTS', 'A project with this name already exists for this owner. Recover it or use another name.');
-      const pending = this.db.prepare("SELECT id FROM git_operations WHERE kind='projectCreate' AND project_id=? AND id!=?").get(id, args.operationId);
-      check(!pending, 'PROJECT_EXISTS', 'A project creation receipt already exists for this name. Recover it before starting another creation.');
-      check(existing || this.db.prepare("SELECT COUNT(*) AS n FROM git_operations WHERE kind='projectCreate'").get().n < this.maximumProjects,
+      const pending = this.db.prepare("SELECT id FROM git_operations WHERE kind IN ('projectCreate','projectAdopt') AND project_id=? AND id!=?").get(id, args.operationId);
+      check(!pending, 'PROJECT_EXISTS', 'A project creation or adoption receipt already exists for this name. Recover it before starting another.');
+      check(existing || this.db.prepare("SELECT COUNT(*) AS n FROM git_operations WHERE kind IN ('projectCreate','projectAdopt')").get().n < this.maximumProjects,
         'LIMIT_EXCEEDED', 'New-project quota reached.');
+      if (kind === 'projectAdopt') check(this.github, 'GITHUB_SETUP_REQUIRED', 'Adopting a repository needs the protected provisioning credential.');
       return { projectId: id };
     }
     const row = this.get(owner, args.projectId);
@@ -260,5 +262,64 @@ export class ProjectProvisioner {
     const exported = await this.broker.run_sync({ ...operation, project_id: row.project_id, result_json: JSON.stringify({ commit }) }, {});
     return { ...state, ...exported, commit, publishedCommit: commit, observedRemoteHead: commit, branch: 'main', repositoryUrl: state.repositoryUrl,
       project: { projectId: row.project_id, name: row.name, template: row.template, owner: row.owner, repository: state.repositoryUrl, publication: args.visibility } };
+  }
+  /**
+   * Adopt an existing repository in the configured account: verify it, add a
+   * dedicated writable deploy key, mirror main and export a source snapshot.
+   * Each GitHub effect has a durable intent and is observed, never repeated.
+   * Deployment stays separate: only a root-owned target spec can deploy it.
+   */
+  async runAdopt(operation, args) {
+    check(this.github, 'GITHUB_SETUP_REQUIRED', 'Adopting a repository needs the protected provisioning credential.');
+    const id = ownedProjectId(operation.owner, args.name);
+    this.db.prepare(`INSERT OR IGNORE INTO git_created_projects(project_id,owner,name,template,create_operation_id,created_at) VALUES(?,?,?,?,?,?)`)
+      .run(id, operation.owner, args.name, 'adopted', operation.id, operation.created_at);
+    let row = this.get(operation.owner, id);
+    check(row.create_operation_id === operation.id && row.template === 'adopted', 'PROJECT_EXISTS', 'The project belongs to another receipt.');
+    let state = operation.result_json ? JSON.parse(operation.result_json) : {};
+    const save = (phase, changes = {}) => { state = { ...state, ...changes }; this.broker.update(operation, 'running', phase, state); operation.phase = phase; };
+    if (!state.repositoryId) {
+      await this.github.checkIdentity();
+      const remote = await this.github.getRepository(args.name);
+      check(remote, 'REPOSITORY_NOT_FOUND', 'No repository with that name exists in the configured GitHub account.');
+      check(remote.name?.toLowerCase() === args.name && remote.owner?.login?.toLowerCase() === this.account.toLowerCase()
+        && Number.isSafeInteger(remote.id) && !remote.archived, 'REPOSITORY_CONFLICT', 'The observed repository cannot be adopted (wrong owner, archived or malformed).');
+      check(remote.permissions?.admin === true, 'GITHUB_AUTHORIZATION_REQUIRED', 'The provisioning credential cannot manage deploy keys on this repository.');
+      check((remote.default_branch || 'main') === 'main', 'UNSUPPORTED_REPOSITORY', 'Adopted repositories must use main as their default branch.');
+      save('adopt_remote_verified', { repositoryId: remote.id, repositoryUrl: `https://github.com/${this.account}/${args.name}`,
+        visibility: remote.private ? 'private' : 'public' });
+    }
+    const root = join(this.directory, id), directory = join(root, 'repository.git');
+    mkdirSync(root, { recursive: true, mode: 0o700 });
+    check(!lstatSync(root).isSymbolicLink(), 'UNSAFE_PATH', 'Project storage contains a symbolic link.');
+    const pair = await this.keyPair(id, { allowCreate: !state.deployKeyId && operation.phase !== 'project_key_intent' });
+    if (!state.deployKeyId) {
+      let key = await this.github.findDeployKey(args.name, pair.publicKey);
+      if (operation.phase === 'project_key_intent') {
+        if (!key) throw new ProjectError('PROJECT_ADOPTION_UNCERTAIN', 'Deploy-key creation was attempted, but its result cannot be observed. It will not be repeated automatically.', true);
+      } else if (!key) { save('project_key_intent'); key = await this.github.addDeployKey(args.name, pair.publicKey, operation.id); }
+      check(Number.isSafeInteger(key?.id), 'GITHUB_UNAVAILABLE', 'GitHub did not confirm the deploy key.');
+      save('project_key_created', { deployKeyId: key.id });
+    }
+    mkdirSync(directory, { recursive: true, mode: 0o700 });
+    check(!lstatSync(directory).isSymbolicLink(), 'UNSAFE_PATH', 'Repository storage contains a symbolic link.');
+    if (!existsSync(join(directory, 'HEAD'))) await execute(this.git.gitPath, ['-c', 'init.templateDir=', 'init', '--bare', '--initial-branch=main', directory],
+      { env: this.git.env, windowsHide: true, timeout: 30000, maxBuffer: 8192 });
+    const repository = { projectId: id, owner: operation.owner, directory, remoteUrl: `git@github.com:${this.account}/${args.name}.git`,
+      defaultBranch: 'main', allowedBranches: ['main'], adopted: true, deployment: true,
+      ...(this.author ? { author: this.author } : {}), transportEnv: pair.transportEnv };
+    this.git.registerRepository({ ...repository, localOnly: false }, { replace: true });
+    this.broker.repositories.set(id, { ...repository, localOnly: false });
+    await this.git.fetch(id);
+    const head = await this.git.remoteHead(id, 'main');
+    check(/^[a-f0-9]{40}$/.test(head.commit || ''), 'REMOTE_EMPTY', 'The repository has no main commit to adopt.');
+    this.db.prepare('UPDATE git_created_projects SET initial_commit=?,repository_json=?,published=1,publish_operation_id=? WHERE project_id=?')
+      .run(head.commit, JSON.stringify(repository), operation.id, id);
+    row = this.get(operation.owner, id); this.register(row);
+    save('adopt_mirrored', { commit: head.commit });
+    const exported = await this.broker.run_sync({ ...operation, project_id: id, result_json: JSON.stringify({ commit: head.commit }) }, {});
+    return { ...state, ...exported, commit: head.commit, branch: 'main', repositoryUrl: state.repositoryUrl,
+      project: { projectId: id, name: args.name, template: 'adopted', owner: operation.owner, repository: state.repositoryUrl,
+        publication: state.visibility, validationCommands: [], runtime: 'adopted' } };
   }
 }

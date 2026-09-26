@@ -120,7 +120,7 @@ export class GitBroker {
   }
   async deploymentStatus({ projectId, owner }) {
     const repo = this.policy(projectId, owner);
-    if (repo.owner && this.projectProvisioner && this.projectDeployment) return this.projectDeployment({ action: 'status', projectId });
+    if (repo.owner && !repo.adopted && this.projectProvisioner && this.projectDeployment) return this.projectDeployment({ action: 'status', projectId });
     check(repo.deployment && this.deployment, 'DEPLOYMENT_DISABLED', 'Deployment is not enabled for this project.');
     return this.deployment({ action: 'status', projectId });
   }
@@ -158,13 +158,13 @@ export class GitBroker {
       check(fence.state === 'active', 'UPDATE_IN_PROGRESS', 'Application activation is draining mutations; recover existing work through status tools.');
     }
     const parsed = brokerSchemas[kind]?.safeParse(input);
-    check(parsed?.success && ['sync', 'commit', 'push', 'deploy', 'projectDeploy', 'restart', 'rollback', 'projectCreate', 'projectPublish'].includes(kind), 'INVALID_ARGUMENT', 'Invalid publishing request.');
+    check(parsed?.success && ['sync', 'commit', 'push', 'deploy', 'projectDeploy', 'restart', 'rollback', 'projectCreate', 'projectPublish', 'projectAdopt'].includes(kind), 'INVALID_ARGUMENT', 'Invalid publishing request.');
     const args = parsed.data;
     const encoded = JSON.stringify(args);
     const existing = this.db.prepare('SELECT * FROM git_operations WHERE owner=? AND idempotency_key=?').get(owner, args.idempotencyKey);
     if (existing) {
       check(existing.kind === kind && existing.request_json === encoded, 'IDEMPOTENCY_CONFLICT', 'The key belongs to different publishing inputs.');
-      if (['projectPublish', 'projectDeploy'].includes(kind) && existing.status === 'uncertain') {
+      if (['projectPublish', 'projectDeploy', 'projectAdopt'].includes(kind) && existing.status === 'uncertain') {
         // This is an explicit mutation retry with identical inputs. The provisioner
         // observes each saved intent before continuing; it never repeats an
         // ambiguous effect. Read-only status cannot initiate the remaining steps.
@@ -180,8 +180,9 @@ export class GitBroker {
       check(['push', 'projectPublish'].includes(published.kind) && published.status === 'completed', 'OPERATION_NOT_READY', 'A completed project publication is required.');
       projectId = published.project_id; workspaceId = published.workspace_id;
       check(this.projectProvisioner && this.projectDeployment && this.projectProvisioner.get(owner, projectId).published, 'DEPLOYMENT_DISABLED', 'New-project deployment requires a published owner-created project.');
+      check(this.projectProvisioner.get(owner, projectId).template !== 'adopted', 'DEPLOYMENT_DISABLED', 'Adopted repositories deploy through their registered fast-forward target, not the stateless app deployer.');
     }
-    if (['projectCreate', 'projectPublish'].includes(kind)) {
+    if (['projectCreate', 'projectPublish', 'projectAdopt'].includes(kind)) {
       check(this.projectProvisioner, 'PROJECT_CREATION_DISABLED', 'New-project provisioning is not configured on this broker.');
       ({ projectId } = this.projectProvisioner.admit(kind, owner, args));
       if (args.commitOperationId) workspaceId = this.row(owner, args.commitOperationId).workspace_id;
@@ -194,7 +195,7 @@ export class GitBroker {
         .find(row => { const prior = JSON.parse(row.request_json); return (prior.commitOperationId || prior.pushOperationId) === (args.commitOperationId || args.pushOperationId); });
       check(!pending, 'GIT_OPERATION_PENDING', `An earlier ${kind} operation remains unresolved${pending ? `: ${pending.id}` : ''}. Recover it before submitting another attempt.`);
     }
-    const repo = kind === 'projectCreate' ? null : this.policy(projectId, owner);
+    const repo = ['projectCreate', 'projectAdopt'].includes(kind) ? null : this.policy(projectId, owner);
     if (kind === 'push') check(!repo.localOnly, 'REPOSITORY_NOT_PUBLISHED', 'Use project_publish for a new local project before ordinary Git pushes.');
     if (['deploy', 'restart', 'rollback'].includes(kind)) check(repo.deployment && this.deployment, 'DEPLOYMENT_DISABLED', 'Deployment is not enabled for this project.');
     check(this.db.prepare('SELECT COUNT(*) AS n FROM git_operations').get().n < 10000, 'LIMIT_EXCEEDED', 'Publishing receipt quota reached.');
@@ -425,6 +426,7 @@ export class GitBroker {
   }
   run_projectCreate(row, args) { return this.projectProvisioner.runCreate(row, args); }
   run_projectPublish(row, args) { return this.projectProvisioner.runPublish(row, args); }
+  run_projectAdopt(row, args) { return this.projectProvisioner.runAdopt(row, args); }
   async close() { await this.pending; this.db.close(); }
 }
 

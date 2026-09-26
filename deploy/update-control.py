@@ -31,7 +31,7 @@ UTILITY = 'deploy/update-control.py'
 OWNER_CLIENT = 'scripts/autonomy-live-qualification.js'
 # Owner-approved control runtime that may change through this transaction. The
 # broker must name the target project on every deployment helper call.
-RUNTIME = ('src/git/broker.js',)
+RUNTIME = ('src/git/broker.js', 'src/git/projects.js')
 CHANGEABLE = frozenset([*HELPERS, UTILITY, *RUNTIME])
 METADATA = ('release.json',)
 

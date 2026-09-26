@@ -33,7 +33,7 @@ function fixture(t, options = {}) {
   async function run(prepared) {
     const row = broker.row(prepared.row.owner, prepared.row.id);
     try {
-      const result = await provisioner[row.kind === 'projectCreate' ? 'runCreate' : 'runPublish'](row, prepared.args);
+      const result = await provisioner[{ projectCreate: 'runCreate', projectPublish: 'runPublish', projectAdopt: 'runAdopt' }[row.kind]](row, prepared.args);
       broker.update(row, 'completed', 'completed', result); return broker.row(row.owner, row.id);
     } catch (error) {
       const latest = broker.row(row.owner, row.id);
@@ -82,6 +82,65 @@ function githubFixture(f, id, { failAt } = {}) {
   };
   return { counts, state, origin };
 }
+function seedOrigin(f, origin) {
+  const work = join(f.root, `seed-${randomUUID()}`);
+  execFileSync('git', ['init', '--initial-branch=main', work], { stdio: 'ignore', windowsHide: true });
+  writeFileSync(join(work, 'README.md'), 'existing repository\n');
+  const g = (...args) => execFileSync('git', ['-C', work, '-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', ...args], { stdio: 'ignore', windowsHide: true });
+  g('add', '.'); g('commit', '-m', 'existing history'); g('push', origin, 'main');
+  return execFileSync('git', ['-C', work, 'rev-parse', 'HEAD']).toString().trim();
+}
+function existingRepository(overrides = {}) {
+  return { id: 300, name: 'legacy', owner: { login: 'FixtureOwner' }, private: true, archived: false,
+    default_branch: 'main', permissions: { admin: true }, ...overrides };
+}
+
+test('adoption verifies an existing repository, adds one key, mirrors main and registers a deployable adopted project', async t => {
+  const f = fixture(t), id = ownedProjectId('alice', 'legacy'), fx = githubFixture(f, id);
+  const head = seedOrigin(f, fx.origin);
+  fx.state.repository = existingRepository();
+  const done = await f.run(f.prepare('projectAdopt', { name: 'legacy' })), result = JSON.parse(done.result_json);
+  assert.equal(done.status, 'completed'); assert.equal(result.commit, head); assert.equal(fx.counts.key, 1); assert.equal(fx.counts.create, 0);
+  assert.equal(result.project.template, 'adopted'); assert.equal(result.project.repository, 'https://github.com/FixtureOwner/legacy');
+  assert.equal(result.project.publication, 'private');
+  const row = f.provisioner.get('alice', id); assert.equal(row.published, 1); assert.equal(row.initial_commit, head);
+  const repo = f.broker.repositories.get(id); assert.equal(repo.adopted, true); assert.equal(repo.deployment, true); assert.equal(repo.localOnly, false);
+  assert.match(result.revision, /^[a-f0-9]{64}$/);
+  assert.equal(readFileSync(join(f.exports, done.id, 'files', 'README.md'), 'utf8'), 'existing repository\n');
+  assert.throws(() => f.prepare('projectAdopt', { name: 'legacy' }), { code: 'PROJECT_EXISTS' });
+  assert.throws(() => f.prepare('projectPublish', { projectId: id }), { code: 'PROJECT_ALREADY_PUBLISHED' });
+});
+
+test('adoption refuses missing, foreign, archived, non-admin and non-main repositories before any key is added', async t => {
+  for (const [repository, code] of [[null, 'REPOSITORY_NOT_FOUND'], [existingRepository({ owner: { login: 'someone-else' } }), 'REPOSITORY_CONFLICT'],
+    [existingRepository({ archived: true }), 'REPOSITORY_CONFLICT'], [existingRepository({ permissions: { admin: false } }), 'GITHUB_AUTHORIZATION_REQUIRED'],
+    [existingRepository({ default_branch: 'master' }), 'UNSUPPORTED_REPOSITORY']]) {
+    const f = fixture(t), fx = githubFixture(f, ownedProjectId('alice', 'legacy'));
+    fx.state.repository = repository;
+    await assert.rejects(f.run(f.prepare('projectAdopt', { name: 'legacy' })), { code });
+    assert.equal(fx.counts.key, 0);
+  }
+});
+
+test('a lost deploy-key response leaves adoption uncertain and recovery never adds a second key', async t => {
+  const f = fixture(t), id = ownedProjectId('alice', 'legacy'), fx = githubFixture(f, id, { failAt: 'key' });
+  const head = seedOrigin(f, fx.origin);
+  fx.state.repository = existingRepository();
+  const prepared = f.prepare('projectAdopt', { name: 'legacy' });
+  await assert.rejects(f.run(prepared));
+  assert.equal(f.broker.row('alice', prepared.row.id).status, 'uncertain');
+  const recovered = await f.run(prepared);
+  assert.equal(recovered.status, 'completed'); assert.equal(JSON.parse(recovered.result_json).commit, head); assert.equal(fx.counts.key, 1);
+});
+
+test('adopted projects cannot use the stateless app deployer', async t => {
+  const f = fixture(t), id = ownedProjectId('alice', 'legacy'), fx = githubFixture(f, id);
+  seedOrigin(f, fx.origin); fx.state.repository = existingRepository();
+  const done = await f.run(f.prepare('projectAdopt', { name: 'legacy' }));
+  f.broker.projectDeployment = async () => { throw new Error('must not be called'); };
+  assert.throws(() => f.broker.submit('projectDeploy', { owner: 'alice', operationId: randomUUID(), idempotencyKey: 'adopted-app-deploy',
+    publicationOperationId: done.id, expectedHead: null }), error => ['DEPLOYMENT_DISABLED', 'OPERATION_NOT_READY', 'INVALID_ARGUMENT'].includes(error.code));
+});
 
 test('safe project names and owner namespaces cannot select paths or another owner project', t => {
   const f = fixture(t);

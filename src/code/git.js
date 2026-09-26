@@ -259,6 +259,7 @@ export class CodeGit {
   }
   projectCreate(args) { return this.projects.create(args); }
   projectPublish(args) { return this.projects.publish(args); }
+  projectAdopt(args) { return this.projects.adopt(args); }
 
   _observe(row, receipt) {
     requireValue(receipt && receipt.operationId === row.id && receipt.kind === row.kind && receipt.projectId === row.project_id
@@ -268,7 +269,7 @@ export class CodeGit {
       const latest = this._row(row.owner, row.id), previous = JSON.parse(latest.receipt_json);
       if (TERMINAL.has(previous.status)) return previous;
       if (receipt.status === 'completed' && !latest.integrated) {
-        if (['projectCreate', 'projectPublish'].includes(row.kind)) this.projects.integrate(row, receipt);
+        if (['projectCreate', 'projectPublish', 'projectAdopt'].includes(row.kind)) this.projects.integrate(row, receipt);
         if (row.kind === 'sync') this._import(row, receipt);
         if (row.kind === 'commit') {
           const result = receipt.result, request = JSON.parse(row.request_json), snapshot = JSON.parse(row.snapshot_json);

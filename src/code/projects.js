@@ -51,16 +51,30 @@ export class CodeProjects {
     });
     return this.git._submit(row);
   }
+  async adopt({ owner, name, idempotencyKey }) {
+    const projectId = ownedProjectId(owner, name);
+    const input = { kind: 'projectAdopt', name };
+    const row = this.git.store.transaction(() => {
+      const existing = this.git._existing(owner, idempotencyKey, input); if (existing) return existing;
+      requireValue(!this.workspaces.projects.has(projectId), 'A project with this name is already registered. Recover it instead.', 'PROJECT_EXISTS');
+      return this.git._prepare({ owner, idempotencyKey, input, projectId, request: { name } });
+    });
+    return this.git._submit(row);
+  }
   /** Called inside CodeGit._observe's transaction before marking a project operation integrated. */
   integrate(row, receipt) {
     const result = receipt.result, metadata = result?.project;
+    const adopted = row.kind === 'projectAdopt';
     requireValue(metadata && metadata.projectId === row.project_id && metadata.owner === row.owner
-      && ownedProjectId(row.owner, metadata.name) === row.project_id && ['node', 'python', 'static'].includes(metadata.template),
+      && ownedProjectId(row.owner, metadata.name) === row.project_id
+      && (adopted ? metadata.template === 'adopted' : ['node', 'python', 'static'].includes(metadata.template)),
       'Project receipt does not match the authenticated owner or project.', 'BROKER_PROTOCOL_ERROR');
     let project;
-    if (row.kind === 'projectCreate') {
+    if (row.kind === 'projectCreate' || adopted) {
       requireValue(result.exportId === row.id && COMMIT.test(result.commit) && DIGEST.test(result.revision) && result.branch === 'main'
-        && metadata.publication === 'local' && metadata.repository === null, 'Project scaffold export metadata is invalid.', 'BROKER_PROTOCOL_ERROR');
+        && (adopted ? ['private', 'public'].includes(metadata.publication)
+          && /^https:\/\/github\.com\/[A-Za-z0-9-]+\/[a-z][a-z0-9-]{0,39}$/.test(metadata.repository)
+          : metadata.publication === 'local' && metadata.repository === null), 'Project export metadata is invalid.', 'BROKER_PROTOCOL_ERROR');
       const root = safePath(this.git.exportDirectory, row.id, { directory: true });
       const exported = JSON.parse(readSafe(root, 'manifest.json', 16 * 1024 * 1024));
       const snapshotPath = safePath(root, 'files', { directory: true }), state = manifest(snapshotPath);
@@ -72,9 +86,12 @@ export class CodeProjects {
           && command.length > 0 && command.length <= 20 && command.every(arg => typeof arg === 'string' && arg.length <= 500)),
         'Project validation command metadata is invalid.', 'BROKER_PROTOCOL_ERROR');
       project = { id: row.project_id, owner: row.owner, name: metadata.name, template: metadata.template,
-        repository: null, publication: 'local', revision: result.commit, snapshotPath,
+        repository: adopted ? metadata.repository : null, publication: adopted ? metadata.publication : 'local',
+        revision: result.commit, snapshotPath,
         validationCommands: metadata.validationCommands, runtime: metadata.runtime,
-        instructions: 'This owner-created project is isolated from production. Run its validation commands before committing. Publish through project_publish once, then use git_commit and git_push for later updates.' };
+        instructions: adopted
+          ? 'This existing repository was adopted by owner approval. Edit in a managed workspace and publish with git_commit and git_push. It deploys only through deployment_fast_forward when an owner has registered a target for it.'
+          : 'This owner-created project is isolated from production. Run its validation commands before committing. Publish through project_publish once, then use git_commit and git_push for later updates.' };
     } else {
       const previous = this.db.prepare('SELECT * FROM code_created_projects WHERE owner=? AND project_id=?').get(row.owner, row.project_id);
       requireValue(previous, 'The publication project is not registered.', 'BROKER_PROTOCOL_ERROR');
