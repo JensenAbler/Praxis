@@ -4,7 +4,7 @@ Praxis gives a conversational model a persistent computer.
 
 You bring the reasoning (ChatGPT, Claude, or any MCP client). Praxis supplies remote MCP tools and durable execution, so the model can write code, run it, publish it, operate the services it deploys, and keep improving Praxis itself, all from a chat window, including one on a phone.
 
-**Endpoint:** <https://mcp.jensenabler.com/praxis/mcp>
+**Endpoint:** <https://mcp.jensenabler.com/praxis/mcp> (see [Connecting](#connecting) for per-client details)
 
 > **Heads up:** as of 0.6.0, Praxis runs commands as **root** on the host, with ordinary networking and no sandbox, command allowlist, filesystem allowlist, or resource quota. Treat access to it the way you'd treat an SSH key to the box.
 
@@ -53,22 +53,31 @@ Log pages from `job_logs` are excerpts. For the full output, read the `rawLogs` 
 
 `host_project_attach` saves a directory, plus optional named data roots like `recordings` or `logs`, so later calls can use short relative paths. It's only a shortcut: jobs and host tools accept any absolute path without registration, and attaching a directory doesn't authorize source edits.
 
-## Status
+## Commit authorship
 
-Version **0.6.0** (native root execution) is live on Alpha. The active release as of 2026-09-26 is `app-46e8a981995e-e254603a`; `capabilities` always reports the current one.
+Every commit made through Praxis records which client wrote it, and the client can't lie about it.
 
-[Recorded acceptance](docs/evidence/native-root-live.json) of the first native release (`app-native-d75788a6e2e6`) covers root execution, normal dependency installation, full output and artifact recovery, cancellation, deadlines, and a job surviving a live backend restart. Existing production services and database contents were preserved through the upgrade.
+An OAuth authorization code is only ever delivered to a client's registered redirect URI, so the redirect host identifies which application completed the owner's authorization. Both token issuers sign that host into the access token as `praxis_client_host`. When a workspace is committed, the Git service derives the author from that verified claim, never from the request body.
 
-| Client | Status |
+| Redirect host | Git author |
 | --- | --- |
-| ChatGPT | Connected, tool definitions refreshed; native iPhone task not yet run |
-| Claude | Verified 2026-09-26 from the Claude mobile app: `capabilities`, sync, workspace create/apply, a workspace job, diff, commit, and push to `main` (this README) |
+| `claude.ai` | `Claude (via Praxis) <claude.ai@clients.praxis.invalid>` |
+| `chatgpt.com`, `chat.openai.com` | `ChatGPT (via Praxis) <chatgpt.com@clients.praxis.invalid>` |
+| any other single host | `MCP client at HOST <HOST@clients.praxis.invalid>` |
+| missing, invalid, or redirect URIs spanning several hosts | `Unknown Praxis client` |
+
+The committer is always the repository owner, so `git log --format='%an | %cn'` shows both who wrote a change and who is accountable for it. The `.invalid` domain guarantees the author addresses never reach a real mailbox. See [src/client-host.js](src/client-host.js).
 
 ## Connecting
 
-The endpoint and OAuth issuer both live under the `/praxis` prefix. Coding tools require the owner's `praxis:code` grant; the original bounded diagnostic tools use `praxis:probe`.
+Each client connects through its own OAuth client:
 
-After tools change, clients may need to refresh their connection metadata. Check the advertised release and tool list in the client itself before relying on it.
+- **ChatGPT** uses the canonical endpoint, <https://mcp.jensenabler.com/praxis/mcp>, whose OAuth issuer lives under the same `/praxis` prefix.
+- **Claude** uses the facade at <https://praxis-apps.jensenabler.com/mcp>.
+
+Coding tools require the owner's `praxis:code` grant; the original bounded diagnostic tools use `praxis:probe`.
+
+Clients may need to refresh their connection metadata after tools change. `capabilities` reports the running version and release, so check it in the client rather than trusting any document.
 
 ## Development
 
@@ -97,8 +106,9 @@ Optional adapters (still supported, but they describe their own assumptions, not
 
 `dependency_prepare` is only needed when a deployment adapter wants sealed package provenance; normal native installs don't need it.
 
-Historical evidence (each record keeps its original client, release, and scope; container-era results don't qualify native execution):
+Evidence (each record keeps its original client, release, and scope; container-era results don't qualify native execution):
 
+- [Native root acceptance](docs/evidence/native-root-live.json): root execution, dependency installation, output and artifact recovery, cancellation, deadlines, and a job surviving a live backend restart
 - [Phone coding and recovery](docs/evidence/iphone-coding-report.md)
 - [Six historical replay implementations](docs/evidence/replay-batch-v1-results.md)
 - [0.5 autonomy milestone](docs/autonomy-milestone.md)
