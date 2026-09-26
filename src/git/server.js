@@ -28,7 +28,7 @@ export function createGitService(config) {
     catch { res.status(401).json({ ok: false, error: { code: 'AUTHORIZATION_REQUIRED', message: 'An owner token with praxis:code is required.' } }); }
   }, express.json({ limit: '32kb' }), async (req, res) => {
     try {
-      const { action, args } = req.body || {}, schema = Object.hasOwn(brokerSchemas, action || '') && brokerSchemas[action];
+      const { action, args } = req.body || {}, schema = typeof action === 'string' && Object.hasOwn(brokerSchemas, action) ? brokerSchemas[action] : undefined;
       const parsed = schema?.safeParse(args);
       if (!parsed?.success || Object.keys(req.body).some(key => !['action', 'args'].includes(key))) throw new BrokerError('INVALID_ARGUMENT', 'Invalid publishing action or arguments.');
       // Commit authorship always comes from the verified token, never from the request body.

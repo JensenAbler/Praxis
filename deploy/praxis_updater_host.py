@@ -5,6 +5,7 @@ import json
 import os
 import pathlib
 import pwd
+import re
 import shutil
 import sqlite3
 import stat
@@ -15,6 +16,20 @@ import time
 def require(value, message):
     if not value:
         raise RuntimeError(message)
+
+
+def manifest_route(tool):
+    name = tool['name']
+    route = tool.get('route', {'target': 'coding', 'action': name})
+    reserved = {'observations_list', 'praxis_release_plan', 'praxis_release_apply', 'praxis_release_status',
+                'praxis_release_history', 'praxis_release_rollback'}
+    require(isinstance(route, dict) and set(route) == {'target', 'action'}
+            and route['target'] in ('coding', 'git') and isinstance(route['action'], str)
+            and re.fullmatch('[a-z][a-zA-Z0-9_]{0,63}', route['action'])
+            and name not in reserved and not name.startswith('probe_')
+            and route['action'] not in reserved and not route['action'].startswith('probe_')
+            and not route['action'].lower().startswith('release'), 'Invalid application tool route.')
+    return route
 
 
 def atomic_json(path, value, mode=0o600):
@@ -360,10 +375,12 @@ class Host:
         previous = json.loads((self.current.resolve() / 'coding-tools.json').read_text())
         next_tools = {tool['name']: tool for tool in candidate['tools']}
         require(len(next_tools) == len(candidate['tools']), 'Duplicate tool name.')
+        for tool in candidate['tools']: manifest_route(tool)
         for tool in previous['tools']:
             require(tool['name'] in next_tools, 'Existing tools cannot disappear during routine self-update.')
             newer = next_tools[tool['name']]
             require(newer['write'] == tool['write'] and newer['destructive'] == tool['destructive'], 'An existing tool permission annotation changed.')
+            require(manifest_route(tool) == manifest_route(newer), 'An existing tool route changed.')
             old_schema, new_schema = tool['inputSchema'], newer['inputSchema']
             require(set(new_schema.get('required', [])) <= set(old_schema.get('required', [])), 'An existing tool gained a required argument.')
             for name, schema in old_schema.get('properties', {}).items():

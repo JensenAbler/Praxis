@@ -2,7 +2,8 @@ import { randomUUID, createHash } from 'node:crypto';
 import { SOURCE_WORKFLOW } from './workflow-policy.js';
 import { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
-import { codeTools, parseArguments } from './code/schema.js';
+import { parseArguments } from './arguments.js';
+import { manifestRoute, healthRoute } from './tool-manifest.js';
 import { diagnosticRecord, errorRecovery, requestContext } from './diagnostics.js';
 import { releaseTools } from './release-schema.js';
 
@@ -12,7 +13,7 @@ const jobId = z.string().uuid();
 const cursor = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).default(0).describe('Omit/0 begins. Copy the returned nextCursor exactly; do not calculate it from page length.');
 const pageLimit = z.number().int().min(1).max(100).default(20).describe('Maximum records per page: 1–100; default 20. Omit for the default.');
 
-export function createProbeServer({ jobs, audit, resourceUrl, bootId, release, authInfo, era, coding, applicationTools = codeTools, releaseClient }) {
+export function createProbeServer({ jobs, audit, resourceUrl, bootId, release, authInfo, era, coding, applicationTools = {}, releaseClient, git }) {
   const owner = authInfo?.extra?.subject;
   if (owner !== 'jensen') throw new Error('Authenticated owner required');
   const server = new McpServer({ name: 'Praxis', version: coding ? '0.6.0' : VERSION }, {
@@ -20,11 +21,11 @@ export function createProbeServer({ jobs, audit, resourceUrl, bootId, release, a
       ? SOURCE_WORKFLOW + ' Start with capabilities, projects_list and workspaces_list. Read logs, recordings and live state with host tools. Jobs run as native root with ordinary networking and persistent caches. Preserve IDs and idempotency keys after uncertainty; inspect job_status before repeating work. Complete raw logs remain recoverable. Refresh client connection metadata after tool changes. observations_list shows recent tool activity, newest first.'
       : 'This is an isolated diagnostic fixture. Call probe_capabilities first. Start only a bounded heartbeat job using a unique idempotencyKey, save its job ID, and inspect it through probe_job_status/logs. In a fresh conversation, probe_jobs_list recovers existing jobs. These tools provide no source access, arbitrary commands, production access, or model execution. Never recreate a job merely because a response was lost; repeat the same idempotency key or list existing jobs. Results describe only this fixture.'
   });
-  const register = (name, title, description, inputSchema, handler, readOnly = true, destructive = false, scope = SCOPE) => {
+  const register = (name, title, description, inputSchema, handler, readOnly = true, destructive = false, scope = SCOPE, route) => {
     // Advertise the exact Zod schema, but perform its validation inside the
     // authenticated handler so rejected arguments receive the same structured
     // error, correlation ID, and audit receipt as other tool failures. The
-    // coding backend independently validates the same schema again.
+    // backend independently validates its OWN schema; the app manifest cannot relax it.
     const advertisedSchema = { '~standard': { ...inputSchema['~standard'], validate: value => ({ value }) } };
     server.registerTool(name, {
       title, description, inputSchema: advertisedSchema,
@@ -37,7 +38,7 @@ export function createProbeServer({ jobs, audit, resourceUrl, bootId, release, a
       let result, text;
       try {
         const healthRead = readOnly && scope === 'praxis:code' && authInfo.scopes?.length === 1 && authInfo.scopes[0] === 'praxis:health'
-          && ['capabilities', 'projects_list', 'project_inspect', 'file_read', 'jobs_list', 'job_status'].includes(name);
+          && healthRoute(name, route);
         if (!authInfo.scopes?.includes(scope) && !healthRead) throw Object.assign(new Error(`Reconnect and grant ${scope} to use this tool.`), { code: 'AUTHORIZATION_REQUIRED' });
         const validated = parseArguments(inputSchema, args);
         const data = await requestContext.run(context, () => handler(validated));
@@ -101,7 +102,12 @@ export function createProbeServer({ jobs, audit, resourceUrl, bootId, release, a
   }
   if (coding) register('observations_list', 'Read recent Praxis tool activity', 'Read sanitized server-side receipts of recent tool calls on this endpoint: tool, outcome, duration and result size, never arguments, tokens or content. Starts from the newest records by default; copy nextCursor to page further back. Use it to recover what a lost conversation did or to confirm call counts.', z.object({ cursor, limit: pageLimit, view: z.enum(['tail', 'head']).default('tail').describe('tail (default) starts at the newest records and pages backward. head reads oldest first from cursor.') }), ({ cursor, limit, view }) => audit.list(owner, cursor, limit, view), true, false, 'praxis:code');
   if (coding) for (const [name, tool] of Object.entries(applicationTools)) {
-    register(name, tool.title, tool.description, tool.schema, args => coding.call(name, args, authInfo.token), !tool.write, !!tool.destructive, 'praxis:code');
+    const route = manifestRoute(name, tool.route);
+    register(name, tool.title, tool.description, tool.schema, args => {
+      const client = route.target === 'coding' ? coding : git;
+      if (!client) throw Object.assign(new Error('Configured tool backend unavailable.'), { code: 'BACKEND_UNAVAILABLE' });
+      return client.call(route.action, args, authInfo.token);
+    }, !tool.write, !!tool.destructive, 'praxis:code', route);
   }
   if (releaseClient) for (const [name, tool] of Object.entries(releaseTools)) {
     register(name, tool.title, tool.description, tool.schema,

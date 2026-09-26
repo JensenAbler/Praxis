@@ -4,13 +4,14 @@
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { z } from 'zod';
+import { manifestRoute } from '../src/tool-manifest.js';
 import { codeTools } from '../src/code/schema.js';
 
 export const LIVE_MANIFEST = '/srv/praxis-app/current/coding-tools.json';
 
 /** The manifest scripts/export-tool-manifest.js would write for the current source. */
 export function currentManifest() {
-  return { version: 1, tools: Object.entries(codeTools).map(([name, tool]) => ({ name, write: !!tool.write, destructive: !!tool.destructive,
+  return { version: 1, tools: Object.entries(codeTools).map(([name, tool]) => ({ name, route: tool.route || { target: 'coding', action: name }, write: !!tool.write, destructive: !!tool.destructive,
     inputSchema: z.toJSONSchema(tool.schema, { target: 'draft-7', unrepresentable: 'any' }) })) };
 }
 
@@ -18,10 +19,16 @@ export function currentManifest() {
 export function manifestProblems(previous, next) {
   const problems = [], tools = new Map(next.tools.map(tool => [tool.name, tool]));
   if (tools.size !== next.tools.length) problems.push('Duplicate tool name.');
+  for (const tool of next.tools) {
+    try { manifestRoute(tool.name, tool.route); } catch { problems.push('Invalid tool route: ' + tool.name); }
+  }
   for (const tool of previous.tools) {
     const newer = tools.get(tool.name);
     if (!newer) { problems.push(`Existing tool disappeared: ${tool.name}`); continue; }
     if (newer.write !== tool.write || newer.destructive !== tool.destructive) problems.push(`Permission annotation changed: ${tool.name}`);
+    try {
+      if (!isDeepStrictEqual(manifestRoute(tool.name, tool.route), manifestRoute(newer.name, newer.route))) problems.push('Existing tool route changed: ' + tool.name);
+    } catch { problems.push('Invalid tool route: ' + tool.name); }
     const before = tool.inputSchema, after = newer.inputSchema, required = new Set(before.required ?? []);
     for (const name of after.required ?? []) if (!required.has(name)) problems.push(`New required argument (a default counts): ${tool.name}.${name}`);
     for (const [name, schema] of Object.entries(before.properties ?? {})) {

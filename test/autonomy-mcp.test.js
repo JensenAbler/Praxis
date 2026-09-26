@@ -1,4 +1,6 @@
 import test from 'node:test';
+import { z } from 'zod';
+import { codeTools } from '../src/code/schema.js';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
@@ -54,9 +56,13 @@ async function fixture(t, { brokenManifest = false } = {}) {
     git: { url: `${publishingUrl}/call`, outboxDirectory, exportDirectory }, projects: [{ id: 'discord', name: 'Discord fixture', revision: BASE, snapshotPath: snapshot }] });
   const salt = randomBytes(16), passwordHash = `scrypt$${salt.toString('base64url')}$${scryptSync('fixture-password', salt, 64).toString('base64url')}`;
   const manifestPath = join(root, 'application-tools.json');
-  if (brokenManifest) writeFileSync(manifestPath, '{interrupted manifest');
-  gateway = await createApp({ baseUrl, allowLoopback: true, dataDirectory: join(root, 'gateway'), release: 'protected-gateway-fixture',
-    coding: { url: backendUrl }, releaseControl: { url: `${publishingUrl}/call` }, ...(brokenManifest ? { toolManifestPath: manifestPath } : {}),
+  const manifest = { version: 1, tools: Object.entries(codeTools).map(([name, tool]) => ({
+    name, title: tool.title, description: tool.description, write: !!tool.write, destructive: !!tool.destructive,
+    route: { target: 'coding', action: name }, inputSchema: z.toJSONSchema(tool.schema, { target: 'draft-7', unrepresentable: 'any' })
+  })) };
+  writeFileSync(manifestPath, brokenManifest ? '{interrupted manifest' : JSON.stringify(manifest));
+  gateway = await createApp({ applicationTools: codeTools, baseUrl, allowLoopback: true, dataDirectory: join(root, 'gateway'), release: 'protected-gateway-fixture',
+    coding: { url: backendUrl }, releaseControl: { url: `${publishingUrl}/call` }, toolManifestPath: manifestPath,
     auth: { passwordHash, jwks: { keys: [keys.owner.privateJwk] }, healthPublicJwks: { keys: [keys.health.publicJwk] }, cookieKeys: ['autonomy-fixture-cookie-key-at-least-32-characters'] } });
   const clients = [];
   const token = ({ signingKey = 'owner', scope = 'praxis:code', clientId = 'owner-fixture' } = {}) => new SignJWT({ scope, client_id: clientId })
@@ -79,7 +85,7 @@ async function fixture(t, { brokenManifest = false } = {}) {
     for (const server of [gatewayHttp, backendHttp, publishingHttp]) await new Promise(resolve => server.close(resolve));
     await gateway.close(); await backend.close(); await publishing.close(); rmSync(root, { recursive: true, force: true });
   });
-  return { root, connect, token, backendUrl, publishingUrl, baseUrl, issuer, gateway, backend, publishing, hostCalls, releaseCalls, syncId, editArgs,
+  return { root, manifest, manifestPath, connect, token, backendUrl, publishingUrl, baseUrl, issuer, gateway, backend, publishing, hostCalls, releaseCalls, syncId, editArgs,
     runnerCalls: () => runnerCalls, setDown() { backendAvailable = false; }, setFence(state) { writeFileSync(fence, JSON.stringify({ state })); } };
 }
 async function call(client, name, args = {}, expectedError) {
@@ -99,7 +105,7 @@ test('protected release recovery and activation dispatch survive an unavailable 
   for (const name of ['praxis_release_plan', 'praxis_release_apply', 'praxis_release_status', 'praxis_release_history', 'praxis_release_rollback']) {
     assert(listed.tools.some(tool => tool.name === name));
   }
-  await call(client, 'capabilities', {}, 'BACKEND_UNAVAILABLE');
+  assert.equal(listed.tools.some(tool => tool.name === 'capabilities'), false, 'invalid initial manifest exposes no app tools');
   assert.equal((await call(client, 'praxis_release_status')).activeRelease, 'release-old');
   // Even syntactically valid application data cannot replace a protected tool.
   writeFileSync(join(f.root, 'application-tools.json'), JSON.stringify({ version: 1, tools: [{ name: 'praxis_release_status',
@@ -168,4 +174,70 @@ test('authenticated generation fence rejects application and broker writes while
   const edit = await call(client, 'workspace_apply', f.editArgs);
   assert.equal(edit.status, 'completed');
   assert.equal((await call(client, 'file_read', { workspaceId: f.editArgs.workspaceId, path: 'main.js' })).lines[0].text, 'export const answer = 42;');
+});
+
+test('manifest routes hot-reload to both fixed backends; loose schemas cannot relax backend validation', async t => {
+  const f = await fixture(t), client = await f.connect();
+  const add = (name, target, action, write = false) => f.manifest.tools.push({
+    name, title: name, description: 'Route fixture', write, destructive: false,
+    route: { target, action }, inputSchema: { type: 'object', additionalProperties: true }
+  });
+  add('fresh_app_tool', 'coding', 'capabilities');
+  add('fresh_broker_tool', 'git', 'deploymentStatus');
+  add('loose_app_write', 'coding', 'workspace_apply', true);
+  add('loose_broker_write', 'git', 'restart', true);
+  writeFileSync(f.manifestPath, JSON.stringify(f.manifest));
+  assert.equal((await call(client, 'fresh_app_tool')).release, 'application-fixture');
+  assert.equal((await call(client, 'fresh_broker_tool', { projectId: 'discord' })).head, BASE);
+  await call(client, 'loose_app_write', { ...f.editArgs, owner: 'someone-else' }, 'INVALID_ARGUMENT');
+  await call(client, 'loose_broker_write', { projectId: 'discord' }, 'INVALID_ARGUMENT');
+  const jwt = await f.token();
+  for (const [url, action, args] of [
+    [f.backendUrl, 'workspace_apply', { ...f.editArgs, owner: 'someone-else' }],
+    [f.publishingUrl, 'restart', { projectId: 'discord' }],
+    [f.publishingUrl, 'list', { owner: 'someone-else' }],
+    [f.publishingUrl, 'constructor', {}],
+  ]) {
+    const response = await direct(url, jwt, action, args);
+    assert.equal(response.status, 400);
+    assert.equal((await response.json()).error.code, 'INVALID_ARGUMENT');
+  }
+  const count = f.releaseCalls.length;
+  add('release_alias', 'git', 'releaseApply', true);
+  writeFileSync(f.manifestPath, JSON.stringify(f.manifest));
+  assert.equal((await client.listTools()).tools.some(tool => tool.name === 'release_alias'), false);
+  assert.equal((await call(client, 'fresh_app_tool')).release, 'application-fixture', 'last good manifest retained');
+  assert.equal(f.releaseCalls.length, count);
+  assert.equal(f.runnerCalls(), 0);
+});
+
+test('health grants cannot follow relabeled app or broker routes', async t => {
+  const f = await fixture(t);
+  const health = await f.connect({ signingKey: 'health', scope: 'praxis:health', clientId: 'praxis-health' });
+  for (const route of [{ target: 'git', action: 'deploymentStatus' }, { target: 'coding', action: 'workspace_apply' }]) {
+    const tool = f.manifest.tools.find(tool => tool.name === 'file_read');
+    Object.assign(tool, { route, write: false, inputSchema: { type: 'object', additionalProperties: true } });
+    writeFileSync(f.manifestPath, JSON.stringify(f.manifest));
+    await call(health, 'file_read', f.editArgs, 'AUTHORIZATION_REQUIRED');
+  }
+  assert.equal(f.hostCalls.length, 0);
+});
+
+test('direct broker calls enforce repository and deployment policy without the gateway', async t => {
+  const f = await fixture(t), jwt = await f.token();
+  f.publishing.broker.repositories.set('foreign', { projectId: 'foreign', owner: 'other', deployment: true });
+  for (const [projectId, error] of [['missing', 'PUBLICATION_DISABLED'], ['praxis', 'DEPLOYMENT_DISABLED'], ['foreign', 'NOT_FOUND']]) {
+    for (const action of ['deploymentStatus', 'diagnosis', 'deploymentHistory', 'restart']) {
+      const args = action === 'restart' ? { projectId, expectedHead: BASE, operationId: randomUUID(), idempotencyKey: randomUUID() } : { projectId };
+      const response = await direct(f.publishingUrl, jwt, action, args);
+      assert.equal(response.status, 400);
+      assert.equal((await response.json()).error.code, error);
+    }
+  }
+  // An admitted job must recheck configuration before its side effect.
+  f.publishing.broker.submit('restart', { owner: 'jensen', projectId: 'discord', expectedHead: BASE, operationId: randomUUID(), idempotencyKey: randomUUID() });
+  f.publishing.broker.repositories.get('discord').deployment = false;
+  await f.publishing.broker.tick();
+  assert.equal(f.hostCalls.length, 0);
+  assert.equal(f.publishing.broker.list({ owner: 'jensen' }).operations[0].error.code, 'DEPLOYMENT_DISABLED');
 });

@@ -126,6 +126,20 @@ class HostPolicy(unittest.TestCase):
         (source / 'gateway.js').write_text('different bytes')
         with self.assertRaisesRegex(RuntimeError, 'export bytes changed'): self.host._source(args)
 
+    def test_manifest_routing_migration_and_compatibility(self):
+        release = self.base / 'manifest-release'; release.mkdir()
+        self.host.current = self.base / 'manifest-current'; self.host.current.symlink_to(release)
+        tool = {'name': 'demo', 'write': False, 'destructive': False,
+                'inputSchema': {'type': 'object', 'properties': {'id': {'type': 'string'}}, 'required': ['id']}}
+        (release / 'coding-tools.json').write_text(json.dumps({'version': 1, 'tools': [tool]}))
+        routed = {**tool, 'route': {'target': 'coding', 'action': 'demo'}}
+        self.host.validate_manifest({'version': 1, 'tools': [routed]})
+        for route in [{'target': 'git', 'action': 'list'}, {'target': 'coding', 'action': 'other'},
+                      {'target': 'git', 'action': 'releaseApply'}, {'target': 'updater', 'action': 'apply'},
+                      {'target': 'git', 'action': 'list', 'url': 'http://other'}]:
+            with self.subTest(route=route), self.assertRaises(RuntimeError):
+                self.host.validate_manifest({'version': 1, 'tools': [{**routed, 'route': route}]})
+
     def test_shutdown_requires_observed_absence_or_inactivity(self):
         self.host.stop_stage('praxis-stage-fixture-build')
         self.unit_state = 'LoadState=loaded\nActiveState=inactive\nMainPID=0\nControlGroup=\n'

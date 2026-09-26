@@ -1,3 +1,4 @@
+import { codeTools } from '../src/code/schema.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
@@ -66,7 +67,7 @@ async function fixture(t) {
   backend = await createCodingService(backendConfig);
   const gatewayConfig = { baseUrl, allowLoopback: true, dataDirectory: join(root, 'gateway-private'), release: 'git-fixture', coding: { url: backendUrl },
     auth: { passwordHash, jwks: { keys: [privateJwk] }, cookieKeys: ['git-fixture-cookie-signing-key-at-least-32-characters'] } };
-  gateway = await createApp(gatewayConfig);
+  gateway = await createApp({ ...gatewayConfig, applicationTools: codeTools });
   const clients = [];
   const token = (scope = 'praxis:code') => new SignJWT({ scope, client_id: 'git-fixture-client' })
     .setProtectedHeader({ alg: 'RS256', kid: privateJwk.kid, typ: 'at+jwt' }).setIssuer(issuer).setAudience(resourceUrl)
@@ -86,7 +87,7 @@ async function fixture(t) {
     backend: () => backend, publishing: () => publishing,
     async restart() {
       await backend.close(); await publishing.close(); await gateway.close();
-      publishing = createGitService(publishingConfig); backend = await createCodingService(backendConfig); gateway = await createApp(gatewayConfig);
+      publishing = createGitService(publishingConfig); backend = await createCodingService(backendConfig); gateway = await createApp({ ...gatewayConfig, applicationTools: codeTools });
     } };
 }
 async function call(client, name, args = {}) {

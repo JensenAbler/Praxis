@@ -10,9 +10,8 @@ import { createAuth } from './auth.js';
 import { JobStore } from './jobs.js';
 import { AuditStore } from './audit.js';
 import { createProbeServer, VERSION } from './mcp.js';
-import { createCodingClient } from './code/client.js';
-import { createGitClient } from './code/git-client.js';
-import { loadToolManifest } from './tool-manifest.js';
+import { createGatewayClient, createReleaseClient } from './gateway-client.js';
+import { watchToolManifest } from './tool-manifest.js';
 import { diagnosticRecord, requestContext } from './diagnostics.js';
 
 export async function createApp(config) {
@@ -26,8 +25,12 @@ export async function createApp(config) {
   mkdirSync(config.dataDirectory, { recursive: true, mode: 0o700 });
   const jobs = new JobStore(config.dataDirectory);
   const audit = new AuditStore(config.dataDirectory);
-  const coding = config.coding ? createCodingClient(config.coding) : undefined;
-  const releaseClient = config.releaseControl ? createGitClient(config.releaseControl) : undefined;
+  const coding = config.coding ? createGatewayClient(config.coding) : undefined;
+  const releaseClient = config.releaseControl ? createReleaseClient(config.releaseControl) : undefined;
+  const git = config.releaseControl ? createGatewayClient(config.releaseControl) : undefined;
+  const applicationManifest = config.toolManifestPath ? watchToolManifest(config.toolManifestPath, {
+    onError: error => console.error(JSON.stringify(diagnosticRecord('application_manifest_unavailable', error)))
+  }) : () => config.applicationTools || {};
   const auth = await createAuth({ issuer, resourceUrl, ...config.auth, dataDirectory: join(config.dataDirectory, 'oauth'), allowLoopback: config.allowLoopback ?? false, codingEnabled: !!coding });
   const app = express();
   app.disable('x-powered-by');
@@ -50,13 +53,9 @@ export async function createApp(config) {
   });
   app.use(`${prefix}/oauth`, auth.router);
   const handler = createMcpHandler(ctx => {
-    let applicationTools;
-    if (config.toolManifestPath) {
-      try { applicationTools = loadToolManifest(config.toolManifestPath).tools; }
-      catch (error) { console.error(JSON.stringify(diagnosticRecord('application_manifest_unavailable', error))); }
-    }
+    const applicationTools = applicationManifest() || {};
     // A broken application manifest must not remove the independent recovery tools.
-    return createProbeServer({ jobs, audit, resourceUrl, bootId, release, authInfo: ctx.authInfo, era: ctx.era, coding, applicationTools, releaseClient });
+    return createProbeServer({ jobs, audit, resourceUrl, bootId, release, authInfo: ctx.authInfo, era: ctx.era, coding, applicationTools, releaseClient, git });
   }, {
     legacy: 'stateless', onerror: error => console.error(JSON.stringify(diagnosticRecord('mcp_protocol_error', error)))
   });

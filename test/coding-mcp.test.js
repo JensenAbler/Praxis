@@ -1,3 +1,4 @@
+import { codeTools } from '../src/code/schema.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
@@ -66,7 +67,7 @@ async function fixture(t, { dependencies = false, native = false } = {}) {
     ...(dependencies ? { dependencyDirectory: join(directory, 'dependency-export') } : {}),
     workspaceDirectory: join(directory, 'workspaces'), release: 'coding-fixture', runner, pollIntervalMs: 20,
     projects: [{ id: 'fixture', name: 'Fixture', repository: 'https://example.test/fixture', revision: 'fixture-base', snapshotPath: snapshot, instructions: 'Keep the module small.', validationCommands: [['fixture-check']] }] });
-  gateway = await createApp(gatewayConfig);
+  gateway = await createApp({ ...gatewayConfig, applicationTools: codeTools });
   const clients = [];
   async function token(scope = 'praxis:code', overrides = {}) {
     return new SignJWT({ scope, client_id: 'fixture-client', ...overrides }).setProtectedHeader({ alg: 'RS256', kid: privateJwk.kid, typ: 'at+jwt' })
@@ -82,7 +83,7 @@ async function fixture(t, { dependencies = false, native = false } = {}) {
     for (const server of [http, backendHttp]) await new Promise(resolve => server.close(resolve));
     await gateway.close(); await backend.close(); rmSync(directory, { recursive: true, force: true });
   });
-  return { directory, snapshot, connect, token, backendUrl, baseUrl, runner, backend, gateway, async restartGateway() { await gateway.close(); gateway = await createApp(gatewayConfig); } };
+  return { directory, snapshot, connect, token, backendUrl, baseUrl, runner, backend, gateway, async restartGateway() { await gateway.close(); gateway = await createApp({ ...gatewayConfig, applicationTools: codeTools }); } };
 }
 
 async function call(client, name, args = {}) {

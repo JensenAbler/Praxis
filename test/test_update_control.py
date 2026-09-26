@@ -31,7 +31,7 @@ class ChangePolicy(unittest.TestCase):
                  'test/test_update_control.py': self.entry('tests'), 'docs/maintenance.md': self.entry('docs')}
         protected = {name: value['sha256'] for name, value in before.items() if name.startswith(('src/', 'deploy/'))}
         self.assertIn(maintenance.UTILITY, maintenance.accepted_changes(before, after, protected))
-        for forbidden in ['src/server.js', 'package.json', 'node_modules/fixture.js', 'scripts/new-privileged.js', 'deploy/bootstrap-autonomy.py']:
+        for forbidden in ['src/auth.js', 'package.json', 'node_modules/fixture.js', 'scripts/new-privileged.js', 'deploy/bootstrap-autonomy.py']:
             with self.subTest(path=forbidden), self.assertRaises(RuntimeError):
                 maintenance.accepted_changes(before, {**after, forbidden: self.entry('unexpected')}, protected)
         with self.assertRaisesRegex(RuntimeError, 'Installed protected'):
@@ -45,7 +45,7 @@ class ChangePolicy(unittest.TestCase):
                  maintenance.UTILITY: self.entry('new utility'), 'release.json': self.entry('another release')}
         self.assertEqual(maintenance.accepted_changes(before, after, protected), sorted(['src/git/broker.js', maintenance.UTILITY]))
         with self.assertRaisesRegex(RuntimeError, 'outside the maintenance allowlist'):
-            maintenance.accepted_changes(before, {**after, 'src/git/server.js': self.entry('unexpected')}, protected)
+            maintenance.accepted_changes(before, {**after, 'src/auth.js': self.entry('unexpected')}, {**protected, 'src/auth.js': None})
         with self.assertRaisesRegex(RuntimeError, 'No allowed helper or broker change'):
             maintenance.accepted_changes(before, {**before, 'release.json': self.entry('metadata only')}, protected)
 
@@ -69,7 +69,7 @@ class ActivationPolicy(unittest.TestCase):
         self.addCleanup(self.temp.cleanup); self.root = Path(self.temp.name)
         self.control = self.root / 'control/current'; self.control.parent.mkdir()
         self.old = self.control.parent / 'releases' / ('a' * 12); self.old.mkdir(parents=True)
-        for name, contents in {'deploy/deploy-discord.py': 'old discord', 'deploy/deploy-project.py': 'old project', 'src/server.js': 'frozen runtime'}.items():
+        for name, contents in {'deploy/deploy-discord.py': 'old discord', 'deploy/deploy-project.py': 'old project', 'src/server.js': 'export {};', 'src/claude-facade/server.js': 'export {};', 'src/git/server.js': 'export {};', 'deploy/praxis_updater_host.py': 'old host'}.items():
             path = self.old / name; path.parent.mkdir(parents=True, exist_ok=True); path.write_text(contents)
         self.control.symlink_to(self.old)
         self.source = self.root / 'source'; shutil.copytree(self.old, self.source)
@@ -110,6 +110,7 @@ class ActivationPolicy(unittest.TestCase):
 
     def command(self, argv, **kwargs):
         self.commands.append(argv)
+        if argv[0] == '/usr/bin/curl': return SimpleNamespace(stdout='{"ok":true}', returncode=0)
         if '-p' in argv: return SimpleNamespace(stdout='ActiveState=inactive\nMainPID=0\n', returncode=0)
         if '--property=ActiveState' in argv: return SimpleNamespace(stdout='active\n', returncode=0)
         if '--property=LoadState' in argv: return SimpleNamespace(stdout='loaded\n', returncode=0)
@@ -160,5 +161,52 @@ class ActivationPolicy(unittest.TestCase):
         self.assertEqual(json.loads(self.fence.read_text())['state'], 'active')
         self.assertFalse((self.backup / 'rollback-result.json').exists())
 
+
+
+
+class ImportClosure(unittest.TestCase):
+    def test_real_closure_and_inert_app_changes(self):
+        root = Path(__file__).parents[1]
+        graph = maintenance._closure.control_closure(root)
+        self.assertIn('src/arguments.js', graph)
+        for name in ['src/code/schema.js', 'src/code/host-schema.js', 'src/code/client.js', 'src/code/git-client.js', 'src/code/git.js', 'src/code/projects.js']:
+            self.assertNotIn(name, graph)
+        entry = ChangePolicy().entry
+        before = {name: entry('old') for name in [*maintenance.HELPERS, 'src/code/projects.js', 'src/auth.js']}
+        after = {**before, 'src/code/projects.js': entry('new app'), 'deploy/deploy-discord.py': entry('new helper')}
+        self.assertEqual(maintenance.accepted_changes(before, after, {}, root, root), ['deploy/deploy-discord.py'])
+        with self.assertRaises(RuntimeError):
+            maintenance.accepted_changes(before, {**after, 'src/auth.js': entry('new auth')}, {}, root, root)
+
+    def test_union_rejects_removed_and_new_dependencies_and_dynamic_imports(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            old, new = Path(tmp) / 'old', Path(tmp) / 'new'
+            for root in (old, new):
+                for name in maintenance._closure.ENTRY_POINTS:
+                    path = root / name; path.parent.mkdir(parents=True, exist_ok=True); path.write_text('export {};')
+                (root / 'src/dep.js').write_text('export const value = 1;')
+            (old / 'src/server.js').write_text("import './dep.js';")
+            (new / 'src/new.js').write_text('export {};')
+            (new / 'src/server.js').write_text("import './new.js';")
+            before, after = bootstrap.accepted_tree(old), bootstrap.accepted_tree(new)
+            active = maintenance._closure.policy_paths(old, new, before, after, {})
+            self.assertIn('src/dep.js', active); self.assertIn('src/new.js', active)
+            (new / 'src/server.js').write_text('import(process.env.MODULE);')
+            with self.assertRaisesRegex(RuntimeError, 'dynamic'):
+                maintenance._closure.control_closure(new)
+
+
+    def test_reachable_documentation_and_unchanged_new_imports_need_allowlisting(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            old, new = Path(tmp) / 'old', Path(tmp) / 'new'
+            for root in (old, new):
+                for name in maintenance._closure.ENTRY_POINTS:
+                    path = root / name; path.parent.mkdir(parents=True, exist_ok=True); path.write_text('export {};')
+                (root / 'test').mkdir(); (root / 'test/live.js').write_text('export {};')
+                for name in maintenance.HELPERS:
+                    path = root / name; path.parent.mkdir(parents=True, exist_ok=True); path.write_text('helper')
+            (new / 'src/server.js').write_text("import '../test/live.js';")
+            with self.assertRaisesRegex(RuntimeError, 'test/live.js'):
+                maintenance.accepted_changes(bootstrap.accepted_tree(old), bootstrap.accepted_tree(new), {}, old, new)
 
 if __name__ == '__main__': unittest.main()

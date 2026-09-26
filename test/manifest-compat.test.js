@@ -19,3 +19,15 @@ test('manifest gate matches the updater: additions pass, changes and new require
 test('current tool schemas are a routine update of the live release manifest', { skip: !existsSync(LIVE_MANIFEST) && 'no live manifest on this host' }, () => {
   assert.deepEqual(manifestProblems(JSON.parse(readFileSync(LIVE_MANIFEST, 'utf8')), currentManifest()), []);
 });
+
+test('routing migration preserves legacy meaning and routine updates cannot retarget tools', () => {
+  const previous = { tools: [base] };
+  const routed = { ...base, route: { target: 'coding', action: 'demo' } };
+  assert.deepEqual(manifestProblems(previous, { tools: [routed] }), []);
+  assert.deepEqual(manifestProblems({ tools: [routed] }, previous), [], 'legacy shorthand has identical meaning');
+  for (const route of [{ target: 'git', action: 'list' }, { target: 'coding', action: 'other' }])
+    assert.match(manifestProblems(previous, { tools: [{ ...routed, route }] }).join(), /route changed/);
+  for (const route of [{ target: 'updater', action: 'apply' }, { target: 'git', action: 'releaseApply' },
+    { target: 'coding', action: 'praxis_release_apply' }, { target: 'git', action: 'list', url: 'http://other' }])
+    assert.match(manifestProblems({ tools: [] }, { tools: [{ ...base, route }] }).join(), /Invalid tool route/);
+});

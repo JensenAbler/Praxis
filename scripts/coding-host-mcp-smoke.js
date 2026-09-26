@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { codeTools } from '../src/code/schema.js';
 /** Run only in the dedicated hardened coding fixture unit, after host bootstrap. */
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
@@ -104,7 +105,7 @@ try {
       instructions: 'Synthetic source used only for authenticated transport and real container evidence.', validationCommands: [['node', '-e', "require('node:assert/strict').equal(require('./answer.cjs').answer, 42)"]] },
       ...(supplied.evaluationProjects || []).map(id => { const project = supplied.projects.find(item => item.id === id); assert.ok(project); return project; })],
   });
-  gateway = await createApp(gatewayConfig);
+  gateway = await createApp({ ...gatewayConfig, applicationTools: codeTools });
   async function token(scope) {
     return new SignJWT({ scope, client_id: 'host-mcp-fixture-client' }).setProtectedHeader({ alg: 'RS256', kid, typ: 'at+jwt' })
       .setIssuer(issuer).setAudience(resourceUrl).setSubject('jensen').setIssuedAt().setExpirationTime('5m').sign(privateKey);
@@ -206,7 +207,7 @@ try {
   for (const old of clients) await old.close();
   await closeHttp(gatewayHttp);
   await gateway.close(); gateway = undefined;
-  gateway = await createApp(gatewayConfig);
+  gateway = await createApp({ ...gatewayConfig, applicationTools: codeTools });
   gatewayHttp = createServer((req, res) => gateway.app(req, res));
   await listen(gatewayHttp, gatewayPort);
   assert.equal((await backend.jobs.runner.inspect({ name: containerName(job.id) })).running, true,

@@ -1,3 +1,4 @@
+import { codeTools } from '../src/code/schema.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
@@ -53,7 +54,7 @@ test('authenticated MCP creates, edits, commits and publishes a new project, the
   async function start() {
     publishing = createGitService(publishingConfig);
     publishing.broker.projectProvisioner.keyPair = async () => ({ publicKey: 'ssh-ed25519 fixture', transportEnv: {} });
-    backend = await createCodingService(backendConfig); gateway = await createApp(gatewayConfig);
+    backend = await createCodingService(backendConfig); gateway = await createApp({ ...gatewayConfig, applicationTools: codeTools });
   }
   await start();
   const clients = [];

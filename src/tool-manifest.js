@@ -1,7 +1,25 @@
 import { readFileSync, lstatSync, realpathSync, statSync } from 'node:fs';
 import { z } from 'zod';
 
-const reserved = new Set(['praxis_release_plan', 'praxis_release_apply', 'praxis_release_status', 'praxis_release_history', 'praxis_release_rollback']);
+const reserved = new Set(['observations_list', 'praxis_release_plan', 'praxis_release_apply', 'praxis_release_status', 'praxis_release_history', 'praxis_release_rollback']);
+
+// Routing is data, never executable configuration. Only these two fixed clients
+// exist in the gateway. Broker action existence and policy belong to the broker.
+export function manifestRoute(name, value) {
+  const route = value === undefined ? { target: 'coding', action: name } : value;
+  if (!route || typeof route !== 'object' || Array.isArray(route)
+    || Object.keys(route).length !== 2 || !['coding', 'git'].includes(route.target)
+    || typeof route.action !== 'string' || !/^[a-z][a-zA-Z0-9_]{0,63}$/.test(route.action)
+    || reserved.has(name) || name.startsWith('probe_')
+    || reserved.has(route.action) || route.action.startsWith('probe_')
+    || /^release/i.test(route.action)) throw new Error('Invalid application tool route');
+  return { target: route.target, action: route.action };
+}
+
+export function healthRoute(name, route) {
+  return route?.target === 'coding' && route.action === name
+    && ['capabilities', 'projects_list', 'project_inspect', 'file_read', 'jobs_list', 'job_status'].includes(name);
+}
 
 /**
  * Reload the manifest whenever the file behind `path` changes, e.g. when a
@@ -31,7 +49,7 @@ export function loadToolManifest(path) {
       || typeof tool.title !== 'string' || tool.title.length > 160 || typeof tool.description !== 'string' || tool.description.length > 4000
       || tool.inputSchema?.type !== 'object' || typeof tool.write !== 'boolean' || typeof tool.destructive !== 'boolean') throw new Error('Invalid application tool definition');
     tools[tool.name] = { title: tool.title, description: tool.description, write: tool.write, destructive: tool.destructive,
-      schema: z.fromJSONSchema(tool.inputSchema) };
+      route: manifestRoute(tool.name, tool.route), schema: z.fromJSONSchema(tool.inputSchema) };
   }
   return { tools, apiVersion: data.apiVersion, release: data.release };
 }

@@ -88,10 +88,27 @@ export class GitBroker {
       ...(row.error_json ? { error: JSON.parse(row.error_json) } : {}), createdAt: row.created_at, updatedAt: row.updated_at };
   }
   get({ owner, operationId }) { return this.receipt(this.row(owner, operationId)); }
+  executionPolicy(row) {
+    if (['projectCreate', 'projectAdopt'].includes(row.kind)) {
+      check(this.projectProvisioner, 'PROJECT_CREATION_DISABLED', 'Project provisioning is not configured.');
+      return;
+    }
+    const repo = this.policy(row.project_id, row.owner);
+    if (['deploy', 'restart', 'rollback'].includes(row.kind))
+      check(repo.deployment && this.deployment, 'DEPLOYMENT_DISABLED', 'Deployment is not enabled for this project.');
+    if (row.kind === 'push') check(!repo.localOnly, 'REPOSITORY_NOT_PUBLISHED', 'The repository is not published.');
+    if (row.kind === 'projectPublish') check(this.projectProvisioner, 'PROJECT_CREATION_DISABLED', 'Project provisioning is not configured.');
+    if (row.kind === 'projectDeploy') {
+      check(this.projectProvisioner && this.projectDeployment, 'DEPLOYMENT_DISABLED', 'Project deployment is not configured.');
+      const project = this.projectProvisioner.get(row.owner, row.project_id);
+      check(project.published && project.template !== 'adopted', 'DEPLOYMENT_DISABLED', 'Only published owner-created apps use this deployer.');
+    }
+  }
   async observe({ owner, operationId }) {
     const row = this.row(owner, operationId);
     if (row.status === 'uncertain' && !this.pending) {
       try {
+        this.executionPolicy(row);
         if (row.kind === 'push') {
           const result = await this.run_push(row, JSON.parse(row.request_json));
           this.update(row, 'completed', 'completed', result);
@@ -157,7 +174,8 @@ export class GitBroker {
       const fence = JSON.parse(readFileSync(this.generationFencePath, 'utf8'));
       check(fence.state === 'active', 'UPDATE_IN_PROGRESS', 'Application activation is draining mutations; recover existing work through status tools.');
     }
-    const parsed = brokerSchemas[kind]?.safeParse(input);
+    const schema = Object.hasOwn(brokerSchemas, kind) ? brokerSchemas[kind] : undefined;
+    const parsed = schema?.safeParse(input);
     check(parsed?.success && ['sync', 'commit', 'push', 'deploy', 'projectDeploy', 'restart', 'rollback', 'projectCreate', 'projectPublish', 'projectAdopt'].includes(kind), 'INVALID_ARGUMENT', 'Invalid publishing request.');
     const args = parsed.data;
     const encoded = JSON.stringify(args);
@@ -165,6 +183,7 @@ export class GitBroker {
     if (existing) {
       check(existing.kind === kind && existing.request_json === encoded, 'IDEMPOTENCY_CONFLICT', 'The key belongs to different publishing inputs.');
       if (['projectPublish', 'projectDeploy', 'projectAdopt'].includes(kind) && existing.status === 'uncertain') {
+        this.executionPolicy(existing);
         // This is an explicit mutation retry with identical inputs. The provisioner
         // observes each saved intent before continuing; it never repeats an
         // ambiguous effect. Read-only status cannot initiate the remaining steps.
@@ -218,6 +237,7 @@ export class GitBroker {
     const args = JSON.parse(row.request_json);
     this.update(row, 'running', row.phase, row.result_json ? JSON.parse(row.result_json) : null);
     try {
+      this.executionPolicy(row);
       const result = await this[`run_${row.kind}`](row, args);
       this.update(row, 'completed', 'completed', result);
     } catch (error) {
