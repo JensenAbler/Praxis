@@ -6,8 +6,6 @@ You bring the reasoning (ChatGPT, Claude, or any MCP client). Praxis supplies re
 
 **Endpoint:** <https://mcp.jensenabler.com/praxis/mcp> (see [Connecting](#connecting) for per-client details)
 
-> **Heads up:** as of 0.6.0, Praxis runs commands as **root** on the host, with ordinary networking and no sandbox, command allowlist, filesystem allowlist, or resource quota. Treat access to it the way you'd treat an SSH key to the box.
-
 ## What the model gets
 
 **Managed workspaces** for changing source. A workspace is a disposable copy of an immutable snapshot of a registered repo. The model edits, tests, and diffs there, then commits and pushes from it. Deployed code is never edited in place.
