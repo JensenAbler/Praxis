@@ -73,7 +73,7 @@ The committer is always the repository owner, so `git log --format='%an | %cn'` 
 Each client connects through its own OAuth client:
 
 - **ChatGPT** uses the canonical endpoint, <https://mcp.jensenabler.com/praxis/mcp>, whose OAuth issuer lives under the same `/praxis` prefix.
-- **Claude** uses the facade at <https://praxis-apps.jensenabler.com/mcp>.
+- **Claude** uses a separate facade endpoint with its own issuer.
 
 Coding tools require the owner's `praxis:code` grant; the original bounded diagnostic tools use `praxis:probe`.
 
