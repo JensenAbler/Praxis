@@ -55,14 +55,14 @@ Log pages from `job_logs` are excerpts. For the full output, read the `rawLogs` 
 
 ## Status
 
-Version **0.6.0** (native root execution) is live on Alpha as release `app-native-d75788a6e2e6`.
+Version **0.6.0** (native root execution) is live on Alpha. The active release as of 2026-09-26 is `app-46e8a981995e-e254603a`; `capabilities` always reports the current one.
 
-[Recorded acceptance](docs/evidence/native-root-live.json) covers root execution, normal dependency installation, full output and artifact recovery, cancellation, deadlines, and a job surviving a live backend restart. Existing production services and database contents were preserved through the upgrade.
+[Recorded acceptance](docs/evidence/native-root-live.json) of the first native release (`app-native-d75788a6e2e6`) covers root execution, normal dependency installation, full output and artifact recovery, cancellation, deadlines, and a job surviving a live backend restart. Existing production services and database contents were preserved through the upgrade.
 
 | Client | Status |
 | --- | --- |
 | ChatGPT | Connected, tool definitions refreshed; native iPhone task not yet run |
-| Claude | Not yet verified; no compatibility claim until an observed run |
+| Claude | Verified 2026-09-26 from the Claude mobile app: `capabilities`, sync, workspace create/apply, a workspace job, diff, commit, and push to `main` (this README) |
 
 ## Connecting
 
