@@ -1,9 +1,12 @@
 #!/usr/bin/python3
-"""Owner-only maintenance for the two fixed deployment helpers; no MCP API.
+"""Owner-only maintenance for the fixed deployment helpers and the git broker; no MCP API.
 
 Usage: update-control.py QUALIFIED_ROOT_TREE PRIVATE_ACCEPTANCE EXPECTED_CONTROL_BASENAME
 The current coding application, its release config, databases and credentials
 are preserved. The installed bootstrap transaction supplies guarded rollback.
+The qualified tree may be a sealed application release: its release.json is
+per-release metadata and, as in the updater's own seal, is excluded from both
+the change policy and the acceptance hash.
 """
 import contextlib
 import hashlib
@@ -26,6 +29,19 @@ HELPERS = {'deploy/deploy-discord.py': '/usr/local/libexec/praxis-deploy-discord
            'deploy/deploy-project.py': '/usr/local/libexec/praxis-deploy-project'}
 UTILITY = 'deploy/update-control.py'
 OWNER_CLIENT = 'scripts/autonomy-live-qualification.js'
+# Owner-approved control runtime that may change through this transaction. The
+# broker must name the target project on every deployment helper call.
+RUNTIME = ('src/git/broker.js',)
+CHANGEABLE = frozenset([*HELPERS, UTILITY, *RUNTIME])
+METADATA = ('release.json',)
+
+
+def sealed(tree):
+    return {name: value for name, value in tree.items() if name not in METADATA}
+
+
+def sealed_digest(tree):
+    return hashlib.sha256(json.dumps(sealed(tree), sort_keys=True).encode()).hexdigest()
 
 
 def check(value, message):
@@ -40,18 +56,19 @@ def protected_file(path, private=False):
 
 
 def accepted_changes(before, after, protected):
+    before, after = sealed(before), sealed(after)
     for name, expected in protected.items():
         check(before.get(name, {}).get('sha256') == expected, 'Installed protected source differs from recorded policy: ' + name)
-        if name not in HELPERS:
-            check(after.get(name, {}).get('sha256') == expected, 'Candidate changes a protected component outside the helper allowlist: ' + name)
+        if name not in CHANGEABLE:
+            check(after.get(name, {}).get('sha256') == expected, 'Candidate changes a protected component outside the maintenance allowlist: ' + name)
     changed = sorted(name for name in before.keys() | after.keys() if before.get(name) != after.get(name))
     for name in changed:
         documentation = name.startswith(('docs/', 'test/')) or ('/' not in name and name.endswith('.md'))
-        check(name in HELPERS or name in (UTILITY, OWNER_CLIENT) or documentation,
+        check(name in CHANGEABLE or name == OWNER_CLIENT or documentation,
               'Candidate changes frozen runtime or an unapproved owner component: ' + name)
     for name in HELPERS:
         check('sha256' in after.get(name, {}) and after[name].get('bytes', 0) > 0, 'Required deployment helper is missing.')
-    check(any(name in HELPERS for name in changed), 'No allowed deployment helper change is present.')
+    check(any(name in HELPERS or name in RUNTIME for name in changed), 'No allowed helper or broker change is present.')
     return changed
 
 
@@ -80,7 +97,7 @@ def activate(bs, source, acceptance, expected, backup, updater, paths=None, comm
     check(APP.is_symlink() and APP.resolve().parent == pathlib.Path(updater['releasesRoot']) and APP.resolve().name == coding['release'],
           'Application pointer and configured release disagree.')
     before, after = bs.accepted_tree(control), bs.accepted_tree(source)
-    check(hashlib.sha256(json.dumps(after, sort_keys=True).encode()).hexdigest() == acceptance['artifactSha256'],
+    check(sealed_digest(after) == acceptance['artifactSha256'],
           'Prepared artifact differs from its acceptance.')
     changes = accepted_changes(before, after, updater['protectedFiles'])
     commit = acceptance['sourceCommit']; target = control.parent / commit[:12]
@@ -101,7 +118,7 @@ def activate(bs, source, acceptance, expected, backup, updater, paths=None, comm
         check(bs.accepted_tree(target) == after, 'Installed control bytes differ from the accepted tree.')
         for name, destination in HELPERS.items(): bs.install_text(destination, (target / name).read_bytes(), 0o755)
         updated = {**updater, 'protectedFiles': dict(updater['protectedFiles'])}
-        for name in [*HELPERS, UTILITY]:
+        for name in CHANGEABLE:
             if name in after: updated['protectedFiles'][name] = after[name]['sha256']
         bs.install_json(UPDATER_CONFIG, updated, 0o600)
         git_path = GIT_CONFIG

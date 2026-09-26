@@ -37,6 +37,23 @@ class ChangePolicy(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'Installed protected'):
             maintenance.accepted_changes(before, after, {**protected, 'src/server.js': '0' * 64})
 
+    def test_broker_and_protected_utility_may_change_and_release_metadata_is_ignored(self):
+        before = {name: self.entry('old') for name in [*maintenance.HELPERS, maintenance.UTILITY, 'src/git/broker.js',
+                                                       'src/git/server.js', 'release.json']}
+        protected = {name: value['sha256'] for name, value in before.items() if name != 'release.json'}
+        after = {**before, 'src/git/broker.js': self.entry('project-aware broker'),
+                 maintenance.UTILITY: self.entry('new utility'), 'release.json': self.entry('another release')}
+        self.assertEqual(maintenance.accepted_changes(before, after, protected), sorted(['src/git/broker.js', maintenance.UTILITY]))
+        with self.assertRaisesRegex(RuntimeError, 'outside the maintenance allowlist'):
+            maintenance.accepted_changes(before, {**after, 'src/git/server.js': self.entry('unexpected')}, protected)
+        with self.assertRaisesRegex(RuntimeError, 'No allowed helper or broker change'):
+            maintenance.accepted_changes(before, {**before, 'release.json': self.entry('metadata only')}, protected)
+
+    def test_acceptance_digest_excludes_release_metadata(self):
+        tree = {'src/a.js': self.entry('a'), 'release.json': self.entry('meta')}
+        self.assertEqual(maintenance.sealed_digest(tree), maintenance.sealed_digest({**tree, 'release.json': self.entry('other')}))
+        self.assertNotEqual(maintenance.sealed_digest(tree), maintenance.sealed_digest({**tree, 'src/a.js': self.entry('b')}))
+
 
 @unittest.skipUnless(os.name == 'posix' and getattr(os, 'getuid', lambda: -1)() == 0, 'Isolated owner-root Linux fixture')
 class ActivationPolicy(unittest.TestCase):
