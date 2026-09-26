@@ -1,43 +1,104 @@
 # Praxis
 
-Praxis gives conversational models a persistent computer they can use to build software, publish it, operate production services, and improve Praxis itself. ChatGPT or Claude supplies the reasoning; Praxis supplies remote MCP tools and durable execution. Development happens in this public repository.
+Praxis gives a conversational model a persistent computer.
 
-**Source development uses managed Praxis workspaces.** Required source workflow: recover the registered project and existing Praxis workspaces; sync main and create a managed workspace only when a fresh base is needed. Make source changes and run checks inside that Praxis workspace, review the diff, then commit and push from that workspace. Fast-forward the registered deployment on Alpha to the published commit and verify it. Do not edit deployed source in place or create ad hoc clones, repositories, or worktrees under /opt or elsewhere. Create a new repository only when the user explicitly requests one; a request to fix or improve an existing project is not that authorization. This workflow applies to Praxis itself. Native root access remains available for read-only diagnosis and authorized operations; it does not waive the source workflow.
+You bring the reasoning (ChatGPT, Claude, or any MCP client). Praxis supplies remote MCP tools and durable execution, so the model can write code, run it, publish it, operate the services it deploys, and keep improving Praxis itself, all from a chat window, including one on a phone.
 
-Version 0.6.0 provides native root execution with ordinary host networking and durable jobs. There is no container, filesystem allowlist, registry proxy, command allowlist, or Praxis resource quota in native mode. Files, package caches, and complete command logs persist on the host.
+**Endpoint:** <https://mcp.jensenabler.com/praxis/mcp>
 
-**Rollout status:** native release `app-native-d75788a6e2e6` is live on Alpha. [Recorded acceptance](docs/evidence/native-root-live.json) covers root execution, normal dependency installation, complete output/artifact recovery, cancellation, deadlines, and a job surviving a live backend restart. Existing production services and historical database contents were preserved. ChatGPT's existing Praxis connection has refreshed tool definitions; a new native iPhone task has not yet been run.
+> **Heads up:** as of 0.6.0, Praxis runs commands as **root** on the host, with ordinary networking and no sandbox, command allowlist, filesystem allowlist, or resource quota. Treat access to it the way you'd treat an SSH key to the box.
 
-Endpoint: **https://mcp.jensenabler.com/praxis/mcp**
+## What the model gets
 
-## Managed source work and host operations
+**Managed workspaces** for changing source. A workspace is a disposable copy of an immutable snapshot of a registered repo. The model edits, tests, and diffs there, then commits and pushes from it. Deployed code is never edited in place.
 
-Start with `capabilities`, `projects_list`, and `workspaces_list` for source work. Use `host_projects_list` for live operational data. Use `host_project_attach` to save an existing project directory and optional named data roots, such as recordings or logs. Attachment is a discovery shortcut; native commands also accept any absolute working directory without a project registration.
+**Host tools** for everything that already lives on the machine: listing, reading (text or binary, paginated), literal search, writing, and exact-text patching. They follow symlinks and see hidden files, Git metadata, env files, logs, transcripts, and recordings. Optional SHA-256 preconditions catch files that changed underneath you.
 
-The host tools cover directory discovery, metadata, text and binary reads, literal search, writes, and exact-text patches. They follow symlinks and include hidden files, Git metadata, environment files, logs, transcripts, recordings, and generated assets. Reads are paginated so large files fit into tool responses. Files are live, and optional SHA-256 preconditions help detect intervening changes.
+**Jobs** for running commands such as tests, `npm`, `pip`, Git, SSH, service management, or browser automation. Jobs run concurrently, keep running if the MCP backend restarts or the phone disconnects, and have no deadline unless you set one. Each job returns a durable ID; `job_wait` blocks for up to 15 seconds per call until it finishes, so clients don't need to poll. Complete stdout, stderr, and event logs stay on disk.
 
-Use `job_start` for commands such as tests, `npm`, `pip`, Git, SSH, service operations, or installed browser automation. Jobs run as root, support concurrency, and continue independently of the MCP backend and phone connection. `timeoutSeconds: 0`, the native default, means no deadline. Each submission returns a durable ID. `job_wait` blocks for up to 15 seconds per call until the job finishes, so a client can wait without polling; `job_status` provides the outcome and recent output. Its `rawLogs` paths expose complete stdout, stderr, and ordered events through the host file tools.
+**Deployment tools** that fast-forward a registered service to a published commit, restart it, report its status, and roll back if needed.
 
-Commit and push the reviewed managed workspace through the Git publication tools. Fast-forward the deployment to that published commit; do not develop in the deployment checkout. The default publication target remains `main`. Native jobs can maintain every Praxis component, including its gateway, authentication, configuration, tool server, deployment helpers, and updater. See [the native workflow and recovery contract](docs/native-root.md).
+## The source workflow
 
-## Recover an existing task
+This applies to every registered project, **including Praxis itself**.
 
-In a fresh conversation, recover the project through `host_projects_list` and the work through `jobs_list`. Read `job_status` before continuing. After an uncertain submission, reuse the original inputs and idempotency key to retrieve the existing job. A lost reply does not justify starting another copy of a command.
+1. Recover state first: `capabilities`, `projects_list`, `workspaces_list`.
+2. Reuse an existing workspace, or `project_sync` and `workspace_create` if you need a fresh base.
+3. Make changes with `workspace_apply` and run checks with `job_start` inside that workspace.
+4. Review with `workspace_diff`.
+5. Publish with `git_commit`, then `git_push` (target: `main`).
+6. Deploy with `deployment_fast_forward` and verify with `deployment_status` / `production_diagnosis`.
 
-Indexed log pages are compact excerpts. For details beyond those excerpts, use `host_file_read` or `host_search` on the raw log paths returned by status. Source files, attached-project discovery, job receipts, and raw logs persist outside the conversation.
+A few rules follow from this:
 
-## Compatibility workflows and evidence
+- Don't edit deployed source in place.
+- Don't create ad hoc clones, repos, or worktrees (under `/opt` or anywhere else).
+- Root access is still available for read-only diagnosis and authorized operations. It doesn't replace this workflow.
 
-Immutable source snapshots and managed workspace tools are the required source-development workflow, including for Praxis itself. Direct host paths support operational diagnosis and authorized runtime maintenance.
+Full details: [native workflow and recovery contract](docs/native-root.md).
 
-The previous [project creation](docs/new-projects.md), [deployment](docs/new-project-deployment.md), [production recovery](docs/production-recovery.md), and [staged self-update](docs/self-improvement.md) adapters remain optional conveniences. Their adapter-specific assumptions describe those workflows, not the extent of native root access. Ordinary native dependency installation does not require a sealed bundle; `dependency_prepare` remains useful when a compatible deployment adapter needs package provenance.
+## Picking up where you left off
 
-Earlier evidence includes [phone coding and recovery](docs/evidence/iphone-coding-report.md), [six historical replay implementations](docs/evidence/replay-batch-v1-results.md), and the [0.5 autonomy milestone](docs/autonomy-milestone.md). These records retain their original client, release, and execution scope. Container qualification is historical evidence and does not qualify native execution.
+Everything durable lives on the host, not in the conversation. In a fresh chat:
 
-## Connection and local verification
+- Find projects with `host_projects_list` (live files) and `projects_list` (source snapshots).
+- Find work with `jobs_list`, `workspaces_list`, and `git_operations_list`.
+- Read `job_status` or `git_operation_status` before doing anything else.
 
-The canonical endpoint and OAuth issuer use the `/praxis` prefix. Coding access requires the owner's `praxis:code` grant; the original bounded diagnostic tools retain `praxis:probe`. Existing connection metadata may need refreshing when tools change. Verify the advertised release and tool names in the actual client. API-client tests and native phone tests are recorded separately; Claude compatibility is not claimed without its own observed run.
+If a submission's response got lost, **retry with the same inputs and idempotency key.** That returns the existing job or operation instead of starting a second copy. A lost reply is never a reason to run a command again.
 
-Node 22.22 or newer is required for the server. Install dependencies with `npm ci --ignore-scripts`, then run `npm test`. Python helper fixtures run with `python -m unittest discover -s test -p 'test_*.py'`. Tests use disposable directories and fixture credentials. Native execution qualification additionally exercises real Linux/systemd jobs, backend-independent recovery, cancellation, output persistence, and authenticated MCP calls.
+Log pages from `job_logs` are excerpts. For the full output, read the `rawLogs` paths from `job_status` with `host_file_read` or `host_search`.
 
-The verification client reads credentials from private files through `PRAXIS_PASSWORD_FILE` and `PRAXIS_CLIENT_STATE`. `scripts/coding-client.js` accepts a JSON tool request file and a result destination; request and result files used for live verification stay outside Git. The public repository contains implementation and reviewed evidence, not credentials, runtime state, or another project's source.
+## Working with live host data
+
+`host_project_attach` saves a directory, plus optional named data roots like `recordings` or `logs`, so later calls can use short relative paths. It's only a shortcut: jobs and host tools accept any absolute path without registration, and attaching a directory doesn't authorize source edits.
+
+## Status
+
+Version **0.6.0** (native root execution) is live on Alpha as release `app-native-d75788a6e2e6`.
+
+[Recorded acceptance](docs/evidence/native-root-live.json) covers root execution, normal dependency installation, full output and artifact recovery, cancellation, deadlines, and a job surviving a live backend restart. Existing production services and database contents were preserved through the upgrade.
+
+| Client | Status |
+| --- | --- |
+| ChatGPT | Connected, tool definitions refreshed; native iPhone task not yet run |
+| Claude | Not yet verified; no compatibility claim until an observed run |
+
+## Connecting
+
+The endpoint and OAuth issuer both live under the `/praxis` prefix. Coding tools require the owner's `praxis:code` grant; the original bounded diagnostic tools use `praxis:probe`.
+
+After tools change, clients may need to refresh their connection metadata. Check the advertised release and tool list in the client itself before relying on it.
+
+## Development
+
+Requires Node 22.22+.
+
+```sh
+npm ci --ignore-scripts
+npm test
+python -m unittest discover -s test -p 'test_*.py'
+```
+
+Tests use disposable directories and fixture credentials. Native qualification additionally runs real Linux/systemd jobs, backend-independent recovery, cancellation, output persistence, and authenticated MCP calls.
+
+For live verification, `scripts/coding-client.js` takes a JSON tool request file and a result path, reading credentials from files named by `PRAXIS_PASSWORD_FILE` and `PRAXIS_CLIENT_STATE`. Keep request and result files out of Git.
+
+This repo contains implementation and reviewed evidence only: no credentials, runtime state, or other projects' source.
+
+## Further reading
+
+Optional adapters (still supported, but they describe their own assumptions, not the limits of native access):
+
+- [Creating new projects](docs/new-projects.md)
+- [Deploying new projects](docs/new-project-deployment.md)
+- [Production recovery](docs/production-recovery.md)
+- [Staged self-update](docs/self-improvement.md)
+
+`dependency_prepare` is only needed when a deployment adapter wants sealed package provenance; normal native installs don't need it.
+
+Historical evidence (each record keeps its original client, release, and scope; container-era results don't qualify native execution):
+
+- [Phone coding and recovery](docs/evidence/iphone-coding-report.md)
+- [Six historical replay implementations](docs/evidence/replay-batch-v1-results.md)
+- [0.5 autonomy milestone](docs/autonomy-milestone.md)
