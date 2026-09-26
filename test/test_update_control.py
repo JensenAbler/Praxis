@@ -54,6 +54,13 @@ class ChangePolicy(unittest.TestCase):
         self.assertEqual(maintenance.sealed_digest(tree), maintenance.sealed_digest({**tree, 'release.json': self.entry('other')}))
         self.assertNotEqual(maintenance.sealed_digest(tree), maintenance.sealed_digest({**tree, 'src/a.js': self.entry('b')}))
 
+    def test_generated_tool_manifest_is_not_a_control_change_but_stays_in_the_digest(self):
+        before = {name: self.entry('old') for name in [*maintenance.HELPERS, 'src/git/broker.js', 'coding-tools.json']}
+        protected = {name: before[name]['sha256'] for name in maintenance.HELPERS}
+        after = {**before, 'src/git/broker.js': self.entry('new'), 'coding-tools.json': self.entry('new tool list')}
+        self.assertEqual(maintenance.accepted_changes(before, after, protected), ['src/git/broker.js'])
+        self.assertNotEqual(maintenance.sealed_digest(before), maintenance.sealed_digest({**before, 'coding-tools.json': self.entry('x')}))
+
 
 @unittest.skipUnless(os.name == 'posix' and getattr(os, 'getuid', lambda: -1)() == 0, 'Isolated owner-root Linux fixture')
 class ActivationPolicy(unittest.TestCase):
