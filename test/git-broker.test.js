@@ -221,12 +221,13 @@ test('deployment uses the completed owned push receipt and persisted uncertain r
   assert.equal(deployed.receipt.status, 'uncertain');
   assert.throws(() => f.broker.submit('deploy', { owner, operationId: randomUUID(), idempotencyKey: 'same-deployment-new-key',
     pushOperationId: pushed.args.operationId, expectedHead: f.base }), { code: 'GIT_OPERATION_PENDING' });
-  assert.deepEqual(calls[0], { action: 'apply', operationId: deployed.args.operationId, expectedHead: f.base, targetCommit: prepared.receipt.result.commit });
+  assert.deepEqual(calls[0], { action: 'apply', projectId: 'demo', operationId: deployed.args.operationId, expectedHead: f.base, targetCommit: prepared.receipt.result.commit });
   await f.reopen(); completed = true;
   const recovered = await f.broker.observe({ owner, operationId: deployed.args.operationId });
   assert.equal(recovered.status, 'completed'); assert.equal(recovered.result.commit, prepared.receipt.result.commit);
   assert.equal(calls.filter(call => call.action === 'apply').length, 1);
   assert.equal(calls.at(-1).action, 'status'); assert.equal(calls.at(-1).operationId, deployed.args.operationId);
+  assert.equal(calls.at(-1).projectId, 'demo');
 });
 
 test('new prototype-named files are ordinary exact source entries', async t => {

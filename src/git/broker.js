@@ -96,7 +96,7 @@ export class GitBroker {
           const result = await this.run_push(row, JSON.parse(row.request_json));
           this.update(row, 'completed', 'completed', result);
         } else if (['deploy', 'restart', 'rollback'].includes(row.kind)) {
-          const result = await this.deployment({ action: 'status', operationId: row.id });
+          const result = await this.deployment({ action: 'status', projectId: row.project_id, operationId: row.id });
           const record = result.operation || result;
           if (record.phase === 'completed') this.update(row, 'completed', 'completed', { ...record, commit: record.targetCommit || JSON.parse(row.result_json).commit, branch: 'main' });
           else if (record.phase === 'failed') this.update(row, 'failed', 'failed', record, { code: 'DEPLOYMENT_FAILED', message: 'Deployment activation failed; the saved checkout was retained.' });
@@ -122,17 +122,17 @@ export class GitBroker {
     const repo = this.policy(projectId, owner);
     if (repo.owner && this.projectProvisioner && this.projectDeployment) return this.projectDeployment({ action: 'status', projectId });
     check(repo.deployment && this.deployment, 'DEPLOYMENT_DISABLED', 'Deployment is not enabled for this project.');
-    return this.deployment({ action: 'status' });
+    return this.deployment({ action: 'status', projectId });
   }
   async diagnosis({ owner, projectId, limit = 40 }) {
     const repo = this.policy(projectId, owner);
     check(repo.deployment && this.deployment, 'DEPLOYMENT_DISABLED', 'Production diagnosis is not enabled for this project.');
-    return this.deployment({ action: 'diagnosis', limit });
+    return this.deployment({ action: 'diagnosis', projectId, limit });
   }
   async deploymentHistory({ owner, projectId, limit = 20, cursor }) {
     const repo = this.policy(projectId, owner);
     check(repo.deployment && this.deployment, 'DEPLOYMENT_DISABLED', 'Deployment history is not enabled for this project.');
-    return this.deployment({ action: 'history', limit, ...(cursor ? { cursor } : {}) });
+    return this.deployment({ action: 'history', projectId, limit, ...(cursor ? { cursor } : {}) });
   }
   async release(action, input) {
     try { return await releaseCall(this, action, input); }
@@ -334,7 +334,7 @@ export class GitBroker {
     const push = JSON.parse(this.row(row.owner, args.pushOperationId).result_json);
     this.update(row, 'running', 'deploy_intent', { commit: push.commit, expectedHead: args.expectedHead });
     let result;
-    try { result = await this.deployment({ action: 'apply', operationId: row.id, expectedHead: args.expectedHead, targetCommit: push.commit,
+    try { result = await this.deployment({ action: 'apply', projectId: row.project_id, operationId: row.id, expectedHead: args.expectedHead, targetCommit: push.commit,
       ...(args.preparedDependenciesId ? { preparedDependenciesId: args.preparedDependenciesId } : {}) }); }
     catch (error) {
       if (error.admissionRejected && row.phase !== 'deploy_intent') error.definiteFailure = true;
@@ -352,7 +352,7 @@ export class GitBroker {
   async run_recovery(row, args, action) {
     const previous = row.result_json ? JSON.parse(row.result_json) : { expectedHead: args.expectedHead };
     this.update(row, 'running', 'deploy_intent', previous);
-    const result = await this.deployment({ action, operationId: row.id, expectedHead: args.expectedHead,
+    const result = await this.deployment({ action, projectId: row.project_id, operationId: row.id, expectedHead: args.expectedHead,
       ...(args.deploymentOperationId ? { deploymentOperationId: args.deploymentOperationId } : {}),
       ...(args.recoverOperationId ? { recoverOperationId: args.recoverOperationId } : {}) });
     if (result.phase !== 'completed') {

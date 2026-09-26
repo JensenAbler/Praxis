@@ -38,6 +38,17 @@ DEPENDENCIES = Path('/srv/praxis-git-exchange/dependencies')
 DEPENDENCY_ID = re.compile(r'^[0-9a-f]{64}$')
 LOG = Path('/tmp/alpha-clawd-bot-stdout.log')
 MAX_LOG_BYTES = 256 * 1024
+# Root-owned declarative registry of additional fast-forward targets. The helper
+# never executes anything a target declares; a spec only selects paths, a unit
+# and a named health vocabulary. Without the file only podcast-discord exists.
+TARGETS = Path('/etc/praxis-deploy/targets.json')
+STATE_ROOT = STATE.parent
+PROJECT_ID = re.compile(r'^[a-z0-9][a-z0-9_-]{0,63}$')
+HEALTH_KINDS = ('systemd', 'discord-login')
+TARGET_KEYS = {'repository', 'repositoryName', 'origin', 'unit', 'logPath', 'health', 'protectedPaths'}
+DEFAULT_TARGETS = {'discord': {'repository': str(REPOSITORY), 'repositoryName': 'JensenAbler/podcast-discord',
+                               'origin': ORIGIN, 'unit': UNIT, 'logPath': str(LOG), 'health': 'discord-login',
+                               'protectedPaths': []}}
 
 
 class DeploymentError(Exception):
@@ -89,12 +100,94 @@ def validate_request(value):
     return value
 
 
+def _normal_absolute(value):
+    return isinstance(value, str) and posixpath.isabs(value) and posixpath.normpath(value) == value and value != '/'
+
+
+def _overlaps(a, b):
+    return a == b or a.startswith(b + '/') or b.startswith(a + '/')
+
+
+def validate_target(project_id, spec):
+    """Validate one declarative target. Protected paths may never overlap the
+    checkout or journal state, so a fast-forward cannot touch runtime data."""
+    invalid = DeploymentError('INVALID_TARGETS', 'Deployment target ' + repr(project_id) + ' is malformed.')
+    if (not isinstance(project_id, str) or not PROJECT_ID.fullmatch(project_id) or not isinstance(spec, dict)
+            or set(spec) - TARGET_KEYS or not {'repository', 'repositoryName', 'origin', 'unit'} <= set(spec)):
+        raise invalid
+    if (not _normal_absolute(spec['repository'])
+            or not isinstance(spec['unit'], str) or not re.fullmatch(r'[A-Za-z0-9@_.-]{1,128}\.service', spec['unit'])
+            or not isinstance(spec['origin'], str) or not 0 < len(spec['origin']) <= 512
+            or not isinstance(spec['repositoryName'], str)
+            or not re.fullmatch(r'[A-Za-z0-9_.-]{1,100}/[A-Za-z0-9_.-]{1,100}', spec['repositoryName'])):
+        raise invalid
+    log_path = spec.get('logPath')
+    health = spec.get('health', 'systemd')
+    protected = spec.get('protectedPaths', [])
+    if ((log_path is not None and not _normal_absolute(log_path)) or health not in HEALTH_KINDS
+            or not isinstance(protected, list) or len(protected) > 32
+            or not all(_normal_absolute(path) for path in protected)):
+        raise invalid
+    state = str(STATE_ROOT / project_id)
+    for path in protected:
+        if _overlaps(path, spec['repository']) or _overlaps(path, state):
+            raise DeploymentError('PROTECTED_PATH_CONFLICT',
+                                  'Deployment target ' + repr(project_id) + ' overlaps a protected data path.')
+    return {'repository': spec['repository'], 'repositoryName': spec['repositoryName'], 'origin': spec['origin'],
+            'unit': spec['unit'], 'logPath': log_path, 'health': health, 'protectedPaths': list(protected)}
+
+
+def load_targets(path=TARGETS, expected_uid=0):
+    targets = {key: dict(value) for key, value in DEFAULT_TARGETS.items()}
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    except FileNotFoundError:
+        return targets
+    except OSError:
+        raise DeploymentError('UNTRUSTED_PATH', 'The deployment target registry cannot be opened safely.') from None
+    try:
+        meta = os.fstat(fd)
+        if (not stat.S_ISREG(meta.st_mode) or meta.st_uid != expected_uid or meta.st_mode & 0o022
+                or meta.st_size > 65536):
+            raise DeploymentError('UNTRUSTED_PATH', 'The deployment target registry has unsafe ownership, permissions or size.')
+        raw = os.read(fd, 65537)
+    finally:
+        os.close(fd)
+    try:
+        declared = json.loads(raw)
+    except ValueError:
+        raise DeploymentError('INVALID_TARGETS', 'The deployment target registry is not valid JSON.') from None
+    if not isinstance(declared, dict):
+        raise DeploymentError('INVALID_TARGETS', 'The deployment target registry must be an object keyed by project ID.')
+    for project_id, spec in declared.items():
+        targets[project_id] = validate_target(project_id, spec)
+    return targets
+
+
+def deployment_for(request, targets):
+    """Select a target and return (Deployment, request without projectId).
+
+    projectId only selects the target; it is removed so journals recorded before
+    generalization keep matching their idempotent request exactly."""
+    if not isinstance(request, dict):
+        raise DeploymentError('INVALID_ARGUMENT', 'Unknown fixed deployment action.')
+    request = dict(request)
+    project_id = request.pop('projectId', 'discord')
+    if not isinstance(project_id, str) or project_id not in targets:
+        raise DeploymentError('FORBIDDEN', 'No deployment target is registered for this project.')
+    spec = targets[project_id]
+    return Deployment(repository=spec['repository'], state=STATE_ROOT / project_id, origin=spec['origin'],
+                      unit=spec['unit'], log_path=spec.get('logPath'), repository_name=spec['repositoryName'],
+                      health=spec.get('health', 'systemd')), request
+
+
 class Deployment:
     """Constructor injection is used only by offline tests; the CLI is fixed."""
 
     def __init__(self, repository=REPOSITORY, state=STATE, origin=ORIGIN,
                  unit=UNIT, expected_uid=0, grace_seconds=5, log_path=LOG,
-                 dependencies=DEPENDENCIES, dependency_uid=None, dependency_state=None):
+                 dependencies=DEPENDENCIES, dependency_uid=None, dependency_state=None,
+                 repository_name='JensenAbler/podcast-discord', health='discord-login'):
         self.repository = Path(repository)
         self.state = Path(state)
         self.origin = origin
@@ -102,7 +195,9 @@ class Deployment:
         self.expected_uid = expected_uid
         self.grace_seconds = grace_seconds
         self.lock_fd = None
-        self.log_path = Path(log_path)
+        self.log_path = Path(log_path) if log_path is not None else None
+        self.repository_name = repository_name
+        self.health = health
         self.dependencies = Path(dependencies)
         self.dependency_uid = dependency_uid
         # State journals are on a separate systemd bind mount. Every dependency
@@ -244,6 +339,9 @@ class Deployment:
         return result
 
     def _logs(self, limit):
+        if self.log_path is None:
+            return {'available': False, 'reason': 'no-log-configured', 'events': [],
+                    'fullContentAccess': 'Use journalctl or host tools for this service.'}
         try:
             fd = os.open(self.log_path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
         except FileNotFoundError:
@@ -281,7 +379,12 @@ class Deployment:
                 observed = datetime.datetime.fromisoformat(event['utc'].replace('Z', '+00:00')).timestamp()
                 if started_wall <= observed <= time.time() + 5:
                     login = event['utc']
-        return {'repository': 'JensenAbler/podcast-discord', 'currentHead': self._head(),
+        if self.health != 'discord-login':
+            return {'repository': self.repository_name, 'currentHead': self._head(),
+                    'clean': self._clean(), 'service': service, 'logs': logs,
+                    'health': {'processRunning': self._active(service),
+                               'observation': 'Process stability only; application behavior was not verified.'}}
+        return {'repository': self.repository_name, 'currentHead': self._head(),
                 'clean': self._clean(), 'service': service, 'logs': logs,
                 'health': {'processRunning': self._active(service),
                            'discordLoginObservedForCurrentInvocation': login is not None,
@@ -691,7 +794,7 @@ class Deployment:
                     service_error = None
                 except DeploymentError as error:
                     service, service_error = None, {'code': error.code, 'message': str(error)}
-                return {'repository': 'JensenAbler/podcast-discord', 'branch': 'main',
+                return {'repository': self.repository_name, 'branch': 'main',
                         'currentHead': self._head(), 'clean': self._clean(), 'service': service,
                         'serviceError': service_error, 'healthKind': 'systemd-process-stability'}
             record = self._load(request['operationId'])
@@ -805,7 +908,8 @@ def main():
         raw = sys.stdin.buffer.read(4097)
         if len(raw) > 4096:
             raise DeploymentError('INVALID_ARGUMENT', 'Deployment request exceeds 4096 bytes.')
-        result = Deployment().handle(json.loads(raw))
+        deployment, request = deployment_for(json.loads(raw), load_targets())
+        result = deployment.handle(request)
         print(json.dumps({'ok': True, 'data': result}, separators=(',', ':')))
     except DeploymentError as error:
         print(json.dumps({'ok': False, 'code': error.code, 'message': str(error)}, separators=(',', ':')))
