@@ -197,7 +197,8 @@ export async function createAuth({ issuer, resourceUrl, passwordHash, jwks, cook
     renderError: (_ctx, _out, _error) => { _ctx.type = 'html'; _ctx.body = '<!doctype html><title>Praxis sign-in</title><p>Authorization could not be completed. Return to your app and reconnect.</p>'; },
   });
   provider.on('authorization.success', (ctx, out = {}) => {
-    if (out.iss === issuer) delete out.iss;
+    // Preserve RFC 9207 issuer identification advertised by discovery.
+    // OAuth clients validate this field before accepting the code.
     trace('authorization_success', undefined, {
       route: ctx?.oidc?.route, responseMode: ctx?.oidc?.params?.response_mode ?? 'query',
       outputKeys: Object.keys(out).sort(), hasCode: typeof out.code === 'string', hasState: typeof out.state === 'string', hasIssuer: typeof out.iss === 'string',
