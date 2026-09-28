@@ -18,6 +18,11 @@ def require(value, message):
         raise RuntimeError(message)
 
 
+# Owner-approved changes to existing tool arguments. Read only from the installed
+# control tree, which changes solely through owner control maintenance.
+APPROVED_TOOL_CHANGES = 'deploy/approved-tool-changes.json'
+
+
 def manifest_route(tool):
     name = tool['name']
     route = tool.get('route', {'target': 'coding', 'action': name})
@@ -370,9 +375,26 @@ class Host:
         self.release_path(value['release'])
         return value
 
+    def approved_tool_changes(self):
+        """Exact before/after argument schemas the owner approved. A routine app release
+        cannot approve its own change: the list comes from the control tree, not the candidate."""
+        control = getattr(self, 'control', None)
+        path = control / APPROVED_TOOL_CHANGES if control is not None else None
+        if path is None or not path.exists():
+            return []
+        require(path.is_file() and not path.is_symlink() and path.stat().st_size <= 65536, 'Invalid approved tool change list.')
+        value = json.loads(path.read_text())
+        require(isinstance(value, dict) and value.get('version') == 1 and isinstance(value.get('changes'), list), 'Invalid approved tool change list.')
+        for change in value['changes']:
+            require(isinstance(change, dict) and {'tool', 'argument', 'before', 'after'} <= set(change) <= {'tool', 'argument', 'before', 'after', 'reason'}
+                    and isinstance(change['tool'], str) and isinstance(change['argument'], str)
+                    and isinstance(change['before'], dict) and isinstance(change['after'], dict), 'Invalid approved tool change.')
+        return value['changes']
+
     def validate_manifest(self, candidate):
         require(candidate.get('version') == 1 and isinstance(candidate.get('tools'), list) and 1 <= len(candidate['tools']) <= 100, 'Unsupported tool manifest.')
         previous = json.loads((self.current.resolve() / 'coding-tools.json').read_text())
+        approved = self.approved_tool_changes()
         next_tools = {tool['name']: tool for tool in candidate['tools']}
         require(len(next_tools) == len(candidate['tools']), 'Duplicate tool name.')
         for tool in candidate['tools']: manifest_route(tool)
@@ -384,7 +406,10 @@ class Host:
             old_schema, new_schema = tool['inputSchema'], newer['inputSchema']
             require(set(new_schema.get('required', [])) <= set(old_schema.get('required', [])), 'An existing tool gained a required argument.')
             for name, schema in old_schema.get('properties', {}).items():
-                require(new_schema.get('properties', {}).get(name) == schema, 'An existing argument changed incompatibly: ' + tool['name'] + '.' + name)
+                after = new_schema.get('properties', {}).get(name)
+                require(after == schema or any(change['tool'] == tool['name'] and change['argument'] == name
+                                               and change['before'] == schema and change['after'] == after for change in approved),
+                        'An existing argument changed incompatibly: ' + tool['name'] + '.' + name)
 
     def reserve(self, operation):
         if self.fence.exists():

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
-import { currentManifest, manifestProblems, LIVE_MANIFEST } from '../scripts/check-manifest-compat.js';
+import { currentManifest, manifestProblems, approvedToolChanges, LIVE_MANIFEST } from '../scripts/check-manifest-compat.js';
 
 const tool = (properties, required = []) => ({ name: 'demo', write: false, destructive: false, inputSchema: { type: 'object', properties, required } });
 const base = tool({ id: { type: 'string' }, limit: { type: 'integer' } }, ['id']);
@@ -12,6 +12,16 @@ test('manifest gate matches the updater: additions pass, changes and new require
   assert.match(manifestProblems({ tools: [base] }, { tools: [tool({ id: { type: 'string' }, limit: { type: 'integer' }, extra: { type: 'boolean', default: false } }, ['id', 'extra'])] })[0], /required.*demo.extra/);
   assert.match(manifestProblems({ tools: [base] }, { tools: [] })[0], /disappeared: demo/);
   assert.match(manifestProblems({ tools: [base] }, { tools: [{ ...base, write: true }] })[0], /annotation/);
+});
+
+test('an owner-approved argument change passes only with its exact before and after schemas', () => {
+  const approved = [{ tool: 'demo', argument: 'limit', before: { type: 'integer' }, after: { type: 'integer', maximum: 5 } }];
+  const changed = tool({ id: { type: 'string' }, limit: { type: 'integer', maximum: 5 } }, ['id']);
+  assert.deepEqual(manifestProblems({ tools: [base] }, { tools: [changed] }, approved), []);
+  assert.match(manifestProblems({ tools: [base] }, { tools: [tool({ id: { type: 'string' }, limit: { type: 'integer', maximum: 6 } }, ['id'])] }, approved)[0], /changed: demo.limit/);
+  assert.match(manifestProblems({ tools: [tool({ id: { type: 'string' }, limit: { type: 'number' } }, ['id'])] }, { tools: [changed] }, approved)[0], /changed: demo.limit/);
+  assert.match(manifestProblems({ tools: [base] }, { tools: [changed] }, [])[0], /changed: demo.limit/);
+  for (const change of approvedToolChanges()) assert.ok(change.tool && change.argument && change.before && change.after);
 });
 
 // On Alpha (a Praxis workspace job or a release-plan build) this is the updater's

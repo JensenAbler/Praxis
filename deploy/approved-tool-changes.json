@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "changes": [
+    {
+      "tool": "project_adopt",
+      "argument": "name",
+      "reason": "Owner-approved 2026-09-28: adopt repositories by their real GitHub names (capitals, dots, underscores), e.g. JensenAbler.github.io. Widening only; clients keep working with cached schemas.",
+      "before": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9-]{0,39}$",
+        "description": "Exact existing GitHub repository name in the configured account, lowercase letters, digits or hyphens."
+      },
+      "after": {
+        "type": "string",
+        "pattern": "^(?!\\.{1,2}$)(?!.*\\.[gG][iI][tT]$)[A-Za-z0-9._-]{1,100}$",
+        "description": "Existing GitHub repository name in the configured account, exactly as shown on GitHub: letters, digits, dots, hyphens or underscores, up to 100 characters. Its project ID is the lowercase hyphenated form, e.g. JensenAbler.github.io becomes jensenabler-github-io."
+      }
+    }
+  ]
+}

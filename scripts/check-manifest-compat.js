@@ -1,13 +1,22 @@
 // Mirrors validate_manifest in deploy/praxis_updater_host.py so an incompatible
 // tool change fails in `npm test` (in a Praxis workspace or here) instead of
 // after a two-minute release build. Keep the two rules identical.
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { z } from 'zod';
 import { manifestRoute } from '../src/tool-manifest.js';
 import { codeTools } from '../src/code/schema.js';
 
 export const LIVE_MANIFEST = '/srv/praxis-app/current/coding-tools.json';
+
+/** Owner-approved argument changes. The updater reads its own copy from the installed control tree. */
+export const APPROVED_TOOL_CHANGES = new URL('../deploy/approved-tool-changes.json', import.meta.url);
+export function approvedToolChanges(path = APPROVED_TOOL_CHANGES) {
+  if (!existsSync(path)) return [];
+  const value = JSON.parse(readFileSync(path, 'utf8'));
+  if (value?.version !== 1 || !Array.isArray(value.changes)) throw new Error('Invalid approved tool change list.');
+  return value.changes;
+}
 
 /** The manifest scripts/export-tool-manifest.js would write for the current source. */
 export function currentManifest() {
@@ -16,7 +25,7 @@ export function currentManifest() {
 }
 
 /** Reasons the updater would refuse `next` as a routine update of `previous`; empty when compatible. */
-export function manifestProblems(previous, next) {
+export function manifestProblems(previous, next, approved = approvedToolChanges()) {
   const problems = [], tools = new Map(next.tools.map(tool => [tool.name, tool]));
   if (tools.size !== next.tools.length) problems.push('Duplicate tool name.');
   for (const tool of next.tools) {
@@ -32,7 +41,10 @@ export function manifestProblems(previous, next) {
     const before = tool.inputSchema, after = newer.inputSchema, required = new Set(before.required ?? []);
     for (const name of after.required ?? []) if (!required.has(name)) problems.push(`New required argument (a default counts): ${tool.name}.${name}`);
     for (const [name, schema] of Object.entries(before.properties ?? {})) {
-      if (!isDeepStrictEqual(after.properties?.[name], schema)) problems.push(`Existing argument changed: ${tool.name}.${name}`);
+      const changed = after.properties?.[name];
+      const allowed = approved.some(change => change.tool === tool.name && change.argument === name
+        && isDeepStrictEqual(change.before, schema) && isDeepStrictEqual(change.after, changed));
+      if (!isDeepStrictEqual(changed, schema) && !allowed) problems.push(`Existing argument changed: ${tool.name}.${name}`);
     }
   }
   return problems;

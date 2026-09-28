@@ -54,3 +54,17 @@ job. Acceptance must come from the final tested release plan; run Python with -B
 After maintenance, apply the approved Apocrypha execStart/user target additions,
 check deployment_status, exercise a no-op deployment at its verified current head,
 and confirm Discord remains clean. Never touch Apocrypha data or its environment.
+
+## Owner-approved argument changes
+
+The manifest gate is a strict diff: it cannot tell a widening from a breaking
+change, so any edit to an existing argument fails a routine release. The owner
+can approve a specific edit in `deploy/approved-tool-changes.json`, listing the
+tool, the argument and its exact before and after JSON schemas. The updater reads
+this file only from the installed control tree (`controlRoot`), so an approval
+takes effect only after owner control maintenance; a routine app release cannot
+approve its own change. `scripts/check-manifest-compat.js` mirrors the rule with
+the repository copy so `npm test` fails early. Entries match exact schemas, so an
+entry becomes inert once its change is live. Widening an existing tool avoids the
+client reconnect a new tool would need: servers validate calls, not the client's
+cached schema.

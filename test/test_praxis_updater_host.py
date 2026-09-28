@@ -140,6 +140,27 @@ class HostPolicy(unittest.TestCase):
             with self.subTest(route=route), self.assertRaises(RuntimeError):
                 self.host.validate_manifest({'version': 1, 'tools': [{**routed, 'route': route}]})
 
+    def test_owner_approved_argument_change_is_read_only_from_control(self):
+        release = self.base / 'approved-release'; release.mkdir()
+        self.host.current = self.base / 'approved-current'; self.host.current.symlink_to(release)
+        before = {'type': 'string', 'pattern': '^[a-z]+$'}; after = {'type': 'string', 'pattern': '^[A-Za-z.]+$'}
+        tool = {'name': 'demo', 'write': False, 'destructive': False,
+                'inputSchema': {'type': 'object', 'properties': {'id': before}, 'required': ['id']}}
+        (release / 'coding-tools.json').write_text(json.dumps({'version': 1, 'tools': [tool]}))
+        widened = {**tool, 'inputSchema': {**tool['inputSchema'], 'properties': {'id': after}}}
+        self.host.control = self.base / 'control'; (self.host.control / 'deploy').mkdir(parents=True)
+        with self.assertRaisesRegex(RuntimeError, 'changed incompatibly'):
+            self.host.validate_manifest({'version': 1, 'tools': [widened]})
+        approvals = self.host.control / module.APPROVED_TOOL_CHANGES
+        approvals.write_text(json.dumps({'version': 1, 'changes': [{'tool': 'demo', 'argument': 'id', 'before': before, 'after': after, 'reason': 'fixture'}]}))
+        self.host.validate_manifest({'version': 1, 'tools': [widened]})
+        other = {**tool, 'inputSchema': {**tool['inputSchema'], 'properties': {'id': {'type': 'string'}}}}
+        with self.assertRaisesRegex(RuntimeError, 'changed incompatibly'):
+            self.host.validate_manifest({'version': 1, 'tools': [other]})
+        approvals.write_text(json.dumps({'version': 1, 'changes': [{'tool': 'demo', 'argument': 'id', 'before': before}]}))
+        with self.assertRaisesRegex(RuntimeError, 'Invalid approved tool change'):
+            self.host.validate_manifest({'version': 1, 'tools': [widened]})
+
     def test_shutdown_requires_observed_absence_or_inactivity(self):
         self.host.stop_stage('praxis-stage-fixture-build')
         self.unit_state = 'LoadState=loaded\nActiveState=inactive\nMainPID=0\nControlGroup=\n'
