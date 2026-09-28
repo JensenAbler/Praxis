@@ -1,5 +1,5 @@
 import { requireValue, readSafe, safePath, manifest } from './paths.js';
-import { ownedProjectId } from '../git/projects.js';
+import { ownedProjectId, adoptedProjectName } from '../git/projects.js';
 
 const COMMIT = /^[a-f0-9]{40}$/;
 const DIGEST = /^[a-f0-9]{64}$/;
@@ -52,7 +52,7 @@ export class CodeProjects {
     return this.git._submit(row);
   }
   async adopt({ owner, name, idempotencyKey }) {
-    const projectId = ownedProjectId(owner, name);
+    const projectId = ownedProjectId(owner, adoptedProjectName(name));
     const input = { kind: 'projectAdopt', name };
     const row = this.git.store.transaction(() => {
       const existing = this.git._existing(owner, idempotencyKey, input); if (existing) return existing;
@@ -73,7 +73,7 @@ export class CodeProjects {
     if (row.kind === 'projectCreate' || adopted) {
       requireValue(result.exportId === row.id && COMMIT.test(result.commit) && DIGEST.test(result.revision) && result.branch === 'main'
         && (adopted ? ['private', 'public'].includes(metadata.publication)
-          && /^https:\/\/github\.com\/[A-Za-z0-9-]+\/[a-z][a-z0-9-]{0,39}$/.test(metadata.repository)
+          && /^https:\/\/github\.com\/[A-Za-z0-9-]+\/[A-Za-z0-9._-]{1,100}$/.test(metadata.repository)
           : metadata.publication === 'local' && metadata.repository === null), 'Project export metadata is invalid.', 'BROKER_PROTOCOL_ERROR');
       const root = safePath(this.git.exportDirectory, row.id, { directory: true });
       const exported = JSON.parse(readSafe(root, 'manifest.json', 16 * 1024 * 1024));

@@ -8,13 +8,15 @@ import { GitTransportError } from './git.js';
 
 const execute = promisify(execFile);
 const name = z.string().regex(/^[a-z][a-z0-9-]{0,39}$/);
+/** A real GitHub repository name, as GitHub allows it: letters, digits, dots, hyphens, underscores. */
+const repoName = z.string().regex(/^[A-Za-z0-9._-]{1,100}$/).refine(value => !['.', '..'].includes(value) && !/\.git$/i.test(value));
 const projectId = z.string().regex(/^p-[a-f0-9]{16}-[a-z][a-z0-9-]{0,39}$/);
 const base = { operationId: z.string().uuid(), idempotencyKey: z.string().regex(/^[A-Za-z0-9._:-]{8,128}$/) };
 export const projectBrokerSchemas = {
   projectCreate: z.object({ ...base, name, template: z.enum(['node', 'python', 'static']).default('node') }).strict(),
   projectPublish: z.object({ ...base, projectId, visibility: z.enum(['private', 'public']).default('private'),
     commitOperationId: z.string().uuid().optional() }).strict(),
-  projectAdopt: z.object({ ...base, name }).strict()
+  projectAdopt: z.object({ ...base, name: repoName }).strict()
 };
 export class ProjectError extends GitTransportError {
   constructor(code, message, uncertain = false) { super(code, message); this.uncertain = uncertain; }
@@ -24,6 +26,20 @@ export function ownedProjectId(owner, projectName) {
   check(typeof owner === 'string' && owner.length > 0 && owner.length <= 100 && name.safeParse(projectName).success,
     'INVALID_ARGUMENT', 'Project names must be lowercase words separated by hyphens, up to 40 characters.');
   return `p-${sha256(owner).slice(0, 16)}-${projectName}`;
+}
+/**
+ * Map an existing GitHub repository name onto the safe project-name form used for
+ * project IDs and paths, e.g. JensenAbler.github.io -> jensenabler-github-io.
+ * The exact repository name is kept separately for GitHub and Git remotes.
+ */
+export function adoptedProjectName(repository) {
+  check(repoName.safeParse(repository).success, 'INVALID_ARGUMENT',
+    'Repository names may contain letters, digits, dots, hyphens and underscores, up to 100 characters.');
+  let slug = repository.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  if (!/^[a-z]/.test(slug)) slug = `r-${slug}`;
+  slug = slug.slice(0, 40).replace(/-+$/, '');
+  check(name.safeParse(slug).success, 'INVALID_ARGUMENT', 'The repository name does not map to a valid project name.');
+  return slug;
 }
 
 /** Templates contain source only; provisioning never executes any template or user source. */
@@ -92,7 +108,7 @@ export class GitHubProvisioningClient {
     }
     try { return await response.json(); } catch { throw new ProjectError('GITHUB_UNAVAILABLE', 'GitHub returned an unreadable result. Recover the existing operation.'); }
   }
-  repoPath(repositoryName) { check(name.safeParse(repositoryName).success, 'INVALID_ARGUMENT', 'Invalid repository name.'); return `/repos/${this.account}/${repositoryName}`; }
+  repoPath(repositoryName) { check(repoName.safeParse(repositoryName).success, 'INVALID_ARGUMENT', 'Invalid repository name.'); return `/repos/${this.account}/${repositoryName}`; }
   getRepository(repositoryName) { return this.request('GET', this.repoPath(repositoryName), undefined, { allowMissing: true }); }
   async checkIdentity() {
     const user = await this.request('GET', '/user');
@@ -140,7 +156,7 @@ export class ProjectProvisioner {
   }
   admit(kind, owner, args) {
     if (kind === 'projectCreate' || kind === 'projectAdopt') {
-      const id = ownedProjectId(owner, args.name);
+      const id = ownedProjectId(owner, kind === 'projectAdopt' ? adoptedProjectName(args.name) : args.name);
       const existing = this.db.prepare('SELECT * FROM git_created_projects WHERE project_id=?').get(id);
       check(!existing || existing.create_operation_id === args.operationId, 'PROJECT_EXISTS', 'A project with this name already exists for this owner. Recover it or use another name.');
       const pending = this.db.prepare("SELECT id FROM git_operations WHERE kind IN ('projectCreate','projectAdopt') AND project_id=? AND id!=?").get(id, args.operationId);
@@ -271,9 +287,9 @@ export class ProjectProvisioner {
    */
   async runAdopt(operation, args) {
     check(this.github, 'GITHUB_SETUP_REQUIRED', 'Adopting a repository needs the protected provisioning credential.');
-    const id = ownedProjectId(operation.owner, args.name);
+    const projectName = adoptedProjectName(args.name), id = ownedProjectId(operation.owner, projectName);
     this.db.prepare(`INSERT OR IGNORE INTO git_created_projects(project_id,owner,name,template,create_operation_id,created_at) VALUES(?,?,?,?,?,?)`)
-      .run(id, operation.owner, args.name, 'adopted', operation.id, operation.created_at);
+      .run(id, operation.owner, projectName, 'adopted', operation.id, operation.created_at);
     let row = this.get(operation.owner, id);
     check(row.create_operation_id === operation.id && row.template === 'adopted', 'PROJECT_EXISTS', 'The project belongs to another receipt.');
     let state = operation.result_json ? JSON.parse(operation.result_json) : {};
@@ -282,22 +298,25 @@ export class ProjectProvisioner {
       await this.github.checkIdentity();
       const remote = await this.github.getRepository(args.name);
       check(remote, 'REPOSITORY_NOT_FOUND', 'No repository with that name exists in the configured GitHub account.');
-      check(remote.name?.toLowerCase() === args.name && remote.owner?.login?.toLowerCase() === this.account.toLowerCase()
+      check(remote.name?.toLowerCase() === args.name.toLowerCase() && repoName.safeParse(remote.name).success
+        && remote.owner?.login?.toLowerCase() === this.account.toLowerCase()
         && Number.isSafeInteger(remote.id) && !remote.archived, 'REPOSITORY_CONFLICT', 'The observed repository cannot be adopted (wrong owner, archived or malformed).');
       check(remote.permissions?.admin === true, 'GITHUB_AUTHORIZATION_REQUIRED', 'The provisioning credential cannot manage deploy keys on this repository.');
       check((remote.default_branch || 'main') === 'main', 'UNSUPPORTED_REPOSITORY', 'Adopted repositories must use main as their default branch.');
-      save('adopt_remote_verified', { repositoryId: remote.id, repositoryUrl: `https://github.com/${this.account}/${args.name}`,
-        visibility: remote.private ? 'private' : 'public' });
+      save('adopt_remote_verified', { repositoryId: remote.id, repositoryName: remote.name,
+        repositoryUrl: `https://github.com/${this.account}/${remote.name}`, visibility: remote.private ? 'private' : 'public' });
     }
+    // GitHub's canonical casing; receipts from before this field existed used the lowercase name.
+    const repository_ = state.repositoryName || args.name;
     const root = join(this.directory, id), directory = join(root, 'repository.git');
     mkdirSync(root, { recursive: true, mode: 0o700 });
     check(!lstatSync(root).isSymbolicLink(), 'UNSAFE_PATH', 'Project storage contains a symbolic link.');
     const pair = await this.keyPair(id, { allowCreate: !state.deployKeyId && operation.phase !== 'project_key_intent' });
     if (!state.deployKeyId) {
-      let key = await this.github.findDeployKey(args.name, pair.publicKey);
+      let key = await this.github.findDeployKey(repository_, pair.publicKey);
       if (operation.phase === 'project_key_intent') {
         if (!key) throw new ProjectError('PROJECT_ADOPTION_UNCERTAIN', 'Deploy-key creation was attempted, but its result cannot be observed. It will not be repeated automatically.', true);
-      } else if (!key) { save('project_key_intent'); key = await this.github.addDeployKey(args.name, pair.publicKey, operation.id); }
+      } else if (!key) { save('project_key_intent'); key = await this.github.addDeployKey(repository_, pair.publicKey, operation.id); }
       check(Number.isSafeInteger(key?.id), 'GITHUB_UNAVAILABLE', 'GitHub did not confirm the deploy key.');
       save('project_key_created', { deployKeyId: key.id });
     }
@@ -305,7 +324,7 @@ export class ProjectProvisioner {
     check(!lstatSync(directory).isSymbolicLink(), 'UNSAFE_PATH', 'Repository storage contains a symbolic link.');
     if (!existsSync(join(directory, 'HEAD'))) await execute(this.git.gitPath, ['-c', 'init.templateDir=', 'init', '--bare', '--initial-branch=main', directory],
       { env: this.git.env, windowsHide: true, timeout: 30000, maxBuffer: 8192 });
-    const repository = { projectId: id, owner: operation.owner, directory, remoteUrl: `git@github.com:${this.account}/${args.name}.git`,
+    const repository = { projectId: id, owner: operation.owner, directory, remoteUrl: `git@github.com:${this.account}/${repository_}.git`,
       defaultBranch: 'main', allowedBranches: ['main'], adopted: true, deployment: true,
       ...(this.author ? { author: this.author } : {}), transportEnv: pair.transportEnv };
     this.git.registerRepository({ ...repository, localOnly: false }, { replace: true });
@@ -319,7 +338,7 @@ export class ProjectProvisioner {
     save('adopt_mirrored', { commit: head.commit });
     const exported = await this.broker.run_sync({ ...operation, project_id: id, result_json: JSON.stringify({ commit: head.commit }) }, {});
     return { ...state, ...exported, commit: head.commit, branch: 'main', repositoryUrl: state.repositoryUrl,
-      project: { projectId: id, name: args.name, template: 'adopted', owner: operation.owner, repository: state.repositoryUrl,
+      project: { projectId: id, name: projectName, repositoryName: repository_, template: 'adopted', owner: operation.owner, repository: state.repositoryUrl,
         publication: state.visibility, validationCommands: [], runtime: 'adopted' } };
   }
 }

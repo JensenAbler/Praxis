@@ -7,7 +7,7 @@ import { randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { TrustedGit } from '../src/git/git.js';
 import { GitBroker } from '../src/git/broker.js';
-import { ProjectProvisioner, GitHubProvisioningClient, ownedProjectId, projectScaffold, projectBrokerSchemas } from '../src/git/projects.js';
+import { ProjectProvisioner, GitHubProvisioningClient, ownedProjectId, adoptedProjectName, projectScaffold, projectBrokerSchemas } from '../src/git/projects.js';
 import { CodeStore } from '../src/code/store.js';
 import { WorkspaceManager } from '../src/code/workspaces.js';
 import { CodeGit } from '../src/code/git.js';
@@ -109,6 +109,32 @@ test('adoption verifies an existing repository, adds one key, mirrors main and r
   assert.equal(readFileSync(join(f.exports, done.id, 'files', 'README.md'), 'utf8'), 'existing repository\n');
   assert.throws(() => f.prepare('projectAdopt', { name: 'legacy' }), { code: 'PROJECT_EXISTS' });
   assert.throws(() => f.prepare('projectPublish', { projectId: id }), { code: 'PROJECT_ALREADY_PUBLISHED' });
+});
+
+test('adoption accepts real GitHub names with dots and capitals under a safe hyphenated project id', async t => {
+  assert.equal(adoptedProjectName('JensenAbler.github.io'), 'jensenabler-github-io');
+  assert.equal(adoptedProjectName('9lives_Repo'), 'r-9lives-repo');
+  assert.equal(adoptedProjectName('legacy'), 'legacy');
+  for (const bad of ['.', '..', 'x.git', 'X.GIT', 'a/b', '../x', 'a b', '', 'a\nb', 'x'.repeat(101)]) {
+    assert.throws(() => adoptedProjectName(bad), { code: 'INVALID_ARGUMENT' });
+    assert.equal(projectBrokerSchemas.projectAdopt.safeParse({ name: bad, operationId: randomUUID(), idempotencyKey: 'project-adopt' }).success, false);
+  }
+  const f = fixture(t), id = ownedProjectId('alice', 'jensenabler-github-io'), fx = githubFixture(f, id);
+  const head = seedOrigin(f, fx.origin);
+  fx.state.repository = existingRepository({ name: 'JensenAbler.github.io', private: false });
+  const done = await f.run(f.prepare('projectAdopt', { name: 'jensenabler.github.io' })), result = JSON.parse(done.result_json);
+  assert.equal(done.status, 'completed'); assert.equal(done.project_id, id); assert.equal(result.commit, head); assert.equal(fx.counts.key, 1);
+  assert.equal(result.project.name, 'jensenabler-github-io'); assert.equal(result.project.repositoryName, 'JensenAbler.github.io');
+  assert.equal(result.project.repository, 'https://github.com/FixtureOwner/JensenAbler.github.io'); assert.equal(result.project.publication, 'public');
+  assert.equal(f.provisioner.get('alice', id).name, 'jensenabler-github-io');
+  assert.throws(() => f.prepare('projectAdopt', { name: 'JensenAbler.github.io' }), { code: 'PROJECT_EXISTS' });
+});
+
+test('adoption refuses a repository whose observed name differs from the requested one', async t => {
+  const f = fixture(t), fx = githubFixture(f, ownedProjectId('alice', 'jensenabler-github-io'));
+  fx.state.repository = existingRepository({ name: 'jensenabler-github-io' });
+  await assert.rejects(f.run(f.prepare('projectAdopt', { name: 'JensenAbler.github.io' })), { code: 'REPOSITORY_CONFLICT' });
+  assert.equal(fx.counts.key, 0);
 });
 
 test('adoption refuses missing, foreign, archived, non-admin and non-main repositories before any key is added', async t => {
