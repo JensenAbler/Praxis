@@ -164,6 +164,34 @@ export async function createCodingService(config) {
   return { app, jobs, workspaces, git, host, store, async close() { stopped = true; clearInterval(timer); await pending; host.close(); store.close(); } };
 }
 
+/**
+ * SIGTERM/SIGINT handler for the coding service. The updater drains by stopping
+ * the unit and requires it to end `inactive`, so a requested stop must exit 0.
+ * Long polls (job_wait, release waits) can hold requests open past the drain, so
+ * after a short grace the remaining connections are cut; clients already treat a
+ * dropped response as a retryable read. A close() failure is logged, not fatal:
+ * SQLite transactions are atomic and jobs run in independent workers. Only a
+ * genuine hang past the deadline exits 1.
+ */
+export function gracefulShutdown({ http, service, exit = code => process.exit(code), log = console, graceMs = 3000, deadlineMs = 10000 }) {
+  let started = false;
+  return () => {
+    if (started) return;
+    started = true;
+    const deadline = setTimeout(() => { log.error(JSON.stringify({ event: 'coding_shutdown_deadline' })); exit(1); }, deadlineMs);
+    deadline.unref?.();
+    const cut = setTimeout(() => http.closeAllConnections?.(), graceMs);
+    cut.unref?.();
+    http.close(async () => {
+      clearTimeout(cut);
+      try { await service.close(); } catch (error) { log.error(JSON.stringify(diagnosticRecord('coding_close_failed', error))); }
+      clearTimeout(deadline);
+      exit(0);
+    });
+    http.closeIdleConnections?.();
+  };
+}
+
 function isEntrypoint() {
   if (!process.argv[1]) return false;
   try {
@@ -178,6 +206,6 @@ if (isEntrypoint()) {
   const config = JSON.parse(readFileSync(configPath, 'utf8'));
   const service = await createCodingService(config);
   const http = service.app.listen(config.port ?? 8792, '127.0.0.1', () => console.log(JSON.stringify({ event: 'coding_listening', release: config.release, port: http.address().port })));
-  const shutdown = () => { http.close(async () => { await service.close(); process.exit(0); }); setTimeout(() => process.exit(1), 10000).unref(); };
+  const shutdown = gracefulShutdown({ http, service });
   process.on('SIGTERM', shutdown); process.on('SIGINT', shutdown);
 }
