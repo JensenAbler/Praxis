@@ -1,7 +1,7 @@
 import { readFileSync, lstatSync, realpathSync, statSync } from 'node:fs';
 import { z } from 'zod';
 
-const reserved = new Set(['observations_list', 'praxis_release_plan', 'praxis_release_apply', 'praxis_release_status', 'praxis_release_history', 'praxis_release_rollback']);
+const reserved = new Set(['usage_summary', 'observations_list', 'praxis_release_plan', 'praxis_release_apply', 'praxis_release_status', 'praxis_release_history', 'praxis_release_rollback']);
 
 // Routing is data, never executable configuration. Only these two fixed clients
 // exist in the gateway. Broker action existence and policy belong to the broker.

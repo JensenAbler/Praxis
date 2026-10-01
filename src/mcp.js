@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { parseArguments } from './arguments.js';
 import { manifestRoute, healthRoute } from './tool-manifest.js';
 import { diagnosticRecord, errorRecovery, requestContext } from './diagnostics.js';
+import { usageSignals } from './usage-telemetry.js';
 import { releaseTools } from './release-schema.js';
 
 export const VERSION = '0.1.0';
@@ -18,7 +19,7 @@ export function createProbeServer({ jobs, audit, resourceUrl, bootId, release, a
   if (owner !== 'jensen') throw new Error('Authenticated owner required');
   const server = new McpServer({ name: 'Praxis', version: coding ? '0.6.0' : VERSION }, {
     instructions: coding
-      ? SOURCE_WORKFLOW + ' Start with capabilities, projects_list and workspaces_list. Read logs, recordings and live state with host tools. Jobs run as native root with ordinary networking and persistent caches. Preserve IDs and idempotency keys after uncertainty; inspect job_status before repeating work. Complete raw logs remain recoverable. Refresh client connection metadata after tool changes. observations_list shows recent tool activity, newest first.'
+      ? SOURCE_WORKFLOW + ' Start with capabilities, projects_list and workspaces_list. Read logs, recordings and live state with host tools. Jobs run as native root with ordinary networking and persistent caches. Preserve IDs and idempotency keys after uncertainty; inspect job_status before repeating work. Complete raw logs remain recoverable. Refresh client connection metadata after tool changes. observations_list shows recent tool activity, newest first; usage_summary reports aggregate usage and workflow friction.'
       : 'This is an isolated diagnostic fixture. Call probe_capabilities first. Start only a bounded heartbeat job using a unique idempotencyKey, save its job ID, and inspect it through probe_job_status/logs. In a fresh conversation, probe_jobs_list recovers existing jobs. These tools provide no source access, arbitrary commands, production access, or model execution. Never recreate a job merely because a response was lost; repeat the same idempotency key or list existing jobs. Results describe only this fixture.'
   });
   const register = (name, title, description, inputSchema, handler, readOnly = true, destructive = false, scope = SCOPE, route) => {
@@ -57,7 +58,7 @@ export function createProbeServer({ jobs, audit, resourceUrl, bootId, release, a
       try {
         audit.record(owner, { requestId, ...(context.httpRequestId ? { httpRequestId: context.httpRequestId } : {}), kind: 'tool', tool: name, era,
           durationMs: Math.round((performance.now() - started) * 1000) / 1000,
-          resultJsonBytes: Buffer.byteLength(text), ok: result.ok, errorCode: result.error?.code ?? null });
+          resultJsonBytes: Buffer.byteLength(text), ok: result.ok, errorCode: result.error?.code ?? null, ...usageSignals(args, result) });
       } catch (error) {
         // Diagnostic telemetry failure must not turn a completed source mutation
         // into an apparent failed request. Its durable receipt is independent.
@@ -101,6 +102,10 @@ export function createProbeServer({ jobs, audit, resourceUrl, bootId, release, a
     register('probe_observations', 'Read server observation receipts', 'Read sanitized server-side tool/HTTP observations in sequence. Includes measured result sizes and durations, never tokens or request bodies.', z.object({ cursor, limit: pageLimit, view: z.enum(['head', 'tail']).default('head').describe('head reads oldest first from cursor. tail starts at the newest records and pages backward; copy nextCursor to continue.') }), ({ cursor, limit, view }) => audit.list(owner, cursor, limit, view));
   }
   if (coding) register('observations_list', 'Read recent Praxis tool activity', 'Read sanitized server-side receipts of recent tool calls on this endpoint: tool, outcome, duration and result size, never arguments, tokens or content. Starts from the newest records by default; copy nextCursor to page further back. Use it to recover what a lost conversation did or to confirm call counts.', z.object({ cursor, limit: pageLimit, view: z.enum(['tail', 'head']).default('tail').describe('tail (default) starts at the newest records and pages backward. head reads oldest first from cursor.') }), ({ cursor, limit, view }) => audit.list(owner, cursor, limit, view), true, false, 'praxis:code');
+  if (coding) register('usage_summary', 'Summarize Praxis usage', 'Report bounded local tool counts, failures and recovery strategies, server latency percentiles, response bytes, pagination and pending-wait friction. No arguments or content. Endpoint-local retained history only; recovery counts do not prove actual retries.', z.object({
+    days: z.number().int().min(1).max(30).default(7),
+    limit: z.number().int().min(1).max(50).default(20)
+  }), args => audit.summary(owner, args), true, false, 'praxis:code');
   if (coding) for (const [name, tool] of Object.entries(applicationTools)) {
     const route = manifestRoute(name, tool.route);
     register(name, tool.title, tool.description, tool.schema, args => {

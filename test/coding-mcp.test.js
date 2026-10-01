@@ -516,3 +516,25 @@ test('authenticated native clients receive the required workspace workflow at in
     assert.match(tools.find(tool => tool.name === name).description, /user explicitly requests a new repository/);
   }
 });
+
+test('usage report authenticates, measures instrumentation and survives telemetry write failure', async t => {
+  const f=await fixture(t), client=await f.connect();
+  await call(client,'file_read',{projectId:'fixture',path:'answer.js',startLine:2});
+  await client.callTool({name:'file_read',arguments:{projectId:'fixture',path:'answer.js',lineCount:201}});
+  const report=await call(client,'usage_summary',{days:7,limit:50});
+  const file=report.usage.tools.find(g=>g.tool==='file_read');
+  assert.equal(file.calls,2);assert.equal(file.failures,1);assert.equal(file.continuations,1);
+  assert.ok(file.p95DurationMs>=0);assert.ok(file.resultBytes>0);
+  assert.doesNotMatch(JSON.stringify(report),/export const answer/);
+  const denied=await (await f.connect('praxis:probe')).callTool({name:'usage_summary',arguments:{}});
+  assert.equal(denied.structuredContent.error.code,'AUTHORIZATION_REQUIRED');
+  assert.equal((await client.callTool({name:'usage_summary',arguments:{days:31}})).structuredContent.error.code,'INVALID_ARGUMENT');
+  const emitted=[];t.mock.method(console,'error',text=>emitted.push(JSON.parse(text)));
+  t.mock.method(f.gateway.audit,'record',()=>{throw new Error('SECRET disk unavailable');});
+  const request={projectId:'fixture',baseRevision:'fixture-base',idempotencyKey:'telemetry-resilience-fixture'};
+  const created=await call(client,'workspace_create',request);
+  assert.equal(created.status,'completed');
+  assert.equal((await call(client,'workspace_create',request)).operationId,created.operationId);
+  assert.ok(emitted.some(e=>e.event==='mcp_audit_failed'));
+  assert.doesNotMatch(JSON.stringify(emitted),/SECRET/);
+});
