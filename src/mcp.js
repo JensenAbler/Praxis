@@ -58,7 +58,7 @@ export function createProbeServer({ jobs, audit, resourceUrl, bootId, release, a
       try {
         audit.record(owner, { requestId, ...(context.httpRequestId ? { httpRequestId: context.httpRequestId } : {}), kind: 'tool', tool: name, era,
           durationMs: Math.round((performance.now() - started) * 1000) / 1000,
-          resultJsonBytes: Buffer.byteLength(text), ok: result.ok, errorCode: result.error?.code ?? null, ...usageSignals(args, result) });
+          resultJsonBytes: Buffer.byteLength(text), ok: result.ok, errorCode: result.error?.code ?? null, retryStrategy: result.error?.retry?.strategy, ...usageSignals(args, result) });
       } catch (error) {
         // Diagnostic telemetry failure must not turn a completed source mutation
         // into an apparent failed request. Its durable receipt is independent.

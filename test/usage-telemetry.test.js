@@ -22,7 +22,7 @@ test('storage allowlist strips sensitive payloads and unknown error text', t=>{
 test('report counts failures, percentiles, pagination, waits and isolates owner/window',t=>{
   const {store}=fixture(t);
   for(let i=1;i<=20;i++) store.record('jensen',{requestId:'r'+i,kind:'tool',tool:'file_read',ok:i!==1,
-    errorCode:i===1?'HASH_CONFLICT':null,durationMs:i,resultJsonBytes:100,
+    errorCode:i===1?'HASH_CONFLICT':null,retryStrategy:i===1?'refresh_state':undefined,durationMs:i,resultJsonBytes:100,
     ...usageSignals({cursor:i>1?12:0},{hasMore:true,nextCursor:42,wait:{terminal:false},truncated:true})});
   store.record('other',{requestId:'x',kind:'tool',tool:'private',ok:true});
   store.record('jensen',{requestId:'old',kind:'tool',tool:'old'});
@@ -53,4 +53,22 @@ test('legacy missing timings do not create fake latency; output tool list stays 
   const r=store.summary('jensen',{limit:5});
   assert.equal(r.usage.tools.length,5);assert.equal(r.usage.omittedTools,55);
   assert.equal(r.usage.tools[0].p95DurationMs,null);
+});
+
+test('continuation-only responses and actual recovery strategies are reported accurately', t=>{
+  assert.equal(usageSignals({}, {nextCursor:42}).moreAvailable,true);
+  assert.equal(usageSignals({cursor:'opaque-page'}, {nextCursor:'next-opaque'}).continuation,true);
+  assert.equal(usageSignals({}, {nextCursor:'next-opaque'}).moreAvailable,true);
+  assert.equal(usageSignals({cursor:''}, {nextCursor:''}).continuation,false);
+  assert.equal(usageSignals({}, {nextCursor:''}).moreAvailable,false);
+  assert.equal(usageSignals({}, {nextCursor:null}).moreAvailable,false);
+  assert.equal(usageSignals({}, {nextCursor:42,hasMore:false}).moreAvailable,false);
+  const {store}=fixture(t);
+  store.record('jensen',{requestId:'r',kind:'tool',tool:'file_read',ok:false,errorCode:'INTERNAL_ERROR',retryStrategy:'retry_read'});
+  store.record('jensen',{requestId:'s',kind:'tool',tool:'workspace_apply',ok:false,errorCode:'INTERNAL_ERROR',retryStrategy:'recover_before_retry'});
+  store.record('jensen',{requestId:'legacy',kind:'tool',tool:'legacy_read',ok:false,errorCode:'INTERNAL_ERROR'});
+  const tools=store.summary('jensen').usage.tools;
+  assert.deepEqual(tools.find(g=>g.tool==='file_read').recoveryStrategies,[{strategy:'retry_read',count:1}]);
+  assert.deepEqual(tools.find(g=>g.tool==='workspace_apply').recoveryStrategies,[{strategy:'recover_before_retry',count:1}]);
+  assert.deepEqual(tools.find(g=>g.tool==='legacy_read').recoveryStrategies,[{strategy:'legacy_unspecified',count:1}]);
 });
