@@ -481,3 +481,29 @@ class Host:
     def release_reservation(self, operation):
         if self.fence.exists() and json.loads(self.fence.read_text()).get('operationId') == operation:
             self.open(operation)
+
+    def prune(self, active, previous):
+        """Retention after a confirmed activation: keep the active release and its rollback
+        target, delete older application releases, and drop staging directories whose
+        preparation finished (its sealed release lives under the releases root). Failed or
+        interrupted preparations keep their stages for diagnosis."""
+        require(self.active()['release'] == active, 'Active release changed; retention skipped.')
+        root = self.root.resolve()
+        keep = {active, previous}
+        removed, stages = [], []
+        for path in sorted(self.root.iterdir()):
+            if path.name in keep or path.is_symlink() or not path.is_dir() or not path.name.startswith('app-'):
+                continue
+            require(path.resolve().parent == root, 'Unexpected release path.')
+            shutil.rmtree(path)
+            removed.append(path.name)
+        if self.stages.exists():
+            for path in sorted(self.stages.iterdir()):
+                if path.is_symlink() or not path.is_dir():
+                    continue
+                operation = path.name[:-len('-smoke')] if path.name.endswith('-smoke') else path.name
+                if (self.state / (operation + '-prepared.json')).is_file():
+                    shutil.rmtree(path)
+                    stages.append(path.name)
+        return {'kept': sorted(name for name in keep if name and (self.root / name).is_dir()),
+                'removedReleases': removed, 'removedStages': stages}

@@ -298,8 +298,21 @@ class Updater:
             self.save(row, 'running', row['phase'], value, error)
             return False
         value.pop('finalizationError', None)
+        if row['phase'] == 'activation_confirmed':
+            value['retention'] = self.retain(value)
         self.save(row, status, phase, value, error)
         return True
+
+    def retain(self, value):
+        """Runs only after a confirmed activation has opened admission. Keeps the active
+        release and its rollback target; a retention problem is recorded, never raised."""
+        prune = getattr(self.host, 'prune', None)
+        if prune is None:
+            return None
+        try:
+            return prune(value['release'], value['previousRelease'])
+        except Exception as error:
+            return {'error': str(error)[:300]}
 
 
 def load_config():

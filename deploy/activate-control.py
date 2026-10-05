@@ -81,6 +81,20 @@ def ensure_idle(paths):
     check(busy == 0, f'{busy} Git operation(s) are in flight; wait for them to settle first.')
 
 
+def prune_control(paths, keep):
+    """Keep the live control release and its rollback target; delete older control copies."""
+    root = paths.control_releases.resolve()
+    kept = {pathlib.Path(item).resolve() for item in keep} | {paths.control_current.resolve()}
+    removed = []
+    for entry in sorted(root.iterdir()):
+        if entry.is_symlink() or not entry.is_dir() or entry.name.startswith('.') or entry.resolve() in kept:
+            continue
+        check(entry.resolve().parent == root, 'Unexpected control release path.')
+        shutil.rmtree(entry)
+        removed.append(entry.name)
+    return {'kept': sorted(path.name for path in kept if path.parent == root), 'removed': removed}
+
+
 def activate(name, paths=Paths(), run=None, health=default_health, idle=ensure_idle, settle_seconds=30, sleep=time.sleep):
     run = run or (lambda argv: subprocess.run(argv, check=True, capture_output=True, text=True))
     source = paths.app_releases / name
@@ -123,6 +137,8 @@ def activate(name, paths=Paths(), run=None, health=default_health, idle=ensure_i
                 if time.monotonic() >= deadline: raise RuntimeError(f'Health did not pass: {error}')
                 sleep(1)
         record['outcome'] = 'activated'
+        try: record['retention'] = prune_control(paths, [target, previous])
+        except Exception as failure: record['retention'] = {'error': str(failure)[:300]}
     except Exception as failure:
         record['outcome'], record['error'] = 'restored', str(failure)
         try:
