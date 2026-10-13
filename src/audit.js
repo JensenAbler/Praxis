@@ -3,13 +3,19 @@ import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { sanitizeObservation, summarizeUsage } from './usage-telemetry.js';
 
+// Rows average ~300 bytes; 100k rows is ~40 MB per endpoint store including
+// the index. max_page_count (4 KiB pages) is the hard file ceiling, sized with
+// headroom above that so inserts never hit SQLITE_FULL at the record cap.
+export const MAX_OBSERVATION_RECORDS = 100000;
+const MAX_DATABASE_PAGES = 32768; // 128 MiB
+
 export class AuditStore {
-  constructor(directory, { maxRecords = 10000, maxAgeDays = 30 } = {}) {
-    if (!Number.isInteger(maxRecords) || maxRecords < 1 || maxRecords > 10000 || !Number.isFinite(maxAgeDays) || maxAgeDays <= 0 || maxAgeDays > 30) throw new RangeError('Invalid telemetry retention');
+  constructor(directory, { maxRecords = MAX_OBSERVATION_RECORDS, maxAgeDays = 30 } = {}) {
+    if (!Number.isInteger(maxRecords) || maxRecords < 1 || maxRecords > MAX_OBSERVATION_RECORDS || !Number.isFinite(maxAgeDays) || maxAgeDays <= 0 || maxAgeDays > 30) throw new RangeError('Invalid telemetry retention');
     this.maxRecords = maxRecords; this.maxAgeDays = maxAgeDays;
     mkdirSync(directory, { recursive: true, mode: 0o700 });
     this.db = new DatabaseSync(join(directory, 'observations.sqlite'));
-    this.db.exec(`PRAGMA journal_mode=WAL; PRAGMA busy_timeout=50; PRAGMA journal_size_limit=1048576; PRAGMA wal_autocheckpoint=256; PRAGMA max_page_count=8192;
+    this.db.exec(`PRAGMA journal_mode=WAL; PRAGMA busy_timeout=50; PRAGMA journal_size_limit=1048576; PRAGMA wal_autocheckpoint=256; PRAGMA max_page_count=${MAX_DATABASE_PAGES};
       CREATE TABLE IF NOT EXISTS observations (
         seq INTEGER PRIMARY KEY AUTOINCREMENT, owner TEXT NOT NULL,
         request_id TEXT NOT NULL, recorded_at TEXT NOT NULL, body TEXT NOT NULL
@@ -41,14 +47,15 @@ export class AuditStore {
       observations: page.map(row => ({ sequence: row.seq, recordedAt: row.recorded_at, ...sanitizeObservation(JSON.parse(row.body)) })),
       nextCursor: (tail ? page[0]?.seq : page.at(-1)?.seq) ?? cursor, view,
       hasMore: rows.length > limit,
-      retention: 'Most recent 10000 observations, at most 30 days; diagnostic telemetry only.'
+      retention: `Most recent ${this.maxRecords} observations, at most ${this.maxAgeDays} days; diagnostic telemetry only.`
     };
   }
   summary(owner, { days = 7, limit = 20 } = {}) {
     if (!Number.isInteger(days) || days < 1 || days > 30 || !Number.isInteger(limit) || limit < 1 || limit > 50) throw new RangeError('Invalid report bounds');
     this.prune();
     const since = new Date(Date.now()-days*86400000).toISOString();
-    const rows = this.db.prepare('SELECT recorded_at,body FROM observations WHERE owner=? AND recorded_at>=? ORDER BY seq LIMIT 10000').all(owner, since);
+    // Newest rows win when the window holds more than the cap; report stays chronological.
+    const rows = this.db.prepare('SELECT recorded_at,body FROM observations WHERE owner=? AND recorded_at>=? ORDER BY seq DESC LIMIT ?').all(owner, since, this.maxRecords).reverse();
     return { usage: summarizeUsage(rows, limit), window: { requestedDays: days, since, oldestRetainedAt: rows[0]?.recorded_at ?? null,
       newestRetainedAt: rows.at(-1)?.recorded_at ?? null, observationsScanned: rows.length },
       retention: { maxRecords: this.maxRecords, maxAgeDays: this.maxAgeDays },

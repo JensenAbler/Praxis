@@ -47,6 +47,19 @@ test('retention is exact, expires on reads, storage stabilizes and persists afte
   store.record('jensen',{requestId:'new',kind:'tool',tool:'file_read',ok:true});
   const reopened=new AuditStore(root);assert.equal(reopened.summary('jensen').usage.calls,1);reopened.close();
 });
+test('default retention allows 100k records and summary reports the newest rows when capped',t=>{
+  const {store}=fixture(t);
+  assert.equal(store.maxRecords,100000);
+  assert.throws(()=>new AuditStore(mkdtempSync(join(tmpdir(),'praxis-usage-')),{maxRecords:100001}),RangeError);
+  assert.ok(store.db.prepare('PRAGMA max_page_count').get().max_page_count>=32768);
+  const {store:small}=fixture(t,{maxRecords:10});
+  for(let i=0;i<30;i++) small.record('jensen',{requestId:'r'+i,kind:'tool',tool:i<20?'old':'new',ok:true});
+  const r=small.summary('jensen');
+  assert.equal(r.window.observationsScanned,10);
+  assert.deepEqual(r.usage.tools.map(x=>x.tool),['new']);
+  assert.ok(r.window.oldestRetainedAt<=r.window.newestRetainedAt);
+  assert.match(small.list('jensen').retention,/Most recent 10 observations/);
+});
 test('legacy missing timings do not create fake latency; output tool list stays bounded',t=>{
   const {store}=fixture(t);
   for(let i=0;i<60;i++) store.record('jensen',{requestId:'r'+i,kind:'tool',tool:'t'+i,ok:true});
