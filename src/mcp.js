@@ -14,7 +14,7 @@ const jobId = z.string().uuid();
 const cursor = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).default(0).describe('Omit/0 begins. Copy the returned nextCursor exactly; do not calculate it from page length.');
 const pageLimit = z.number().int().min(1).max(100).default(20).describe('Maximum records per page: 1–100; default 20. Omit for the default.');
 
-export function createProbeServer({ jobs, audit, resourceUrl, bootId, release, authInfo, era, coding, applicationTools = {}, releaseClient, git }) {
+export function createProbeServer({ jobs, audit, resourceUrl, bootId, release, authInfo, era, endpoint = 'unspecified', coding, applicationTools = {}, releaseClient, git }) {
   const owner = authInfo?.extra?.subject;
   if (owner !== 'jensen') throw new Error('Authenticated owner required');
   const server = new McpServer({ name: 'Praxis', version: coding ? '0.6.0' : VERSION }, {
@@ -22,6 +22,9 @@ export function createProbeServer({ jobs, audit, resourceUrl, bootId, release, a
       ? SOURCE_WORKFLOW + ' Start with capabilities, projects_list and workspaces_list. Read logs, recordings and live state with host tools. Jobs run as native root with ordinary networking and persistent caches. Preserve IDs and idempotency keys after uncertainty; inspect job_status before repeating work. Complete raw logs remain recoverable. Refresh client connection metadata after tool changes. observations_list shows recent tool activity, newest first; usage_summary reports aggregate usage and workflow friction.'
       : 'This is an isolated diagnostic fixture. Call probe_capabilities first. Start only a bounded heartbeat job using a unique idempotencyKey, save its job ID, and inspect it through probe_job_status/logs. In a fresh conversation, probe_jobs_list recovers existing jobs. These tools provide no source access, arbitrary commands, production access, or model execution. Never recreate a job merely because a response was lost; repeat the same idempotency key or list existing jobs. Results describe only this fixture.'
   });
+  // A report identifies this store's endpoint, never the client or author of old rows.
+  const observationScope = { endpoint: ['canonical', 'claude_facade'].includes(endpoint) ? endpoint : 'unspecified',
+    history: 'endpoint-local', counts: 'Tool counts exclude HTTP and protocol receipts. Protocol receipts mark completed tools/call requests whose handler did not start; they do not prove a tool failure.' };
   const register = (name, title, description, inputSchema, handler, readOnly = true, destructive = false, scope = SCOPE, route) => {
     // Advertise the exact Zod schema, but perform its validation inside the
     // authenticated handler so rejected arguments receive the same structured
@@ -33,6 +36,8 @@ export function createProbeServer({ jobs, audit, resourceUrl, bootId, release, a
       annotations: { readOnlyHint: readOnly, destructiveHint: destructive, idempotentHint: !(name.startsWith('host_') && !readOnly), openWorldHint: scope === 'praxis:code' },
       _meta: { securitySchemes: [{ type: 'oauth2', scopes: [scope] }] }
     }, async (args) => {
+      const dispatch = requestContext.getStore()?.toolDispatch;
+      if (dispatch) dispatch.started++;
       const requestId = randomUUID();
       const context = { ...requestContext.getStore(), requestId, action: name };
       const started = performance.now();
@@ -99,13 +104,13 @@ export function createProbeServer({ jobs, audit, resourceUrl, bootId, release, a
     register('probe_failure', 'Inspect a controlled error', 'Return an intentional FIXTURE_ERROR with a recovery instruction. It makes no job or external changes.', z.object({}), () => {
       throw Object.assign(new Error('Intentional fixture error. Continue by calling probe_capabilities; do not retry this tool to make it succeed.'), { code: 'FIXTURE_ERROR' });
     });
-    register('probe_observations', 'Read server observation receipts', 'Read sanitized server-side tool/HTTP observations in sequence. Includes measured result sizes and durations, never tokens or request bodies.', z.object({ cursor, limit: pageLimit, view: z.enum(['head', 'tail']).default('head').describe('head reads oldest first from cursor. tail starts at the newest records and pages backward; copy nextCursor to continue.') }), ({ cursor, limit, view }) => audit.list(owner, cursor, limit, view));
+    register('probe_observations', 'Read server observation receipts', 'Read sanitized server-side tool/HTTP observations in sequence. Includes measured result sizes and durations, never tokens or request bodies.', z.object({ cursor, limit: pageLimit, view: z.enum(['head', 'tail']).default('head').describe('head reads oldest first from cursor. tail starts at the newest records and pages backward; copy nextCursor to continue.') }), ({ cursor, limit, view }) => ({ ...audit.list(owner, cursor, limit, view), observationScope }));
   }
-  if (coding) register('observations_list', 'Read recent Praxis tool activity', 'Read sanitized server-side receipts of recent tool calls on this endpoint: tool, outcome, duration and result size, never arguments, tokens or content. Starts from the newest records by default; copy nextCursor to page further back. Use it to recover what a lost conversation did or to confirm call counts.', z.object({ cursor, limit: pageLimit, view: z.enum(['tail', 'head']).default('tail').describe('tail (default) starts at the newest records and pages backward. head reads oldest first from cursor.') }), ({ cursor, limit, view }) => audit.list(owner, cursor, limit, view), true, false, 'praxis:code');
+  if (coding) register('observations_list', 'Read recent Praxis tool activity', 'Read sanitized server-side receipts of recent tool calls on this endpoint: tool, outcome, duration and result size, never arguments, tokens or content. Starts from the newest records by default; copy nextCursor to page further back. Use it to recover what a lost conversation did or to confirm call counts.', z.object({ cursor, limit: pageLimit, view: z.enum(['tail', 'head']).default('tail').describe('tail (default) starts at the newest records and pages backward. head reads oldest first from cursor.') }), ({ cursor, limit, view }) => ({ ...audit.list(owner, cursor, limit, view), observationScope }), true, false, 'praxis:code');
   if (coding) register('usage_summary', 'Summarize Praxis usage', 'Report bounded local tool counts, failures and recovery strategies, server latency percentiles, response bytes, pagination and pending-wait friction. No arguments or content. Endpoint-local retained history only; recovery counts do not prove actual retries.', z.object({
     days: z.number().int().min(1).max(30).default(7),
     limit: z.number().int().min(1).max(50).default(20)
-  }), args => audit.summary(owner, args), true, false, 'praxis:code');
+  }), args => ({ ...audit.summary(owner, args), observationScope }), true, false, 'praxis:code');
   if (coding) for (const [name, tool] of Object.entries(applicationTools)) {
     const route = manifestRoute(name, tool.route);
     register(name, tool.title, tool.description, tool.schema, args => {
@@ -120,4 +125,37 @@ export function createProbeServer({ jobs, audit, resourceUrl, bootId, release, a
       !tool.write, !!tool.destructive, 'praxis:code');
   }
   return server;
+}
+
+
+// Shared by both HTTP adapters. This observes lifecycle only; never reads or
+// rewrites response bytes, logs requested names, or changes SDK dispatch.
+export function observeMcpHttp(req, res, audit, owner) {
+  const context = requestContext.getStore();
+  const requestId = context.requestId;
+  const started = performance.now();
+  const dispatch = context.toolDispatch = { started: 0 };
+  let logged = false;
+  const record = aborted => {
+    if (logged) return;
+    logged = true;
+    const protocol = req.get('mcp-protocol-version');
+    const common = { method: req.method, status: res.statusCode, aborted,
+      protocol: /^\d{4}-\d{2}-\d{2}$/.test(protocol || '') ? protocol : 'unspecified',
+      durationMs: Math.round(performance.now() - started) };
+    try {
+      audit.record(owner, { requestId, kind: 'http', ...common });
+      // A completed tools/call response without entering a registered handler
+      // is an unhandled request, even when the SDK returns HTTP 200. This
+      // does not infer a tool outcome. Notifications, batches and aborted
+      // requests are outside this bounded observation.
+      if (!aborted && req.body && !Array.isArray(req.body) && req.body.method === 'tools/call' &&
+          (typeof req.body.id === 'string' || (typeof req.body.id === 'number' && Number.isFinite(req.body.id))) && dispatch.started === 0) {
+        audit.record(owner, { requestId: randomUUID(), httpRequestId: requestId,
+          kind: 'protocol', ...common });
+      }
+    } catch (error) { console.error(JSON.stringify(diagnosticRecord('mcp_http_audit_failed', error, context))); }
+  };
+  res.once('finish', () => record(false));
+  res.once('close', () => record(!res.writableFinished));
 }

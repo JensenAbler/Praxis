@@ -9,7 +9,7 @@ import { requireBearerAuth, hostHeaderValidation, originValidation } from '@mode
 import { createAuth } from './auth.js';
 import { JobStore } from './jobs.js';
 import { AuditStore } from './audit.js';
-import { createProbeServer, VERSION } from './mcp.js';
+import { createProbeServer, observeMcpHttp, VERSION } from './mcp.js';
 import { createGatewayClient, createReleaseClient } from './gateway-client.js';
 import { watchToolManifest } from './tool-manifest.js';
 import { diagnosticRecord, requestContext } from './diagnostics.js';
@@ -55,7 +55,7 @@ export async function createApp(config) {
   const handler = createMcpHandler(ctx => {
     const applicationTools = applicationManifest() || {};
     // A broken application manifest must not remove the independent recovery tools.
-    return createProbeServer({ jobs, audit, resourceUrl, bootId, release, authInfo: ctx.authInfo, era: ctx.era, coding, applicationTools, releaseClient, git });
+    return createProbeServer({ endpoint: 'canonical', jobs, audit, resourceUrl, bootId, release, authInfo: ctx.authInfo, era: ctx.era, coding, applicationTools, releaseClient, git });
   }, {
     legacy: 'stateless', onerror: error => console.error(JSON.stringify(diagnosticRecord('mcp_protocol_error', error)))
   });
@@ -68,21 +68,7 @@ export async function createApp(config) {
   app.use(`${prefix}/mcp`, requireBearerAuth({ verifier: { verifyAccessToken: auth.verifyAccessToken }, requiredScopes: coding ? [] : ['praxis:probe'], resourceMetadataUrl: resourceMetadata }));
   app.use(`${prefix}/mcp`, express.json({ limit: coding ? '512kb' : '64kb' }));
   app.all(`${prefix}/mcp`, async (req, res, next) => {
-    const context = requestContext.getStore();
-    const requestId = context.requestId;
-    const started = performance.now();
-    let logged = false;
-    const record = (aborted) => {
-      if (logged) return;
-      logged = true;
-      try {
-        const protocol = req.get('mcp-protocol-version');
-        audit.record(req.auth.extra.subject, { requestId, kind: 'http', method: req.method, status: res.statusCode, aborted,
-          protocol: /^\d{4}-\d{2}-\d{2}$/.test(protocol || '') ? protocol : 'unspecified', durationMs: Math.round(performance.now() - started) });
-      } catch (error) { console.error(JSON.stringify(diagnosticRecord('mcp_http_audit_failed', error, context))); }
-    };
-    res.once('finish', () => record(false));
-    res.once('close', () => record(!res.writableFinished));
+    observeMcpHttp(req, res, audit, req.auth.extra.subject);
     try { await toNodeHandler(handler)(req, res, req.body); } catch (error) { next(error); }
   });
   app.use((_req, res) => res.status(404).json({ error: 'not_found' }));
