@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Owner-authorized incremental Alpha backup. Never prunes remote snapshots."""
-import os,sys,json,subprocess,pathlib,datetime,sqlite3,hashlib,stat,re,fcntl,shutil,time
+import os,sys,json,subprocess,pathlib,datetime,sqlite3,hashlib,stat,re,fcntl,shutil,time,tempfile
 BASE=pathlib.Path('/var/lib/alpha-backup')
 STAGE=BASE/'stage'
 REMOTE='alpha-backup:Alpha-VPS-Backup'
@@ -65,6 +65,44 @@ def repo_exclusions(repos):
    entry['status']='retained: '+type(e).__name__
   manifest.append(entry)
  return manifest,excluded
+def sqlite_snapshot(p,temp):
+ def export(source):
+  out=sqlite3.connect(temp);start=time.monotonic()
+  def progress(*unused):
+   if time.monotonic()-start>10:raise TimeoutError('SQLite online backup busy')
+  try:
+   source.backup(out,pages=1024,progress=progress,sleep=0.05)
+   if out.execute('PRAGMA quick_check').fetchone()[0]!='ok':raise RuntimeError('SQLite integrity check failed: '+p)
+  finally:out.close()
+ source=sqlite3.connect(pathlib.Path(p).as_uri()+'?mode=ro',uri=True,timeout=5)
+ try:
+  export(source);return
+ except (TimeoutError,sqlite3.OperationalError):
+  if temp.exists():temp.unlink()
+ finally:source.close()
+ # Chromium can hold an exclusive lock. Copy its complete, unchanged DB/journal
+ # set, verify source stability and copied hashes, then let SQLite recover locally.
+ for attempt in range(5):
+  with tempfile.TemporaryDirectory(prefix='alpha-db-') as directory:
+   def signatures():
+    result={}
+    for suffix in ('','-wal','-shm','-journal'):
+     f=pathlib.Path(p+suffix)
+     if f.exists():
+      st=f.stat();result[suffix]=(st.st_size,st.st_mtime_ns,hashlib.sha256(f.read_bytes()).hexdigest())
+    return result
+   before=signatures()
+   try:
+    for suffix in before:shutil.copy2(p+suffix,pathlib.Path(directory,'database'+suffix))
+    after=signatures()
+    copied={suffix:hashlib.sha256(pathlib.Path(directory,'database'+suffix).read_bytes()).hexdigest() for suffix in before}
+   except FileNotFoundError:continue
+   if before!=after or any(copied[k]!=v[2] for k,v in before.items()):continue
+   source=sqlite3.connect(pathlib.Path(directory,'database'))
+   try:export(source);return
+   finally:source.close()
+ raise RuntimeError('Could not capture stable SQLite database: '+p)
+
 def databases(dbs):
  dest=STAGE/'databases';dest.mkdir(parents=True,exist_ok=True)
  records=[];excluded=[]
@@ -72,15 +110,7 @@ def databases(dbs):
   target=dest/'sqlite'/p.lstrip('/');target.parent.mkdir(parents=True,exist_ok=True)
   temp=target.with_name(target.name+'.new')
   if temp.exists():temp.unlink()
-  start=time.monotonic()
-  def progress(*unused):
-   if time.monotonic()-start>180:raise TimeoutError('SQLite backup timed out')
-  source=sqlite3.connect(pathlib.Path(p).as_uri()+'?mode=ro',uri=True,timeout=30)
-  out=sqlite3.connect(temp)
-  try:
-   source.backup(out,pages=1024,progress=progress,sleep=0.1)
-   if out.execute('PRAGMA quick_check').fetchone()[0]!='ok':raise RuntimeError('SQLite integrity check failed')
-  finally:out.close();source.close()
+  sqlite_snapshot(p,temp)
   temp.chmod(0o600);temp.replace(target)
   st=os.stat(p);records.append({'source':p,'backup':str(target),'uid':st.st_uid,'gid':st.st_gid,'mode':stat.S_IMODE(st.st_mode)})
   excluded.extend([p,p+'-wal',p+'-shm',p+'-journal'])
