@@ -42,7 +42,7 @@ export function createHandler({dir, origin, key, expectedEmail, activityMode=fal
       }
       if(u.pathname===BASE+'/setup' && req.method==='POST') {
         if(!s) return page(res,403,'Setup session expired or cookies are unavailable. Reopen the private setup link in Safari and try again.');
-        if(req.headers.origin!==origin) return page(res,403,'Browser origin was missing or incorrect. Reopen the private setup link, reload the form, and try again.');
+        if((req.headers.origin && req.headers.origin!=='null' && req.headers.origin!==origin) || req.headers['sec-fetch-site']==='cross-site') return page(res,403,'Browser origin was missing or incorrect. Reopen the private setup link, reload the form, and try again.');
         if(!(req.headers['content-type']||'').startsWith('application/x-www-form-urlencoded')) return page(res,415,'Unsupported form format. Reload the setup form.');
         let body=''; for await(const chunk of req){body+=chunk;if(body.length>20000)return page(res,413,'Upload too large.');}
         const form=new URLSearchParams(body);

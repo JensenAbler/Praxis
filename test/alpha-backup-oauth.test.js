@@ -14,6 +14,16 @@ test('backup auth requires private link, session, correct account and exact scop
  const page=await(await fetch(base+'/drive-audit/setup',{headers:{cookie}})).text();assert.match(page,/Connect Alpha backups/);
  const csrf=/name="csrf" value="([^"]+)"/.exec(page)[1];
  async function begin(){const r=await fetch(base+'/drive-audit/setup',{method:'POST',redirect:'manual',headers:{cookie,origin:'http://localhost','content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams({csrf})});assert.equal(r.status,303);const u=new URL(r.headers.get('location'));assert.equal(u.searchParams.get('scope'),SCOPE);assert.equal(u.searchParams.get('code_challenge_method'),'S256');return u.searchParams.get('state');}
+ // Privacy-preserving browsers may omit Origin or send null. Session-bound CSRF remains mandatory.
+ for(const origin of [undefined,'null','http://localhost','https://foreign.example']){
+  for(const token of [csrf,'wrong']){
+   const headers={cookie,'content-type':'application/x-www-form-urlencoded'};
+   if(origin!==undefined)headers.origin=origin;
+   const r=await fetch(base+'/drive-audit/setup',{method:'POST',redirect:'manual',headers,body:new URLSearchParams({csrf:token})});
+   assert.equal(r.status,token===csrf && origin!=='https://foreign.example'?303:403);
+  }
+ }
+ assert.equal((await fetch(base+'/drive-audit/setup',{method:'POST',redirect:'manual',headers:{cookie,origin:'null','sec-fetch-site':'cross-site','content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams({csrf})})).status,403);
  let state=await begin();
  assert.equal((await fetch(base+'/drive-audit/callback?code=x&state=invalid',{headers:{cookie}})).status,400);
  assert.equal((await fetch(base+'/drive-audit/callback?code=x&state='+state,{headers:{cookie}})).status,403);
