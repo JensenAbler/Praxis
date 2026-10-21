@@ -40,7 +40,7 @@ OWNER_CLIENT = 'scripts/autonomy-live-qualification.js'
 # broker must name the target project on every deployment helper call.
 RUNTIME = ('src/git/server.js', 'src/git/broker.js', 'src/git/projects.js',
            'src/mcp.js', 'src/server.js', 'src/claude-facade/server.js',
-           'src/tool-manifest.js', 'src/gateway-client.js', 'src/arguments.js',
+           'src/tool-manifest.js', 'src/gateway-client.js', 'src/arguments.js', 'src/transport.js',
            # One-time migration from the old gateway graph.
            'src/code/schema.js', 'src/code/git-client.js',
            'deploy/praxis_updater_host.py', 'deploy/control_closure.py')

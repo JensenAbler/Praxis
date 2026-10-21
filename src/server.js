@@ -1,4 +1,5 @@
 import express from 'express';
+import { resourceJson } from './transport.js';
 import { readFileSync, mkdirSync, realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -66,7 +67,7 @@ export async function createApp(config) {
   });
   app.use(`${prefix}/mcp`, originValidation([base.hostname, 'chatgpt.com', 'chat.openai.com', 'claude.ai', ...(config.allowLoopback ? ['localhost', '127.0.0.1'] : [])]));
   app.use(`${prefix}/mcp`, requireBearerAuth({ verifier: { verifyAccessToken: auth.verifyAccessToken }, requiredScopes: coding ? [] : ['praxis:probe'], resourceMetadataUrl: resourceMetadata }));
-  app.use(`${prefix}/mcp`, express.json({ limit: coding ? '512kb' : '64kb' }));
+  app.use(`${prefix}/mcp`, coding ? resourceJson : express.json({ limit: '64kb' }));
   app.all(`${prefix}/mcp`, async (req, res, next) => {
     observeMcpHttp(req, res, audit, req.auth.extra.subject);
     try { await toNodeHandler(handler)(req, res, req.body); } catch (error) { next(error); }

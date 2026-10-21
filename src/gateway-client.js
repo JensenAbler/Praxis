@@ -1,3 +1,4 @@
+import { annotateTransport } from './transport.js';
 import { correlationId, requestContext, errorRecovery } from './diagnostics.js';
 
 export function createGatewayClient({ url }) {
@@ -27,7 +28,7 @@ export function createGatewayClient({ url }) {
         });
       }
       if (!body.data || typeof body.data !== 'object' || Array.isArray(body.data)) throw unavailable('Coding service returned an incomplete result. Recover existing work before retrying.');
-      return body.data;
+      return action === 'capabilities' || (action === 'host_file_write' && body.data.transferId) ? annotateTransport(body.data) : body.data;
     }
   };
 }

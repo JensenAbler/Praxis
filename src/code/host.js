@@ -4,6 +4,7 @@ import { resolve, isAbsolute, dirname, join } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import { WorkspaceError } from './paths.js';
+import { HostUploads, isCanonicalBase64 } from './host-uploads.js';
 
 const CHUNK = 65536;
 const observed = () => ({ observedAt: new Date().toISOString(), consistency: 'live-unverified', snapshot: false,
@@ -47,28 +48,29 @@ async function readAt(handle, offset, length) {
   }
   return data.subarray(0, bytesRead);
 }
-async function hashHandle(handle) {
+async function hashHandle(handle, { signal } = {}) {
   const digest = createHash('sha256');
   let bytes = 0;
   while (true) {
+    signal?.throwIfAborted();
     const part = await readAt(handle, bytes, CHUNK);
     if (!part.length) break;
     digest.update(part); bytes += part.length;
   }
   return { sha256: digest.digest('hex'), hashedBytes: bytes };
 }
-async function hashFile(path) {
+async function hashFile(path, options) {
   const handle = await open(path, 'r');
   try {
-    return await hashHandle(handle);
+    return await hashHandle(handle, options);
   } finally { await handle.close(); }
 }
-async function precondition(path, expectedSha256) {
+async function precondition(path, expectedSha256, options) {
   const value = await maybeStat(path);
   if (expectedSha256 === null) check(!value, 'The target already exists.', 'HASH_CONFLICT');
   else if (expectedSha256 !== undefined) {
     check(value?.isFile(), 'The expected file does not exist or is not regular.', 'HASH_CONFLICT');
-    check((await hashFile(path)).sha256 === expectedSha256, 'File content no longer matches expectedSha256.', 'HASH_CONFLICT');
+    check((await hashFile(path, options)).sha256 === expectedSha256, 'File content no longer matches expectedSha256.', 'HASH_CONFLICT');
   }
   return value;
 }
@@ -111,8 +113,12 @@ export class HostAccess {
         name TEXT NOT NULL, path TEXT NOT NULL, data_roots_json TEXT NOT NULL,
         created_at TEXT NOT NULL, updated_at TEXT NOT NULL, UNIQUE(owner,name));`);
     this.locks = new Map();
+    this.uploads = new HostUploads(this, dataDirectory, { check, targetPath, precondition, fingerprint, maybeStat, readAt, hashFile, hashHandle, observed });
   }
-  close() { this.db.close(); }
+  close() {
+    if (this.uploads.pending.size) return this.uploads.close().then(() => this.db.close());
+    this.db.close();
+  }
   _public(row) { return { hostProjectId: row.id, name: row.name, path: row.path, dataRoots: JSON.parse(row.data_roots_json), createdAt: row.created_at, updatedAt: row.updated_at }; }
   getProject(owner, hostProjectId) {
     const row = this.db.prepare('SELECT * FROM host_projects WHERE id=? AND owner=?').get(hostProjectId, owner);
@@ -246,11 +252,14 @@ export class HostAccess {
     } finally { await handle?.close(); await unlink(temporary).catch(error => { if (error.code !== 'ENOENT') throw error; }); }
   }
   fileWrite(args) {
+    if (args.transferAction) return safe(() => this.uploads.run(args));
     return safe(async () => {
+      check(typeof args.content === 'string', 'content is required for a non-transfer write.');
+      check(args.transferId === undefined && args.chunkSha256 === undefined && args.totalBytes === undefined && args.sha256 === undefined, 'Transfer fields require transferAction.');
       const requestedPath = this.resolvePath(args), path = await targetPath(requestedPath);
       const { mode = 'replace', encoding = 'utf8', expectedSha256, offset, permissions } = args;
       check(mode !== 'replace' || offset === undefined, 'offset applies only to append mode.');
-      if (encoding === 'base64') check(/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(args.content), 'content must be canonical base64.');
+      if (encoding === 'base64') check(isCanonicalBase64(args.content), 'content must be canonical base64.');
       const bytes = Buffer.from(args.content, encoding === 'base64' ? 'base64' : 'utf8');
       return this._locked(path, async () => {
         if (args.createParents) await mkdir(dirname(path), { recursive: true });

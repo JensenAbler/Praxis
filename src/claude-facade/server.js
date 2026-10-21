@@ -10,7 +10,9 @@ import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import { createMcpExpressApp } from '@modelcontextprotocol/sdk/server/express.js';
+import express from 'express';
+import { hostHeaderValidation } from '@modelcontextprotocol/sdk/server/middleware/hostHeaderValidation.js';
+import { resourceJson } from '../transport.js';
 import { getOAuthProtectedResourceMetadataUrl, mcpAuthRouter } from '@modelcontextprotocol/sdk/server/auth/router.js';
 import { PraxisSdkOAuthProvider, OAUTH_SCOPES, createApprovalRouter } from './oauth-provider.js';
 import { JobStore } from '../jobs.js';
@@ -36,7 +38,11 @@ const credentials=env.CREDENTIALS_DIRECTORY;
 if(!credentials && !suppliedProvider) throw new Error('CREDENTIALS_DIRECTORY is required (systemd LoadCredential).');
 const read=name=>readFileSync(join(credentials,name),'utf8').trim();
 const provider=suppliedProvider || new PraxisSdkOAuthProvider({directory:dataDirectory,passwordHash:read('password-hash'),jwks:JSON.parse(read('jwks.json')),resourceUrl});
-const app=createMcpExpressApp({host,allowedHosts:['127.0.0.1','localhost',publicHostname]});
+const app=express();
+app.use(hostHeaderValidation(['127.0.0.1','localhost',publicHostname]));
+// Keep OAuth's default small JSON parser; authenticated MCP gets resource admission.
+const oauthJson=express.json();
+app.use((req,res,next)=>/^\/mcp\/?$/.test(req.path)?next():oauthJson(req,res,next));
 const metadataUrl=getOAuthProtectedResourceMetadataUrl(resourceUrl);
 const jobs=suppliedJobs || new JobStore(dataDirectory), audit=suppliedAudit || new AuditStore(dataDirectory);
 const coding=suppliedCoding || createGatewayClient({url:codingUrl});
@@ -68,6 +74,7 @@ app.use('/mcp',(_req,res,next)=>{
   requestContext.run({requestId,httpRequestId:requestId},next);
 });
 app.use('/mcp',requireBearer);
+app.use('/mcp',resourceJson);
 app.use('/mcp',(req,res,next)=>{observeMcpHttp(req,res,audit,'jensen');next()});
 app.post('/mcp',async(req,res)=>{
   const transport=new StreamableHTTPServerTransport({sessionIdGenerator:undefined,enableJsonResponse:true});
@@ -81,6 +88,14 @@ app.post('/mcp',async(req,res)=>{
 app.get('/mcp',(_req,res)=>res.status(405).set('Allow','POST').send('Method Not Allowed'));
 app.delete('/mcp',(_req,res)=>res.status(405).set('Allow','POST').send('Method Not Allowed'));
 
+// Keep malformed private MCP payloads out of Express's default HTML/error logs.
+app.use('/mcp',(error,_req,res,_next)=>{
+  if(res.headersSent) return res.end();
+  res.status(error.status >= 400 && error.status <= 599 ? error.status : 500).json({
+    error:error.type === 'entity.parse.failed' ? 'invalid_json' : 'invalid_request',
+    requestId:requestContext.getStore()?.requestId
+  });
+});
 return { app, jobs, audit, provider, close: () => { jobs.close(); audit.close(); } };
 }
 

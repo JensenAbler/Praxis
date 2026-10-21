@@ -1,5 +1,6 @@
 import { patronusCall } from '../patronus/client.js';
 import express from 'express';
+import { resourceJson, transportPolicy } from '../transport.js';
 import { SOURCE_WORKFLOW, SOURCE_WORKFLOW_STEPS } from '../workflow-policy.js';
 import { mkdirSync, readFileSync, realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -52,7 +53,7 @@ export async function createCodingService(config) {
       return next();
     }
     catch { return res.status(401).json({ ok: false, requestId: requestContext.getStore().requestId, error: { code: 'AUTHORIZATION_REQUIRED', message: 'An owner access token with praxis:code permission is required.', ...errorRecovery('AUTHORIZATION_REQUIRED') } }); }
-  }, express.json({ limit: '512kb' }), async (req, res) => {
+  }, resourceJson, async (req, res) => {
     try {
       if (!req.body || Object.keys(req.body).some(key => !['action', 'args'].includes(key))) throw Object.assign(new Error('Expected action and args'), { code: 'INVALID_ARGUMENT' });
       const { tool, args } = parseCodeCall(req.body.action, req.body.args);
@@ -100,7 +101,7 @@ export async function createCodingService(config) {
           workflow: ['project_sync(praxis)', 'edit/check/review', 'git_commit/git_push', 'project_sync(praxis)', 'praxis_release_plan', 'praxis_release_status', 'praxis_release_apply'],
           boundary: 'Only the coding application and data-only tool manifest change. Installed gateway, authentication, Git/deployment adapters, updater and privileged policies require the independent owner path.',
           recovery: 'Protected release tools remain reachable when the coding backend fails. Exact-input retry of a restoration_failed activation explicitly resumes its recorded restoration. No database restore or blind job restart.' },
-        limits: { jobs: CODE_JOB_LIMITS, workspaces: WORKSPACE_LIMITS, requestBytes: 524288, fileReadLines: 200,
+        limits: { jobs: CODE_JOB_LIMITS, workspaces: WORKSPACE_LIMITS, requestBytes: transportPolicy().requestBytes, transport: transportPolicy(), fileReadLines: 200,
           argumentCharacters: 8192, commandArgumentBytes: 32768, environmentValueCharacters: 1000,
           environmentKeys: ['CI', 'NODE_ENV', 'TZ', 'LANG', 'LC_ALL', 'FORCE_COLOR', 'NO_COLOR', 'PYTHONHASHSEED', 'PYTHONDONTWRITEBYTECODE'] },
         disabled: [
@@ -125,7 +126,7 @@ export async function createCodingService(config) {
             persistentHome: runner.homeDirectory },
           selfImprovement: { enabled: true, boundary: 'Praxis source changes follow the same managed workspace, review, commit and push workflow. Activate only the published revision through the release procedure; native root access supports diagnosis and authorized operations.',
             recovery: 'Preserve a working release and durable job records when changing the service. The existing release tools remain a convenient staged activation path; they are not an authority boundary.' },
-          limits: { requestBytes: 524288, resultPages: 'Bounded pages keep tool responses usable; they do not limit file size, total raw logs or host access.',
+          limits: { requestBytes: transportPolicy().requestBytes, transport: transportPolicy(), resultPages: 'Bounded pages keep tool responses usable; they do not limit file size, total raw logs or host access.',
             indexedJobExcerpts: { headBytes: CODE_JOB_LIMITS.logBytes, tailBytes: CODE_JOB_LIMITS.tailBytes },
             compatibilityWorkspaces: 'Immutable workspace/export tools retain their source-snapshot semantics. Direct host tools and commands are unrestricted and support live files of any size.' },
           disabled: [],
@@ -161,7 +162,7 @@ export async function createCodingService(config) {
     pending = Promise.resolve().then(() => jobs.tick()).catch(error => console.error(JSON.stringify(diagnosticRecord('coding_tick_failed', error)))).finally(() => { pending = undefined; });
   }, config.pollIntervalMs || 500);
   timer?.unref();
-  return { app, jobs, workspaces, git, host, store, async close() { stopped = true; clearInterval(timer); await pending; host.close(); store.close(); } };
+  return { app, jobs, workspaces, git, host, store, async close() { stopped = true; clearInterval(timer); await pending; await host.close(); store.close(); } };
 }
 
 /**
