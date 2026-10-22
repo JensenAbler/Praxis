@@ -25,9 +25,12 @@ Different database exports are individually consistent, not one cross-service tr
 
 ## Exclusions and reconstruction
 stage/scope.json records exclusions. Pseudo-filesystems, temporary directories, package cache, swap, and backup working files are excluded.
-Other mounted filesystems are not followed except boot and boot/efi. stage/mounts.txt records them.
+Other mounted filesystems are not followed except boot and boot/efi. stage/mounts.txt records them. In particular, /srv/praxis-code/storage and /srv/praxis-stage are not traversed; their backing images may exist under /var/lib, but a live image copy is not a verified consistent filesystem. Inspect warnings and test disposable copies offline before any read-only, no-journal-replay mount. Never repair or auto-mount the only recovered copy. See BOOTSTRAP.md for the legacy-volume caveat and current native-root paths.
 stage/repositories.json records GitHub URLs and commits. Only tracked file bytes verified against a commit advertised by GitHub are omitted. Recreate those files from that commit. Local modified, untracked, ignored files and Git metadata remain in the archive.
 stage/png-exclusion.json records 365 already-uploaded PNGs and their existing Drive folder, filenames, sizes and local SHA-256. The Drive listing was verified by filename and size; remote content hashes were not exposed by the connector. Download those PNGs separately and verify the SHA-256 during restore.
+
+## Service inventory and rehearsal
+The initial stage/bootstrap-services.json may predate the chosen backup. Reconcile it with that snapshot's actual unit files, drop-ins and stage/services.txt; do not enable disabled services or assume changes made after the backup are present. Follow BOOTSTRAP.md for the service-specific checks and a separately approved, isolated fresh-host rehearsal. Extraction alone does not prove that Praxis authentication or applications have been recovered.
 
 ## Verification and retention
 Each archive part is compared with the MD5 returned by Drive after upload, and has a SHA-256 recorded in COMPLETE.json.
