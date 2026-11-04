@@ -8,6 +8,21 @@ ENV={**os.environ,'RCLONE_CONFIG':str(BASE/'rclone.conf'),'GIT_TERMINAL_PROMPT':
 ROOTS=['/etc','/root','/home','/opt','/srv','/var/lib','/usr/local']
 PRUNE={'.git','node_modules','.cache','.npm','.rustup','__pycache__','site-packages'}
 EXCLUDED=['/proc','/sys','/dev','/run','/tmp','/var/tmp','/snap','/var/cache',str(BASE/'cache'),str(BASE/'spool'),str(BASE/'state'),str(BASE/'restore-test'),str(BASE/'run.log'),'/swap.img','/swapfile']
+# Only generated, six-character scratch directories; never persistent Codex data.
+# Apocrypha removes summary directories in its compactor's finally block.
+EPHEMERAL_EXCLUSIONS=[
+ './var/lib/apocrypha/codex/summary-??????',
+ './var/lib/apocrypha/codex/tmp/arg0-linux/codex-arg0??????',
+]
+def tar_command(pending,exclusion_file):
+ cmd=['tar','--create','--format=pax','--listed-incremental='+str(pending),'--xattrs','--acls','--numeric-owner','--one-file-system','--no-wildcards','-C','/']
+ # Verified repository/PNG exclusions remain literal, including glob characters.
+ cmd+=['--exclude-from='+str(exclusion_file)]
+ # Separate, anchored patterns cover scratch directories created during the scan.
+ cmd+=['--wildcards','--anchored','--no-wildcards-match-slash']
+ cmd+=['--exclude='+p for p in EPHEMERAL_EXCLUSIONS]
+ cmd+=['--no-wildcards','--file=-','.','./boot','./boot/efi']
+ return cmd
 def run(args,timeout=None):
  return subprocess.check_output(args,env=ENV,stderr=subprocess.DEVNULL,timeout=timeout)
 def write(path,obj):
@@ -146,7 +161,7 @@ def main():
  (STAGE/'restore-sample.txt').write_text('Alpha backup restore verification\n')
  excludes=EXCLUDED+excluded
  (BASE/'excludes.txt').write_text('\n'.join(pattern(p) for p in excludes)+'\n')
- write(STAGE/'scope.json',{'roots':['/','/boot','/boot/efi'],'one_file_system':True,'excluded_paths':excludes,'notes':['SQLite copies and PostgreSQL exports are in stage/databases; restore them using databases.json.','Running files are captured individually, not as one atomic machine image.','Git metadata is retained conservatively for local refs and reflogs.','Other mounted filesystems are not followed; see mounts.txt.','No automatic pruning.']})
+ write(STAGE/'scope.json',{'roots':['/','/boot','/boot/efi'],'one_file_system':True,'excluded_paths':excludes,'ephemeral_exclusion_patterns':EPHEMERAL_EXCLUSIONS,'notes':['SQLite copies and PostgreSQL exports are in stage/databases; restore them using databases.json.','Running files are captured individually, not as one atomic machine image.','Git metadata is retained conservatively for local refs and reflogs.','Other mounted filesystems are not followed; see mounts.txt.','No automatic pruning.']})
 
  write(BASE/'status.json',{'status':'uploading','started':started})
  spool=BASE/'spool';spool.mkdir(exist_ok=True)
@@ -157,11 +172,8 @@ def main():
  if not full:shutil.copy2(previous,pending)
  name=datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%SZ')
  destination=REMOTE+'/snapshots/'+name
- # Literal exclusions; shell/glob expansion is never used.
- cmd=['tar','--create','--format=pax','--listed-incremental='+str(pending),'--xattrs','--acls','--numeric-owner','--one-file-system','--no-wildcards','-C','/']
  (BASE/'tar-excludes.txt').write_text('\n'.join('.'+p for p in excludes)+'\n')
- cmd+=['--exclude-from='+str(BASE/'tar-excludes.txt')]
- cmd+=['--file=-','.','./boot','./boot/efi']
+ cmd=tar_command(pending,BASE/'tar-excludes.txt')
  manifest={'format':'GNU tar incremental, zstd compression, split byte stream; no encryption','snapshot':name,'kind':'full' if full else 'incremental','parent':None if full else json.loads((state/'last.json').read_text())['snapshot'],'started':started,'parts':[]}
  warnings=spool/'tar-warnings.txt'
  with warnings.open('wb') as err:

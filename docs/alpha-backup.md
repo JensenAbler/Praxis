@@ -19,3 +19,19 @@ then configure the scheduled uploader. Authorization alone never starts uploads.
 - Record failure and last successful backup independently from process status.
 - Do not call setup complete before account capacity and restore are verified.
 - Check the Google OAuth app publishing status to avoid Testing-mode expiry.
+
+## Ephemeral archive inputs
+The archive excludes only the generated six-character scratch directories
+./var/lib/apocrypha/codex/summary-?????? and
+./var/lib/apocrypha/codex/tmp/arg0-linux/codex-arg0??????.
+These anchored, fixed-depth patterns prevent live compactor/CLI cleanup from
+aborting the archive. They are recorded separately in stage/scope.json.
+Persistent Codex state, sessions, authentication, shell snapshots, databases,
+and similarly named paths remain in scope. Repository and PNG exclusions
+continue to use literal matching, not wildcard matching.
+
+Never add --ignore-failed-read or accept tar exit 2: missing non-temporary inputs,
+permission errors, and other archive failures must still prevent publication of
+COMPLETE.json and advancement of the incremental checkpoint. Existing tar exit 1
+warnings remain recorded. Run npm test and python3 test/alpha_restore_test.py
+before publishing a change to the backup script.
