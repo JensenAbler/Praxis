@@ -31,4 +31,8 @@ test('a pageBytes read returns more than the legacy 256 KiB in one page', async 
   const page = await host.fileRead({ path: file, pageBytes: 1024 * 1024, encoding: 'base64' });
   assert.equal(page.bytesRead, Math.min(1024 * 1024, readPageLimit('base64')));
   assert.equal(page.effectiveMaxBytes, Math.min(1024 * 1024, readPageLimit('base64')));
+  assert(hostTools.host_file_read.schema.safeParse({ path: file, pageSize: '1048576' }).success);
+  assert(!hostTools.host_file_read.schema.safeParse({ path: file, pageSize: '12abc' }).success);
+  const viaString = await host.fileRead({ path: file, pageSize: '1048576', encoding: 'base64' });
+  assert.equal(viaString.bytesRead, page.bytesRead);
 });
