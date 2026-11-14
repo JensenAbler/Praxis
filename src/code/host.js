@@ -212,7 +212,8 @@ export class HostAccess {
   }
   fileRead(args) {
     return safe(async () => {
-      const path = this.resolvePath(args), { cursor = 0, maxBytes: requestedBytes = 16384, encoding = 'utf8', includeSha256 = false, expectedSha256 } = args;
+      const path = this.resolvePath(args), { cursor = 0, maxBytes: legacyBytes = 16384, pageBytes, encoding = 'utf8', includeSha256 = false, expectedSha256 } = args;
+      const requestedBytes = pageBytes ?? legacyBytes;
       const pageLimit = readPageLimit(encoding), maxBytes = Math.min(requestedBytes, pageLimit);
       const handle = await open(path, 'r');
       try {

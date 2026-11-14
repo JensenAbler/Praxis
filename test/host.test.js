@@ -156,7 +156,8 @@ test('all descriptors use the host dispatch contract and bound output rather tha
   assert(hostTools.host_file_write.schema.safeParse({ path: '/tmp/new.env', content: 'a'.repeat(200000) }).success);
   assert(hostTools.host_file_read.schema.safeParse({ path: '/var/log/service.log', cursor: 10 ** 12 }).success);
   assert.equal(hostTools.host_file_read.schema.parse({ path: '/var/log/service.log' }).maxBytes, 16384);
-  // No fixed page ceiling: the runtime clamps each page to the memory budget instead.
-  assert(hostTools.host_file_read.schema.safeParse({ path: '/tmp/file', maxBytes: 1000000 }).success);
-  assert(!hostTools.host_file_read.schema.safeParse({ path: '/tmp/file', maxBytes: 3 }).success);
+  assert(!hostTools.host_file_read.schema.safeParse({ path: '/tmp/file', maxBytes: 1000000 }).success);
+  // pageBytes has no fixed ceiling: the runtime clamps each page to the memory budget instead.
+  assert(hostTools.host_file_read.schema.safeParse({ path: '/tmp/file', pageBytes: 1000000 }).success);
+  assert(!hostTools.host_file_read.schema.safeParse({ path: '/tmp/file', pageBytes: 3 }).success);
 });

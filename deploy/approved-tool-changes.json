@@ -15,23 +15,6 @@
         "pattern": "^(?!\\.{1,2}$)(?!.*\\.[gG][iI][tT]$)[A-Za-z0-9._-]{1,100}$",
         "description": "Existing GitHub repository name in the configured account, exactly as shown on GitHub: letters, digits, dots, hyphens or underscores, up to 100 characters. Its project ID is the lowercase hyphenated form, e.g. JensenAbler.github.io becomes jensenabler-github-io."
       }
-    },
-    {
-      "tool": "host_file_read",
-      "argument": "maxBytes",
-      "reason": "Owner-approved 2026-11-14: no self-imposed page ceiling below the real bottlenecks. Pages are clamped at runtime to the server's current memory budget (effectiveMaxBytes); the client's own response limit is the other bound. Widening only; the default stays 16384.",
-      "before": {
-        "default": 16384,
-        "type": "integer",
-        "minimum": 4,
-        "maximum": 262144
-      },
-      "after": {
-        "default": 16384,
-        "type": "integer",
-        "minimum": 4,
-        "maximum": 9007199254740991
-      }
     }
   ]
 }
