@@ -4,7 +4,8 @@ import {fileURLToPath} from 'node:url';
 import test from 'node:test';
 
 test('Alpha backup preserves unique data and fails on real archive errors',()=>{
- const result=spawnSync('python3',[fileURLToPath(new URL('./alpha_backup_archive_test.py',import.meta.url))],{encoding:'utf8',timeout:120000});
+ // No __pycache__ in scripts/: the release updater rejects a build that changes the source tree.
+ const result=spawnSync('python3',[fileURLToPath(new URL('./alpha_backup_archive_test.py',import.meta.url))],{encoding:'utf8',timeout:120000,env:{...process.env,PYTHONDONTWRITEBYTECODE:'1'}});
  assert.ifError(result.error);
  assert.equal(result.status,0,result.stdout+'\n'+result.stderr);
  assert.match(result.stderr,/Ran 6 tests/);
