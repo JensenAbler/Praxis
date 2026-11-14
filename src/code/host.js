@@ -3,10 +3,22 @@ import { open, stat, lstat, realpath, readlink, readdir, mkdir, rename, unlink }
 import { resolve, isAbsolute, dirname, join } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
+import { getHeapStatistics } from 'node:v8';
 import { WorkspaceError } from './paths.js';
 import { HostUploads, isCanonicalBase64 } from './host-uploads.js';
 
 const CHUNK = 65536;
+// host_file_read pages have no fixed ceiling. Each page is clamped to what this
+// process can serialize right now: half of available memory (the same headroom
+// as transport admission), divided by the ~9x retained-copy cost measured for
+// wire strings (see src/transport.js). base64 adds 4/3; JSON escaping of UTF-8
+// text can reach 6x. The client/upstream limit is outside our control and is
+// the only other bound.
+const READ_AMPLIFICATION = 9, READ_HEADROOM = 0.5;
+export function readPageLimit(encoding, available = Math.min(process.availableMemory(), getHeapStatistics().total_available_size)) {
+  const wire = Math.floor(Math.max(0, available) * READ_HEADROOM / READ_AMPLIFICATION);
+  return Math.max(4, encoding === 'base64' ? Math.floor(wire * 3 / 4) : Math.floor(wire / 6));
+}
 const observed = () => ({ observedAt: new Date().toISOString(), consistency: 'live-unverified', snapshot: false,
   consistencyNote: 'Host files can change during this operation and between pages. No workspace revision or external-process lock is implied.' });
 export class HostAccessError extends WorkspaceError {}
@@ -200,7 +212,8 @@ export class HostAccess {
   }
   fileRead(args) {
     return safe(async () => {
-      const path = this.resolvePath(args), { cursor = 0, maxBytes = 16384, encoding = 'utf8', includeSha256 = false, expectedSha256 } = args;
+      const path = this.resolvePath(args), { cursor = 0, maxBytes: requestedBytes = 16384, encoding = 'utf8', includeSha256 = false, expectedSha256 } = args;
+      const pageLimit = readPageLimit(encoding), maxBytes = Math.min(requestedBytes, pageLimit);
       const handle = await open(path, 'r');
       try {
         const before = await handle.stat();
@@ -220,7 +233,8 @@ export class HostAccess {
           }
         }
         const after = await handle.stat();
-        return { path, ...details(after), cursor, bytesRead: bytes.length, encoding,
+        return { path, ...details(after), cursor, bytesRead: bytes.length, encoding, effectiveMaxBytes: maxBytes,
+          ...(maxBytes < requestedBytes ? { limitedBy: 'memory', note: 'Page clamped to the current memory budget; continue from nextCursor.' } : {}),
           content: bytes.toString(encoding === 'base64' ? 'base64' : 'utf8'), hasMore,
           nextCursor: hasMore ? cursor + bytes.length : null, ...fullHash,
           changedDuringRead: fingerprint(before) !== fingerprint(after),
