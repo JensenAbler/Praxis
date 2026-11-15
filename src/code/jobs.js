@@ -565,7 +565,10 @@ export class CodeJobs {
         const refreshed = await this.workspaces.refreshAfterJob({ owner: job.owner, workspaceId: job.workspace_id });
         revision = refreshed?.revision ?? this.workspaces.getExecutionWorkspace({ owner: job.owner, workspaceId: job.workspace_id }).revision;
       }
-      if (JSON.parse(job.request_json).dependencyPreparation && state.exitCode === 0 && !forcedReason && !job.termination_reason && !executionError) {
+      // The native runner reports an ordinary finish as reason 'exit', which
+      // reconcile() forwards; only abnormal reasons may skip sealing.
+      const ordinaryExit = !forcedReason || forcedReason === 'exit';
+      if (JSON.parse(job.request_json).dependencyPreparation && state.exitCode === 0 && ordinaryExit && !job.termination_reason && !executionError) {
         const existing = this.db.prepare('SELECT 1 FROM code_dependency_bundles WHERE job_id=?').get(job.id);
         if (!existing) {
           const bundle = sealDependencies({ workspacePath: workspace.path, directory: this.dependencyDirectory,

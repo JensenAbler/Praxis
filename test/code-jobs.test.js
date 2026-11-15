@@ -145,6 +145,48 @@ test('dependency bundles seal only after successful terminal execution and survi
   // The archive is candidate data; safe extraction is separately enforced by the deployment helper.
 });
 
+test('dependency bundles seal when the runner reports an ordinary exit reason (native runner)', async t => {
+  const f = fixture(t);
+  f.options.dependencyDirectory = join(f.directory, 'bundles');
+  f.jobs.dependencyDirectory = f.options.dependencyDirectory;
+  mkdirSync(join(f.workspace, '.cache'));
+  const packageJson = '{"name":"fixture","version":"1.0.1"}';
+  const packageLock = '{"lockfileVersion":3,"packages":{}}';
+  writeFileSync(join(f.workspace, 'package.json'), packageJson);
+  writeFileSync(join(f.workspace, 'package-lock.json'), packageLock);
+  writeFileSync(join(f.workspace, '.cache', 'praxis-dependencies.tar'), Buffer.alloc(10240, 1));
+  writeFileSync(join(f.workspace, '.cache', 'praxis-dependencies.json'), JSON.stringify({
+    packageJsonSha256: createHash('sha256').update(packageJson).digest('hex'),
+    packageLockSha256: createHash('sha256').update(packageLock).digest('hex'), shrinkwrapSha256: null,
+    platform: 'linux', arch: 'x64', nodeVersion: 'v22.22.0', nodeMajor: 22,
+  }));
+  const job = f.jobs.prepareDependencies(request());
+  await f.jobs.tick();
+  const name = containerName(job.id);
+  f.runner.complete(name);
+  f.runner.containers.get(name).terminationReason = 'exit';
+  await f.jobs.tick();
+  const saved = new CodeJobs(f.options).get({ owner: 'jensen', jobId: job.id });
+  assert.equal(saved.status, 'completed');
+  assert.equal(saved.terminationReason, 'exit');
+  assert.match(saved.preparedDependenciesId, /^[0-9a-f]{64}$/);
+});
+
+test('dependency bundles are not sealed after an abnormal termination reason', async t => {
+  const f = fixture(t);
+  f.options.dependencyDirectory = join(f.directory, 'bundles');
+  f.jobs.dependencyDirectory = f.options.dependencyDirectory;
+  const job = f.jobs.prepareDependencies(request());
+  await f.jobs.tick();
+  const name = containerName(job.id);
+  f.runner.complete(name);
+  f.runner.containers.get(name).terminationReason = 'exit_unconfirmed';
+  await f.jobs.tick();
+  const saved = new CodeJobs(f.options).get({ owner: 'jensen', jobId: job.id });
+  assert.notEqual(saved.status, 'completed');
+  assert.equal(saved.preparedDependenciesId, undefined);
+});
+
 test('a queued preparation never silently switches executor image', async t => {
   const f = fixture(t);
   f.jobs.dependencyDirectory = join(f.directory, 'bundles');
