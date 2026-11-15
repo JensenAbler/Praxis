@@ -1,4 +1,4 @@
-import { constants, mkdirSync, openSync, closeSync, fstatSync, readSync, writeSync, fsyncSync, fchmodSync, renameSync, readFileSync, lstatSync, existsSync, realpathSync, unlinkSync, readdirSync } from 'node:fs';
+import { constants, mkdirSync, openSync, closeSync, fstatSync, readSync, writeSync, fsyncSync, fchmodSync, renameSync, readFileSync, lstatSync, existsSync, realpathSync, unlinkSync, readdirSync, lchownSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
@@ -33,6 +33,17 @@ function syncDirectory(path) {
   if (process.platform === 'win32') return;
   const fd = openSync(path, constants.O_RDONLY);
   try { fsyncSync(fd); } finally { closeSync(fd); }
+}
+
+/** The deployment helpers trust only bundle files owned by the bundle
+ * directory's owner (the original praxis-code backend user). Praxis now runs
+ * as root, so when it can, it hands each sealed file to that owner instead of
+ * leaving it root-owned. Never follows links; no-op when not running as root. */
+export function matchDirectoryOwner(directory, path) {
+  if (typeof process.getuid !== 'function' || process.getuid() !== 0) return;
+  const owner = lstatSync(directory), file = lstatSync(path);
+  if (!file.isFile() || file.isSymbolicLink()) throw failure('Unsafe sealed dependency file.');
+  if (file.uid !== owner.uid || file.gid !== owner.gid) lchownSync(path, owner.uid, owner.gid);
 }
 
 /** Copy only after the preparation job is terminal. Prepared bytes are untrusted;
@@ -110,8 +121,10 @@ export function sealDependencies({ workspacePath, directory, workspaceId, revisi
     if (!archiveSha256) unlinkSync(temporary);
   }
   renameSync(temporary, join(root, `${archiveSha256}.tar`));
+  matchDirectoryOwner(root, join(root, `${archiveSha256}.tar`));
   const savedPath = join(root, `${archiveSha256}.json`);
   if (existsSync(savedPath)) {
+    matchDirectoryOwner(root, savedPath); // Repairs bundles sealed root-owned before this fix.
     const saved = JSON.parse(readSafe(root, `${archiveSha256}.json`, 16384));
     if (saved.archiveSha256 !== archiveSha256 || Object.entries(hashes).some(([key, value]) => saved[key] !== value)
       || saved.image !== image || saved.nodeMajor !== metadata.nodeMajor || saved.platform !== metadata.platform || saved.arch !== metadata.arch) {
@@ -126,6 +139,6 @@ export function sealDependencies({ workspacePath, directory, workspaceId, revisi
   const manifestPath = join(root, `${archiveSha256}.json.pending`);
   const manifestFd = openSync(manifestPath, constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | (constants.O_NOFOLLOW ?? 0), 0o600);
   try { writeSync(manifestFd, JSON.stringify(manifest)); if (process.platform !== 'win32') fchmodSync(manifestFd, 0o640); fsyncSync(manifestFd); } finally { closeSync(manifestFd); }
-  renameSync(manifestPath, savedPath); syncDirectory(root);
+  renameSync(manifestPath, savedPath); matchDirectoryOwner(root, savedPath); syncDirectory(root);
   return manifest;
 }

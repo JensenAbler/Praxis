@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, chownSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createHash, randomUUID } from 'node:crypto';
@@ -42,6 +42,21 @@ test('native retention has no legacy count quota while container compatibility k
     if (native) assert.equal(sealDependencies(f.options).executionMode, 'native');
     else assert.throws(() => sealDependencies(f.options), /retention is full/);
   }
+});
+
+test('when run as root, sealed files take the bundle directory owner so deploy helpers trust them', { skip: process.getuid?.() !== 0 && 'requires root' }, t => {
+  const f = fixture(t);
+  chownSync(f.options.directory, 4242, 4343);
+  const result = sealDependencies(f.options);
+  for (const name of [`${result.archiveSha256}.tar`, `${result.archiveSha256}.json`]) {
+    const value = statSync(join(f.options.directory, name));
+    assert.equal(value.uid, 4242, name);
+    assert.equal(value.gid, 4343, name);
+  }
+  // A bundle sealed root-owned before the fix is repaired when prepared again.
+  chownSync(join(f.options.directory, `${result.archiveSha256}.json`), 0, 0);
+  sealDependencies({ ...f.options, jobId: randomUUID() });
+  assert.equal(statSync(join(f.options.directory, `${result.archiveSha256}.json`)).uid, 4242);
 });
 
 test('legacy manifests remain compatible and native preparation still rejects stale manifests and execution identities', t => {
